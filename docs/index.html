@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chicago Building Permits MCP</title>
+  <style>
+    :root {
+      --ink: #17201d;
+      --muted: #58655f;
+      --paper: #fbfaf6;
+      --line: #d8d1c3;
+      --mint: #b7e4cf;
+      --coral: #f27c64;
+      --plum: #53375f;
+      --gold: #e9ba55;
+      --teal: #006d77;
+      --white: #fffdf8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    a {
+      color: var(--teal);
+      font-weight: 700;
+      text-decoration-thickness: 2px;
+      text-underline-offset: 3px;
+    }
+
+    .hero {
+      min-height: 88vh;
+      display: grid;
+      align-items: end;
+      padding: 32px;
+      background:
+        linear-gradient(135deg, rgba(23, 32, 29, 0.84), rgba(83, 55, 95, 0.68)),
+        url("assets/chi_permits_web_loaded.png") center / cover no-repeat;
+      color: var(--white);
+    }
+
+    .hero-inner {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      padding-bottom: 48px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 16px;
+      color: var(--mint);
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 940px;
+      margin: 0;
+      font-size: clamp(3rem, 7vw, 7.5rem);
+      line-height: 0.92;
+      letter-spacing: 0;
+    }
+
+    .hero p {
+      max-width: 760px;
+      margin: 22px 0 0;
+      color: #f8f3e8;
+      font-size: clamp(1.05rem, 2vw, 1.35rem);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 28px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      padding: 10px 16px;
+      border: 2px solid rgba(255, 253, 248, 0.78);
+      border-radius: 6px;
+      color: var(--white);
+      background: rgba(255, 253, 248, 0.1);
+      text-decoration: none;
+      backdrop-filter: blur(8px);
+    }
+
+    .button.primary {
+      border-color: var(--gold);
+      background: var(--gold);
+      color: #241b0b;
+    }
+
+    main {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 44px 0 72px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin: 24px 0 36px;
+    }
+
+    .card {
+      min-height: 178px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--white);
+      box-shadow: 0 10px 22px rgba(23, 32, 29, 0.06);
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--plum);
+      font-size: 1rem;
+    }
+
+    .band {
+      margin: 36px calc(50% - 50vw);
+      padding: 42px max(20px, calc(50vw - 560px));
+      background: #eef7ef;
+      border-top: 1px solid #c9ddcf;
+      border-bottom: 1px solid #c9ddcf;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: clamp(1.7rem, 3vw, 2.55rem);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    code,
+    pre {
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    }
+
+    pre {
+      overflow-x: auto;
+      padding: 16px;
+      border-radius: 8px;
+      background: #16201c;
+      color: #f8f3e8;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1.08fr 0.92fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    .note {
+      border-left: 5px solid var(--coral);
+      padding: 12px 16px;
+      background: #fff3ee;
+      color: #3a2822;
+    }
+
+    .screen {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 20px 46px rgba(23, 32, 29, 0.16);
+    }
+
+    .pill-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 0;
+      margin: 18px 0 0;
+      list-style: none;
+    }
+
+    .pill-list li {
+      border: 1px solid #aabeb2;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: #ffffff;
+      color: #25312d;
+      font-size: 0.92rem;
+      font-weight: 650;
+    }
+
+    footer {
+      padding: 24px 20px 42px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media (max-width: 760px) {
+      .hero {
+        min-height: 84vh;
+        padding: 24px 20px;
+      }
+
+      .grid,
+      .split {
+        grid-template-columns: 1fr;
+      }
+
+      main {
+        width: min(100% - 28px, 1120px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="eyebrow">Chicago Data Portal + local MCP</div>
+      <h1>Chicago Building Permits MCP</h1>
+      <p>Search open permits, general contractors, and open technical contacts with a local DuckDB-backed MCP server that refreshes from Chicago's Building Permits dataset.</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/dkaruri/chicago-building-permits-mcp">GitHub repository</a>
+        <a class="button" href="https://data.cityofchicago.org/Buildings/Building-Permits/ydr8-5enu">Source dataset</a>
+      </div>
+    </div>
+  </section>
+
+  <main>
+    <section>
+      <h2>What This Tool Does</h2>
+      <div class="grid">
+        <article class="card">
+          <strong>Open permits</strong>
+          Search currently open Chicago building permits by address, permit number, type, status, ward, community area, work type, and cost.
+        </article>
+        <article class="card">
+          <strong>Contractor profiles</strong>
+          View public contact fields, active jobs, historical job counts, average processing days, and work specializations for general contractors.
+        </article>
+        <article class="card">
+          <strong>Open tech profiles</strong>
+          Review architects, engineers, expediters, masons, and other technical contacts with the same workload and specialization summaries.
+        </article>
+      </div>
+    </section>
+
+    <section class="band">
+      <div class="split">
+        <div>
+          <h2>Run The Live Search App Locally</h2>
+          <p>GitHub Pages is static, so the hosted site cannot run the Python MCP server or DuckDB database directly. The live tool runs on your machine and keeps itself current by checking Chicago Data Portal metadata.</p>
+          <pre><code>uv sync
+uv run chi-permits init
+uv run chi-permits-web</code></pre>
+          <p>Then open <code>http://127.0.0.1:8765</code>.</p>
+          <p class="note">The local database is intentionally excluded from GitHub. Rebuild or refresh it from the public API with <code>uv run chi-permits init</code> or the web app refresh control.</p>
+        </div>
+        <img class="screen" src="assets/chi_permits_web_loaded.png" alt="Chicago Building Permits web tool screenshot">
+      </div>
+    </section>
+
+    <section>
+      <h2>MCP Tools Included</h2>
+      <p>The server exposes permit-aware MCP functions for lookup, trends, rankings, contact profiles, and read-only SQL.</p>
+      <ul class="pill-list">
+        <li>dataset_info</li>
+        <li>permit_lookup</li>
+        <li>recent_permits</li>
+        <li>permit_breakdown</li>
+        <li>permit_trends</li>
+        <li>top_permits</li>
+        <li>open_permits</li>
+        <li>general_contractors</li>
+        <li>open_techs</li>
+        <li>contact_detail</li>
+        <li>run_sql</li>
+      </ul>
+    </section>
+
+    <section class="band">
+      <h2>Freshness Model</h2>
+      <p>The web app checks the Chicago Data Portal's dataset metadata through <code>/api/status</code>. When the portal has newer rows than the local DuckDB snapshot, the app starts a background ingest. You can also refresh manually from the interface.</p>
+      <p>Contact information is limited to public fields available in the source dataset: contact type, name, city, state, and ZIP code. Phone and email fields are not present in the source.</p>
+    </section>
+  </main>
+
+  <footer>
+    Built from Chicago Data Portal Building Permits dataset ydr8-5enu.
+  </footer>
+</body>
+</html>
+
