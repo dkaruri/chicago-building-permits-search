@@ -5,6 +5,7 @@ import typer
 from .config import db_path
 from .db import connect
 from .ingest import run_ingest
+from .static_export import export_static
 
 app = typer.Typer(help="Chicago Building Permits MCP utilities")
 
@@ -38,3 +39,14 @@ def status() -> None:
     typer.echo(f"Ingested at: {row[2]}")
     typer.echo(f"Source updated at unix: {row[3]}")
     typer.echo(f"Database: {path}")
+
+
+@app.command("export-static")
+def export_static_command(
+    out_dir: str = typer.Option("docs/data", help="Directory for GitHub Pages JSON files."),
+) -> None:
+    manifest = export_static(out_dir)
+    typer.echo(f"Exported static Pages data to {out_dir}")
+    typer.echo(f"Open permits: {manifest['files']['open_permits']['rows']}")
+    typer.echo(f"General contractors: {manifest['files']['general_contractors']['rows']}")
+    typer.echo(f"Open techs: {manifest['files']['open_techs']['rows']}")

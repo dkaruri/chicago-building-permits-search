@@ -3,305 +3,595 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Chicago Building Permits MCP</title>
+  <title>Chicago Building Permits Search</title>
   <style>
     :root {
       --ink: #17201d;
-      --muted: #58655f;
+      --muted: #607069;
       --paper: #fbfaf6;
+      --panel: #fffdf8;
       --line: #d8d1c3;
       --mint: #b7e4cf;
       --coral: #f27c64;
       --plum: #53375f;
       --gold: #e9ba55;
       --teal: #006d77;
+      --steel: #355070;
       --white: #fffdf8;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
       background: var(--paper);
       color: var(--ink);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      line-height: 1.55;
+      line-height: 1.45;
     }
 
-    a {
-      color: var(--teal);
-      font-weight: 700;
-      text-decoration-thickness: 2px;
-      text-underline-offset: 3px;
-    }
-
-    .hero {
-      min-height: 88vh;
-      display: grid;
-      align-items: end;
-      padding: 32px;
-      background:
-        linear-gradient(135deg, rgba(23, 32, 29, 0.84), rgba(83, 55, 95, 0.68)),
-        url("assets/chi_permits_web_loaded.png") center / cover no-repeat;
+    header {
+      padding: 22px max(18px, calc(50vw - 680px)) 18px;
       color: var(--white);
+      background:
+        linear-gradient(135deg, rgba(23, 32, 29, 0.92), rgba(83, 55, 95, 0.82)),
+        url("assets/chi_permits_web_loaded.png") center / cover no-repeat;
+      border-bottom: 5px solid var(--gold);
     }
 
-    .hero-inner {
-      width: min(1120px, 100%);
-      margin: 0 auto;
-      padding-bottom: 48px;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      gap: 8px;
-      align-items: center;
-      margin-bottom: 16px;
+    .kicker {
       color: var(--mint);
-      font-size: 0.8rem;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 6px 0 8px;
+      font-size: clamp(2.1rem, 5vw, 4.8rem);
+      line-height: 0.94;
+      letter-spacing: 0;
+    }
+
+    header p {
+      max-width: 920px;
+      margin: 0;
+      color: #f8f3e8;
+      font-size: 1rem;
+    }
+
+    main {
+      width: min(1360px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 18px 0 42px;
+    }
+
+    .status {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .metric, .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 10px 22px rgba(23, 32, 29, 0.06);
+    }
+
+    .metric {
+      min-height: 82px;
+      padding: 12px;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.76rem;
       font-weight: 800;
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
 
-    h1 {
-      max-width: 940px;
-      margin: 0;
-      font-size: clamp(3rem, 7vw, 7.5rem);
-      line-height: 0.92;
-      letter-spacing: 0;
-    }
-
-    .hero p {
-      max-width: 760px;
-      margin: 22px 0 0;
-      color: #f8f3e8;
-      font-size: clamp(1.05rem, 2vw, 1.35rem);
-    }
-
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 28px;
-    }
-
-    .button {
-      display: inline-flex;
-      align-items: center;
-      min-height: 44px;
-      padding: 10px 16px;
-      border: 2px solid rgba(255, 253, 248, 0.78);
-      border-radius: 6px;
-      color: var(--white);
-      background: rgba(255, 253, 248, 0.1);
-      text-decoration: none;
-      backdrop-filter: blur(8px);
-    }
-
-    .button.primary {
-      border-color: var(--gold);
-      background: var(--gold);
-      color: #241b0b;
-    }
-
-    main {
-      width: min(1120px, calc(100% - 40px));
-      margin: 0 auto;
-      padding: 44px 0 72px;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 16px;
-      margin: 24px 0 36px;
-    }
-
-    .card {
-      min-height: 178px;
-      padding: 20px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--white);
-      box-shadow: 0 10px 22px rgba(23, 32, 29, 0.06);
-    }
-
-    .card strong {
+    .metric strong {
       display: block;
-      margin-bottom: 8px;
+      margin-top: 5px;
       color: var(--plum);
-      font-size: 1rem;
+      font-size: clamp(1.15rem, 2vw, 1.65rem);
+      line-height: 1;
     }
 
-    .band {
-      margin: 36px calc(50% - 50vw);
-      padding: 42px max(20px, calc(50vw - 560px));
-      background: #eef7ef;
-      border-top: 1px solid #c9ddcf;
-      border-bottom: 1px solid #c9ddcf;
-    }
-
-    h2 {
-      margin: 0 0 14px;
-      font-size: clamp(1.7rem, 3vw, 2.55rem);
-      line-height: 1.05;
-      letter-spacing: 0;
-    }
-
-    code,
-    pre {
-      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-    }
-
-    pre {
-      overflow-x: auto;
-      padding: 16px;
-      border-radius: 8px;
-      background: #16201c;
-      color: #f8f3e8;
-    }
-
-    .split {
+    .layout {
       display: grid;
-      grid-template-columns: 1.08fr 0.92fr;
-      gap: 28px;
+      grid-template-columns: 340px minmax(0, 1fr);
+      gap: 14px;
       align-items: start;
     }
 
-    .note {
-      border-left: 5px solid var(--coral);
-      padding: 12px 16px;
-      background: #fff3ee;
-      color: #3a2822;
+    .panel {
+      padding: 14px;
     }
 
-    .screen {
+    .controls {
+      position: sticky;
+      top: 12px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    button, input, select {
       width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--ink);
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    button.active {
+      border-color: var(--teal);
+      background: var(--teal);
+      color: #ffffff;
+    }
+
+    button.primary {
+      border-color: var(--coral);
+      background: var(--coral);
+      color: #ffffff;
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    input, select {
+      padding: 9px 10px;
+      text-transform: none;
+      letter-spacing: 0;
+      font-weight: 500;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 420px;
+      gap: 14px;
+    }
+
+    .panel-head {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    h2, h3 {
+      margin: 0;
+      letter-spacing: 0;
+      line-height: 1.1;
+    }
+
+    h2 { font-size: 1.2rem; }
+    h3 { color: var(--plum); font-size: 1.35rem; }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 72vh;
       border: 1px solid var(--line);
       border-radius: 8px;
-      box-shadow: 0 20px 46px rgba(23, 32, 29, 0.16);
     }
 
-    .pill-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      padding: 0;
-      margin: 18px 0 0;
-      list-style: none;
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #ffffff;
+      font-size: 0.86rem;
     }
 
-    .pill-list li {
-      border: 1px solid #aabeb2;
+    th, td {
+      padding: 9px 8px;
+      border-bottom: 1px solid #e8e1d4;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f2efe7;
+      color: var(--steel);
+      font-size: 0.72rem;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+
+    tbody tr {
+      cursor: pointer;
+    }
+
+    tbody tr:hover {
+      background: #eef7ef;
+    }
+
+    .money { color: #865d11; font-weight: 800; }
+    .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border: 1px solid #b7c8bd;
       border-radius: 999px;
-      padding: 6px 10px;
       background: #ffffff;
       color: #25312d;
-      font-size: 0.92rem;
-      font-weight: 650;
+      font-size: 0.78rem;
+      font-weight: 700;
     }
 
-    footer {
-      padding: 24px 20px 42px;
+    .detail {
+      position: sticky;
+      top: 12px;
+      max-height: calc(100vh - 24px);
+      overflow: auto;
+    }
+
+    .detail-section {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-section h4 {
+      margin: 0 0 7px;
+      color: var(--steel);
+      font-size: 0.76rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .permit-card {
+      margin-top: 8px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .permit-card strong {
+      color: var(--plum);
+    }
+
+    a {
+      color: var(--teal);
+      font-weight: 800;
+      text-decoration-thickness: 2px;
+      text-underline-offset: 3px;
+    }
+
+    .empty {
+      padding: 20px;
       color: var(--muted);
       text-align: center;
     }
 
-    @media (max-width: 760px) {
-      .hero {
-        min-height: 84vh;
-        padding: 24px 20px;
-      }
-
-      .grid,
-      .split {
-        grid-template-columns: 1fr;
-      }
-
-      main {
-        width: min(100% - 28px, 1120px);
-      }
+    @media (max-width: 1120px) {
+      .status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .layout, .content { grid-template-columns: 1fr; }
+      .controls, .detail { position: static; }
+      .table-wrap { max-height: none; }
     }
   </style>
 </head>
 <body>
-  <section class="hero">
-    <div class="hero-inner">
-      <div class="eyebrow">Chicago Data Portal + local MCP</div>
-      <h1>Chicago Building Permits MCP</h1>
-      <p>Search open permits, general contractors, and open technical contacts with a local DuckDB-backed MCP server that refreshes from Chicago's Building Permits dataset.</p>
-      <div class="actions">
-        <a class="button primary" href="https://github.com/dkaruri/chicago-building-permits-mcp">GitHub repository</a>
-        <a class="button" href="https://data.cityofchicago.org/Buildings/Building-Permits/ydr8-5enu">Source dataset</a>
-      </div>
-    </div>
-  </section>
+  <header>
+    <div class="kicker">Chicago Data Portal static search</div>
+    <h1>Open Permits + Contractor Profiles</h1>
+    <p>Static GitHub Pages tool generated from Chicago Building Permits data. Profiles include public contact fields, open job counts, average processing days, and work specializations.</p>
+  </header>
 
   <main>
-    <section>
-      <h2>What This Tool Does</h2>
-      <div class="grid">
-        <article class="card">
-          <strong>Open permits</strong>
-          Search currently open Chicago building permits by address, permit number, type, status, ward, community area, work type, and cost.
-        </article>
-        <article class="card">
-          <strong>Contractor profiles</strong>
-          View public contact fields, active jobs, historical job counts, average processing days, and work specializations for general contractors.
-        </article>
-        <article class="card">
-          <strong>Open tech profiles</strong>
-          Review architects, engineers, expediters, masons, and other technical contacts with the same workload and specialization summaries.
-        </article>
-      </div>
-    </section>
+    <section id="status" class="status"></section>
 
-    <section class="band">
-      <div class="split">
-        <div>
-          <h2>Run The Live Search App Locally</h2>
-          <p>GitHub Pages is static, so the hosted site cannot run the Python MCP server or DuckDB database directly. The live tool runs on your machine and keeps itself current by checking Chicago Data Portal metadata.</p>
-          <pre><code>uv sync
-uv run chi-permits init
-uv run chi-permits-web</code></pre>
-          <p>Then open <code>http://127.0.0.1:8765</code>.</p>
-          <p class="note">The local database is intentionally excluded from GitHub. Rebuild or refresh it from the public API with <code>uv run chi-permits init</code> or the web app refresh control.</p>
+    <section class="layout">
+      <aside class="panel controls">
+        <div class="tabs">
+          <button id="tab-general_contractors" class="active" onclick="setMode('general_contractors')">General Contractors</button>
+          <button id="tab-open_techs" onclick="setMode('open_techs')">Open Techs</button>
+          <button id="tab-open_permits" onclick="setMode('open_permits')">Open Permits</button>
         </div>
-        <img class="screen" src="assets/chi_permits_web_loaded.png" alt="Chicago Building Permits web tool screenshot">
-      </div>
-    </section>
+        <label>Search
+          <input id="q" placeholder="Name, permit, address, work type..." oninput="scheduleSearch()">
+        </label>
+        <label>Ward
+          <input id="ward" placeholder="Open permits only" oninput="scheduleSearch()">
+        </label>
+        <label>Sort
+          <select id="sort" onchange="search()">
+            <option value="open_jobs">Open jobs</option>
+            <option value="total_jobs">Total jobs</option>
+            <option value="avg_processing_days">Avg processing days</option>
+            <option value="latest_issue_date">Latest issue date</option>
+            <option value="reported_cost">Reported cost</option>
+          </select>
+        </label>
+        <button class="primary" onclick="search()">Search</button>
+        <p class="small">Data refreshes by GitHub Actions. Source contact fields are public portal fields only: name, type, city, state, and ZIP.</p>
+        <p class="small"><a href="https://github.com/dkaruri/chicago-building-permits-mcp">Repository</a> &middot; <a href="https://data.cityofchicago.org/Buildings/Building-Permits/ydr8-5enu">Source dataset</a></p>
+      </aside>
 
-    <section>
-      <h2>MCP Tools Included</h2>
-      <p>The server exposes permit-aware MCP functions for lookup, trends, rankings, contact profiles, and read-only SQL.</p>
-      <ul class="pill-list">
-        <li>dataset_info</li>
-        <li>permit_lookup</li>
-        <li>recent_permits</li>
-        <li>permit_breakdown</li>
-        <li>permit_trends</li>
-        <li>top_permits</li>
-        <li>open_permits</li>
-        <li>general_contractors</li>
-        <li>open_techs</li>
-        <li>contact_detail</li>
-        <li>run_sql</li>
-      </ul>
-    </section>
+      <section class="content">
+        <div class="panel">
+          <div class="panel-head">
+            <h2 id="results-title">Results</h2>
+            <span id="result-count" class="small"></span>
+          </div>
+          <div id="results" class="table-wrap"><div class="empty">Loading data...</div></div>
+        </div>
 
-    <section class="band">
-      <h2>Freshness Model</h2>
-      <p>The web app checks the Chicago Data Portal's dataset metadata through <code>/api/status</code>. When the portal has newer rows than the local DuckDB snapshot, the app starts a background ingest. You can also refresh manually from the interface.</p>
-      <p>Contact information is limited to public fields available in the source dataset: contact type, name, city, state, and ZIP code. Phone and email fields are not present in the source.</p>
+        <aside class="panel detail">
+          <h2>Detail</h2>
+          <div id="detail" class="small">Select a result.</div>
+        </aside>
+      </section>
     </section>
   </main>
 
-  <footer>
-    Built from Chicago Data Portal Building Permits dataset ydr8-5enu.
-  </footer>
+  <script>
+    const state = {
+      mode: "general_contractors",
+      manifest: null,
+      data: {},
+      timer: null,
+      selected: null
+    };
+
+    const $ = id => document.getElementById(id);
+    const fmt = n => n == null || n === "" ? "" : Number(n).toLocaleString();
+    const money = n => n == null || n === "" ? "" : "$" + Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    const days = n => n == null || n === "" ? "" : Number(n).toFixed(1);
+    const clean = value => (value == null ? "" : String(value));
+    const esc = value => clean(value).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+    const norm = value => clean(value).toLowerCase();
+
+    async function loadJson(name, quiet = false) {
+      if (!state.data[name]) {
+        const path = state.manifest.files[name].path;
+        if (!quiet) $("results").innerHTML = `<div class="empty">Loading ${name.replaceAll("_", " ")}...</div>`;
+        state.data[name] = await fetch(path).then(r => {
+          if (!r.ok) throw new Error(`Failed to load ${path}`);
+          return r.json();
+        });
+      }
+      return state.data[name];
+    }
+
+    async function init() {
+      state.manifest = await fetch("data/manifest.json").then(r => r.json());
+      renderStatus();
+      await search();
+    }
+
+    function renderStatus() {
+      const m = state.manifest;
+      $("status").innerHTML = `
+        <div class="metric"><span>Permits Loaded</span><strong>${fmt(m.row_count)}</strong></div>
+        <div class="metric"><span>Open Permits</span><strong>${fmt(m.open_permit_count)}</strong></div>
+        <div class="metric"><span>Contractors</span><strong>${fmt(m.general_contractor_count)}</strong></div>
+        <div class="metric"><span>Open Techs</span><strong>${fmt(m.open_tech_count)}</strong></div>
+        <div class="metric"><span>Exported</span><strong>${clean(m.exported_at).slice(0, 10)}</strong></div>
+      `;
+    }
+
+    function setMode(mode) {
+      state.mode = mode;
+      state.selected = null;
+      ["general_contractors", "open_techs", "open_permits"].forEach(name => $("tab-" + name).classList.remove("active"));
+      $("tab-" + mode).classList.add("active");
+      $("sort").value = mode === "open_permits" ? "latest_issue_date" : "open_jobs";
+      $("detail").innerHTML = "Select a result.";
+      search();
+    }
+
+    function scheduleSearch() {
+      clearTimeout(state.timer);
+      state.timer = setTimeout(search, 140);
+    }
+
+    function queryTerms() {
+      return norm($("q").value).split(/\s+/).filter(Boolean);
+    }
+
+    function matchesTerms(row, fields, terms) {
+      if (!terms.length) return true;
+      const haystack = fields.map(field => norm(row[field])).join(" ");
+      return terms.every(term => haystack.includes(term));
+    }
+
+    function sortRows(rows) {
+      const key = $("sort").value;
+      const copy = rows.slice();
+      copy.sort((a, b) => {
+        if (key === "latest_issue_date") return clean(b.latest_issue_date || b.issue_date).localeCompare(clean(a.latest_issue_date || a.issue_date));
+        return Number(b[key] || 0) - Number(a[key] || 0);
+      });
+      return copy;
+    }
+
+    async function search() {
+      if (!state.manifest) return;
+      if (state.mode === "open_permits") {
+        const rows = await loadJson("open_permits");
+        renderPermits(filterPermits(rows));
+      } else {
+        const rows = await loadJson(state.mode);
+        renderContacts(filterContacts(rows));
+      }
+    }
+
+    function filterContacts(rows) {
+      const terms = queryTerms();
+      return sortRows(rows.filter(row => matchesTerms(row, [
+        "contact_name", "sample_contact_type", "city", "state", "zipcode"
+      ], terms) || specialtyText(row).includes(terms.join(" ")))).slice(0, 250);
+    }
+
+    function specialtyText(row) {
+      return norm([...(row.work_types || []).map(x => x.work_type), ...(row.permit_types || []).map(x => x.permit_type), ...(row.contact_types || []).map(x => x.contact_type)].join(" "));
+    }
+
+    function filterPermits(rows) {
+      const terms = queryTerms();
+      const ward = $("ward").value.trim();
+      return sortRows(rows.filter(row => {
+        if (ward && clean(row.ward) !== ward) return false;
+        return matchesTerms(row, [
+          "permit_number", "permit_status", "permit_type", "review_type", "address", "work_type",
+          "work_description", "general_contractors", "open_techs"
+        ], terms);
+      })).slice(0, 300);
+    }
+
+    function renderContacts(rows) {
+      $("results-title").textContent = state.mode === "general_contractors" ? "General Contractors" : "Open Techs";
+      $("result-count").textContent = `${fmt(rows.length)} shown`;
+      if (!rows.length) {
+        $("results").innerHTML = `<div class="empty">No matching profiles.</div>`;
+        return;
+      }
+      $("results").innerHTML = `
+        <table>
+          <thead><tr><th>Name</th><th>Type</th><th>Public Contact</th><th>Open Jobs</th><th>Avg Days</th></tr></thead>
+          <tbody>${rows.map((row, i) => `
+            <tr onclick="selectContact(${i})">
+              <td><strong>${esc(row.contact_name)}</strong><br><span class="small">${esc(specialtySummary(row))}</span></td>
+              <td>${esc(row.sample_contact_type)}</td>
+              <td>${esc([row.city, row.state, row.zipcode].filter(Boolean).join(", "))}</td>
+              <td>${fmt(row.open_jobs)}</td>
+              <td>${days(row.avg_processing_days)}</td>
+            </tr>`).join("")}</tbody>
+        </table>`;
+      state.visibleRows = rows;
+    }
+
+    function specialtySummary(row) {
+      return (row.work_types || []).slice(0, 2).map(x => x.work_type).filter(Boolean).join(" / ") || "No dominant work type";
+    }
+
+    async function selectContact(index) {
+      const row = state.visibleRows[index];
+      state.selected = row;
+      $("detail").innerHTML = `<p class="small">Loading matching open permits for ${esc(row.contact_name)}...</p>`;
+      const openPermits = await loadJson("open_permits", true);
+      const field = state.mode === "general_contractors" ? "general_contractors" : "open_techs";
+      const related = openPermits.filter(p => norm(p[field]).split("|").map(x => x.trim()).includes(norm(row.contact_name))).slice(0, 40);
+      $("detail").innerHTML = `
+        <h3>${esc(row.contact_name)}</h3>
+        <div class="tag-row">
+          <span class="tag">${fmt(row.open_jobs)} open jobs</span>
+          <span class="tag">${fmt(row.total_jobs)} total jobs</span>
+          <span class="tag">${days(row.avg_processing_days)} avg processing days</span>
+          <span class="tag">${money(row.reported_cost_total)} reported cost</span>
+        </div>
+        <p>${esc(row.sample_contact_type)}<br>${esc([row.city, row.state, row.zipcode].filter(Boolean).join(", "))}</p>
+        ${renderSpecialties(row)}
+        <div class="detail-section">
+          <h4>Open permits in static index</h4>
+          ${related.length ? related.map(renderPermitCard).join("") : `<p class="small">No open permits matched this profile in the exported open-permit index.</p>`}
+        </div>`;
+    }
+
+    function renderSpecialties(row) {
+      return `
+        <div class="detail-section"><h4>Specializes in work types</h4>${tags(row.work_types, "work_type")}</div>
+        <div class="detail-section"><h4>Permit mix</h4>${tags(row.permit_types, "permit_type")}</div>
+        <div class="detail-section"><h4>Public contact roles</h4>${tags(row.contact_types, "contact_type")}</div>
+      `;
+    }
+
+    function tags(rows, key) {
+      const items = rows || [];
+      if (!items.length) return `<span class="small">No clear pattern in available records.</span>`;
+      return `<div class="tag-row">${items.map(x => `<span class="tag">${esc(x[key])} &middot; ${fmt(x.jobs)} jobs${x.open_jobs ? `, ${fmt(x.open_jobs)} open` : ""}</span>`).join("")}</div>`;
+    }
+
+    function renderPermits(rows) {
+      $("results-title").textContent = "Open Permits";
+      $("result-count").textContent = `${fmt(rows.length)} shown`;
+      if (!rows.length) {
+        $("results").innerHTML = `<div class="empty">No matching permits.</div>`;
+        return;
+      }
+      $("results").innerHTML = `
+        <table>
+          <thead><tr><th>Permit</th><th>Status</th><th>Issued</th><th>Address</th><th>Ward</th><th>Cost</th></tr></thead>
+          <tbody>${rows.map((row, i) => `
+            <tr onclick="selectPermit(${i})">
+              <td><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span></td>
+              <td>${esc(row.permit_status)}</td>
+              <td>${esc(row.issue_date)}</td>
+              <td>${esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
+              <td>${esc(row.ward)}</td>
+              <td class="money">${money(row.reported_cost)}</td>
+            </tr>`).join("")}</tbody>
+        </table>`;
+      state.visibleRows = rows;
+    }
+
+    function selectPermit(index) {
+      const row = state.visibleRows[index];
+      $("detail").innerHTML = `
+        <h3>${esc(row.permit_number)}</h3>
+        <div class="tag-row">
+          <span class="tag">${esc(row.permit_status)}</span>
+          <span class="tag">${esc(row.permit_type)}</span>
+          <span class="tag">Ward ${esc(row.ward)}</span>
+          <span class="tag">${money(row.reported_cost)}</span>
+        </div>
+        <p><strong>${esc(row.address)}</strong><br>${esc(row.work_description)}</p>
+        <div class="detail-section"><h4>General contractors</h4>${nameTags(row.general_contractors)}</div>
+        <div class="detail-section"><h4>Open techs</h4>${nameTags(row.open_techs)}</div>
+        <div class="detail-section"><h4>Permit facts</h4>
+          <p class="small">Issued ${esc(row.issue_date)} &middot; Community area ${esc(row.community_area)} &middot; Review type ${esc(row.review_type)} &middot; Processing days ${days(row.processing_time)} &middot; Total fee ${money(row.total_fee)}</p>
+        </div>`;
+    }
+
+    function nameTags(value) {
+      const names = clean(value).split("|").map(x => x.trim()).filter(Boolean);
+      if (!names.length) return `<span class="small">No public contact listed in this category.</span>`;
+      return `<div class="tag-row">${names.map(name => `<span class="tag">${esc(name)}</span>`).join("")}</div>`;
+    }
+
+    init().catch(error => {
+      $("results").innerHTML = `<div class="empty">${error.message}</div>`;
+      console.error(error);
+    });
+  </script>
 </body>
 </html>
-

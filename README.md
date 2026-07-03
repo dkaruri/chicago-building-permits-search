@@ -88,6 +88,28 @@ These are derived from the permits associated with that contact.
 
 When the web tool checks `/api/status`, it compares the local ingest timestamp to the Chicago Data Portal metadata. If the portal has newer rows, it automatically starts a background refresh. You can also trigger refresh manually with the button in the UI.
 
+## GitHub Pages Static Tool
+
+The repository also publishes a static search tool from `docs/`:
+
+<https://dkaruri.github.io/chicago-building-permits-mcp/>
+
+GitHub Pages cannot run Python, DuckDB, or an MCP server directly, so the hosted tool uses generated JSON indexes:
+
+- `docs/data/open_permits.json`
+- `docs/data/general_contractors.json`
+- `docs/data/open_techs.json`
+- `docs/data/manifest.json`
+
+Build or refresh those files locally:
+
+```powershell
+uv run chi-permits init
+uv run chi-permits export-static
+```
+
+The workflow at `.github/workflows/refresh-pages-data.yml` runs on a daily schedule and can also be triggered manually. It downloads the latest Chicago Data Portal records, exports the static JSON files, and commits changes back to the repo so Pages rebuilds.
+
 ## Notes
 
 This is independent from the NYC Capital Projects MCP. It uses Chicago permit concepts: permit number, permit type/status, issue date, work type, reported cost, fees, ward, community area, address, coordinates, and normalized public contact slots.
