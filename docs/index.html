@@ -278,7 +278,7 @@
 
     .permit-card {
       margin-top: 8px;
-      padding: 10px;
+      padding: 12px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #ffffff;
@@ -286,6 +286,62 @@
 
     .permit-card strong {
       color: var(--plum);
+    }
+
+    .permit-card header {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 0 0 8px;
+      color: inherit;
+      background: transparent;
+      border: 0;
+    }
+
+    .permit-card h5 {
+      margin: 0;
+      color: var(--plum);
+      font-size: 0.98rem;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .permit-status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #eef7ef;
+      color: var(--teal);
+      font-size: 0.72rem;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .permit-facts {
+      display: grid;
+      gap: 5px;
+      margin: 8px 0 0;
+      padding-left: 20px;
+      color: var(--ink);
+    }
+
+    .permit-facts li {
+      padding-left: 2px;
+    }
+
+    .permit-facts b {
+      color: var(--steel);
+    }
+
+    .permit-description {
+      margin: 10px 0 0;
+      padding: 10px;
+      border-left: 4px solid var(--gold);
+      background: #fbf4df;
+      color: #403727;
     }
 
     a {
@@ -555,12 +611,31 @@
     function renderPermitCard(row) {
       return `
         <article class="permit-card">
-          <strong>${esc(row.permit_number)}</strong>
-          <div class="small">${esc(row.issue_date)} &middot; ${esc(row.permit_status)} &middot; ${esc(row.permit_type)}</div>
-          <div>${esc(row.address)}</div>
-          <div class="small">${esc(row.work_type)}${row.ward ? ` &middot; Ward ${esc(row.ward)}` : ""}${row.reported_cost ? ` &middot; ${money(row.reported_cost)}` : ""}</div>
-          ${row.work_description ? `<p class="small">${esc(row.work_description)}</p>` : ""}
+          <header>
+            <div>
+              <h5>${esc(row.permit_number)}</h5>
+              <div class="small">${esc(row.address)}</div>
+            </div>
+            <span class="permit-status">${esc(row.permit_status)}</span>
+          </header>
+          ${permitFacts(row, [
+            ["Issued", row.issue_date],
+            ["Permit type", row.permit_type],
+            ["Review type", row.review_type],
+            ["Work type", row.work_type],
+            ["Ward", row.ward],
+            ["Reported cost", money(row.reported_cost)]
+          ])}
+          ${row.work_description ? `<p class="permit-description small">${esc(row.work_description)}</p>` : ""}
         </article>`;
+    }
+
+    function permitFacts(row, facts) {
+      const items = facts
+        .filter(([label, value]) => clean(value) !== "")
+        .map(([label, value]) => `<li><b>${esc(label)}:</b> ${esc(value)}</li>`)
+        .join("");
+      return items ? `<ul class="permit-facts">${items}</ul>` : "";
     }
 
     function renderPermits(rows) {
@@ -593,15 +668,38 @@
         <div class="tag-row">
           <span class="tag">${esc(row.permit_status)}</span>
           <span class="tag">${esc(row.permit_type)}</span>
-          <span class="tag">Ward ${esc(row.ward)}</span>
-          <span class="tag">${money(row.reported_cost)}</span>
+          ${row.ward ? `<span class="tag">Ward ${esc(row.ward)}</span>` : ""}
+          ${row.reported_cost ? `<span class="tag">${money(row.reported_cost)}</span>` : ""}
         </div>
-        <p><strong>${esc(row.address)}</strong><br>${esc(row.work_description)}</p>
+        <div class="detail-section">
+          <h4>Location</h4>
+          ${permitFacts(row, [
+            ["Address", row.address],
+            ["Ward", row.ward],
+            ["Community area", row.community_area]
+          ])}
+        </div>
+        <div class="detail-section">
+          <h4>Permit details</h4>
+          ${permitFacts(row, [
+            ["Issued", row.issue_date],
+            ["Permit type", row.permit_type],
+            ["Status", row.permit_status],
+            ["Review type", row.review_type],
+            ["Work type", row.work_type],
+            ["Processing days", days(row.processing_time)]
+          ])}
+        </div>
+        <div class="detail-section">
+          <h4>Costs and fees</h4>
+          ${permitFacts(row, [
+            ["Reported cost", money(row.reported_cost)],
+            ["Total fee", money(row.total_fee)]
+          ])}
+        </div>
+        ${row.work_description ? `<div class="detail-section"><h4>Work description</h4><p class="permit-description small">${esc(row.work_description)}</p></div>` : ""}
         <div class="detail-section"><h4>General contractors</h4>${nameTags(row.general_contractors)}</div>
-        <div class="detail-section"><h4>Open techs</h4>${nameTags(row.open_techs)}</div>
-        <div class="detail-section"><h4>Permit facts</h4>
-          <p class="small">Issued ${esc(row.issue_date)} &middot; Community area ${esc(row.community_area)} &middot; Review type ${esc(row.review_type)} &middot; Processing days ${days(row.processing_time)} &middot; Total fee ${money(row.total_fee)}</p>
-        </div>`;
+        <div class="detail-section"><h4>Open techs</h4>${nameTags(row.open_techs)}</div>`;
     }
 
     function nameTags(value) {
