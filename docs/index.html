@@ -435,6 +435,7 @@
           </select>
         </label>
         <button class="primary" onclick="search()">Search</button>
+        <button onclick="clearSearch()">Clear results</button>
         <p class="small">Data refreshes by GitHub Actions. Source contact fields are public portal fields only: name, type, city, state, and ZIP.</p>
         <p class="small"><a href="https://github.com/dkaruri/chicago-building-permits-mcp">Repository</a> &middot; <a href="https://data.cityofchicago.org/Buildings/Building-Permits/ydr8-5enu">Source dataset</a></p>
       </aside>
@@ -462,7 +463,10 @@
       manifest: null,
       data: {},
       timer: null,
-      selected: null
+      selected: null,
+      filteredRows: [],
+      visibleRows: [],
+      visibleLimit: 0
     };
 
     const $ = id => document.getElementById(id);
@@ -472,7 +476,7 @@
     const clean = value => (value == null ? "" : String(value));
     const esc = value => clean(value).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
     const norm = value => clean(value).toLowerCase();
-    const enc = value => encodeURIComponent(clean(value));
+    const enc = value => encodeURIComponent(clean(value)).replace(/'/g, "%27");
 
     function showDetail(html) {
       $("content").classList.remove("no-detail");
@@ -501,6 +505,7 @@
     async function init() {
       state.manifest = await fetch("data/manifest.json").then(r => r.json());
       renderStatus();
+      $("results").addEventListener("scroll", maybeLoadMore);
       await search();
     }
 
@@ -521,6 +526,13 @@
       ["general_contractors", "open_techs", "open_permits"].forEach(name => $("tab-" + name).classList.remove("active"));
       $("tab-" + mode).classList.add("active");
       $("sort").value = mode === "open_permits" ? "latest_issue_date" : "open_jobs";
+      hideDetail();
+      search();
+    }
+
+    function clearSearch() {
+      $("q").value = "";
+      $("ward").value = "";
       hideDetail();
       search();
     }
@@ -552,12 +564,15 @@
 
     async function search() {
       if (!state.manifest) return;
+      state.visibleLimit = state.mode === "open_permits" ? 150 : 100;
       if (state.mode === "open_permits") {
         const rows = await loadJson("open_permits");
-        renderPermits(filterPermits(rows));
+        state.filteredRows = filterPermits(rows);
+        renderPermits();
       } else {
         const rows = await loadJson(state.mode);
-        renderContacts(filterContacts(rows));
+        state.filteredRows = filterContacts(rows);
+        renderContacts();
       }
     }
 
@@ -565,7 +580,7 @@
       const terms = queryTerms();
       return sortRows(rows.filter(row => matchesTerms(row, [
         "contact_name", "sample_contact_type", "city", "state", "zipcode"
-      ], terms) || specialtyText(row).includes(terms.join(" ")))).slice(0, 250);
+      ], terms) || specialtyText(row).includes(terms.join(" "))));
     }
 
     function specialtyText(row) {
@@ -581,12 +596,36 @@
           "permit_number", "permit_status", "permit_type", "review_type", "address", "work_type",
           "work_description", "general_contractors", "open_techs"
         ], terms);
-      })).slice(0, 300);
+      }));
     }
 
-    function renderContacts(rows) {
+    function visibleSlice() {
+      state.visibleRows = state.filteredRows.slice(0, state.visibleLimit);
+      return state.visibleRows;
+    }
+
+    function resultCountText() {
+      const shown = Math.min(state.visibleLimit, state.filteredRows.length);
+      return `${fmt(shown)} of ${fmt(state.filteredRows.length)} shown`;
+    }
+
+    function maybeLoadMore() {
+      const el = $("results");
+      if (!state.filteredRows.length || state.visibleLimit >= state.filteredRows.length) return;
+      if (el.scrollTop + el.clientHeight < el.scrollHeight - 80) return;
+      state.visibleLimit += state.mode === "open_permits" ? 150 : 100;
+      if (state.mode === "open_permits") {
+        renderPermits(true);
+      } else {
+        renderContacts(true);
+      }
+    }
+
+    function renderContacts(keepScroll = false) {
+      const previousScroll = $("results").scrollTop;
+      const rows = visibleSlice();
       $("results-title").textContent = state.mode === "general_contractors" ? "General Contractors" : "Open Techs";
-      $("result-count").textContent = `${fmt(rows.length)} shown`;
+      $("result-count").textContent = resultCountText();
       if (!rows.length) {
         $("results").innerHTML = `<div class="empty">No matching profiles.</div>`;
         return;
@@ -603,7 +642,7 @@
               <td>${days(row.avg_processing_days)}</td>
             </tr>`).join("")}</tbody>
         </table>`;
-      state.visibleRows = rows;
+      $("results").scrollTop = keepScroll ? previousScroll : 0;
     }
 
     function specialtySummary(row) {
@@ -614,13 +653,15 @@
       const row = state.visibleRows[index];
       state.selected = row;
       showDetail(`<p class="small">Loading matching open permits for ${esc(row.contact_name)}...</p>`);
+      let allRelated = [];
       let related = [];
       let relatedError = "";
       try {
         const openPermits = await loadJson("open_permits", true);
         const field = state.mode === "general_contractors" ? "general_contractors" : "open_techs";
         const contactKey = norm(row.contact_name);
-        related = openPermits.filter(p => namesFrom(p[field]).includes(contactKey)).slice(0, 40);
+        allRelated = openPermits.filter(p => namesFrom(p[field]).includes(contactKey));
+        related = allRelated.slice(0, 40);
       } catch (error) {
         relatedError = error.message || "Open permit details could not be loaded.";
       }
@@ -637,6 +678,11 @@
         <div class="detail-section">
           <h4>Open permits in static index</h4>
           ${relatedError ? `<p class="small">${esc(relatedError)}</p>` : related.length ? related.map(renderPermitCard).join("") : `<p class="small">No open permits matched this profile in the exported open-permit index.</p>`}
+          ${allRelated.length > related.length ? `<p class="small">Showing ${fmt(related.length)} of ${fmt(allRelated.length)} matching open permits.</p>` : ""}
+        </div>
+        <div class="detail-section">
+          <h4>${state.mode === "general_contractors" ? "Associated Open Techs" : "Associated General Contractors"}</h4>
+          ${relatedError ? `<p class="small">${esc(relatedError)}</p>` : associationTags(allRelated, state.mode === "general_contractors" ? "open_techs" : "general_contractors", state.mode === "general_contractors" ? "open_techs" : "general_contractors")}
         </div>`);
     }
 
@@ -681,6 +727,19 @@
         </article>`;
     }
 
+    function associationTags(permits, field, mode) {
+      const counts = new Map();
+      permits.forEach(permit => {
+        const labelsByKey = clean(permit[field]).split("|").map(x => x.trim()).filter(Boolean);
+        labelsByKey.forEach(label => {
+          counts.set(label, (counts.get(label) || 0) + 1);
+        });
+      });
+      const rows = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 24);
+      if (!rows.length) return `<span class="small">No associated contacts found on this contact's open permits.</span>`;
+      return `<div class="tag-row">${rows.map(([name, count]) => `<span class="tag clickable" onclick="openContactProfile('${enc(name)}', '${mode}')">${esc(name)} &middot; ${fmt(count)} shared open permits</span>`).join("")}</div>`;
+    }
+
     function showPermitFromEncoded(encoded) {
       showPermitDetail(JSON.parse(decodeURIComponent(encoded)));
     }
@@ -693,9 +752,11 @@
       return items ? `<ul class="permit-facts">${items}</ul>` : "";
     }
 
-    function renderPermits(rows) {
+    function renderPermits(keepScroll = false) {
+      const previousScroll = $("results").scrollTop;
+      const rows = visibleSlice();
       $("results-title").textContent = "Open Permits";
-      $("result-count").textContent = `${fmt(rows.length)} shown`;
+      $("result-count").textContent = resultCountText();
       if (!rows.length) {
         $("results").innerHTML = `<div class="empty">No matching permits.</div>`;
         return;
@@ -713,7 +774,7 @@
               <td class="money">${money(row.reported_cost)}</td>
             </tr>`).join("")}</tbody>
         </table>`;
-      state.visibleRows = rows;
+      $("results").scrollTop = keepScroll ? previousScroll : 0;
     }
 
     function selectPermit(index) {
@@ -770,6 +831,11 @@
       $("q").value = name;
       $("ward").value = "";
       await search();
+      const filteredIndex = (state.filteredRows || []).findIndex(row => norm(row.contact_name) === norm(name));
+      if (filteredIndex >= state.visibleRows.length) {
+        state.visibleLimit = filteredIndex + 1;
+        renderContacts();
+      }
       const index = (state.visibleRows || []).findIndex(row => norm(row.contact_name) === norm(name));
       if (index >= 0) {
         await selectContact(index);
