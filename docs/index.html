@@ -508,9 +508,16 @@
       const row = state.visibleRows[index];
       state.selected = row;
       $("detail").innerHTML = `<p class="small">Loading matching open permits for ${esc(row.contact_name)}...</p>`;
-      const openPermits = await loadJson("open_permits", true);
-      const field = state.mode === "general_contractors" ? "general_contractors" : "open_techs";
-      const related = openPermits.filter(p => norm(p[field]).split("|").map(x => x.trim()).includes(norm(row.contact_name))).slice(0, 40);
+      let related = [];
+      let relatedError = "";
+      try {
+        const openPermits = await loadJson("open_permits", true);
+        const field = state.mode === "general_contractors" ? "general_contractors" : "open_techs";
+        const contactKey = norm(row.contact_name);
+        related = openPermits.filter(p => namesFrom(p[field]).includes(contactKey)).slice(0, 40);
+      } catch (error) {
+        relatedError = error.message || "Open permit details could not be loaded.";
+      }
       $("detail").innerHTML = `
         <h3>${esc(row.contact_name)}</h3>
         <div class="tag-row">
@@ -523,8 +530,12 @@
         ${renderSpecialties(row)}
         <div class="detail-section">
           <h4>Open permits in static index</h4>
-          ${related.length ? related.map(renderPermitCard).join("") : `<p class="small">No open permits matched this profile in the exported open-permit index.</p>`}
+          ${relatedError ? `<p class="small">${esc(relatedError)}</p>` : related.length ? related.map(renderPermitCard).join("") : `<p class="small">No open permits matched this profile in the exported open-permit index.</p>`}
         </div>`;
+    }
+
+    function namesFrom(value) {
+      return clean(value).split("|").map(x => norm(x.trim())).filter(Boolean);
     }
 
     function renderSpecialties(row) {
@@ -539,6 +550,17 @@
       const items = rows || [];
       if (!items.length) return `<span class="small">No clear pattern in available records.</span>`;
       return `<div class="tag-row">${items.map(x => `<span class="tag">${esc(x[key])} &middot; ${fmt(x.jobs)} jobs${x.open_jobs ? `, ${fmt(x.open_jobs)} open` : ""}</span>`).join("")}</div>`;
+    }
+
+    function renderPermitCard(row) {
+      return `
+        <article class="permit-card">
+          <strong>${esc(row.permit_number)}</strong>
+          <div class="small">${esc(row.issue_date)} &middot; ${esc(row.permit_status)} &middot; ${esc(row.permit_type)}</div>
+          <div>${esc(row.address)}</div>
+          <div class="small">${esc(row.work_type)}${row.ward ? ` &middot; Ward ${esc(row.ward)}` : ""}${row.reported_cost ? ` &middot; ${money(row.reported_cost)}` : ""}</div>
+          ${row.work_description ? `<p class="small">${esc(row.work_description)}</p>` : ""}
+        </article>`;
     }
 
     function renderPermits(rows) {
