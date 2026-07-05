@@ -182,8 +182,13 @@
       gap: 14px;
     }
 
-    .content.no-detail {
+    .content.no-detail,
+    .content.detail-mode {
       grid-template-columns: 1fr;
+    }
+
+    .content.detail-mode #results-panel {
+      display: none;
     }
 
     .panel-head {
@@ -304,14 +309,44 @@
     }
 
     .detail {
-      position: sticky;
-      top: 12px;
-      max-height: calc(100vh - 24px);
+      max-height: none;
       overflow: auto;
     }
 
     .detail.hidden {
       display: none;
+    }
+
+    .detail-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .detail-nav .pager-controls {
+      margin-left: auto;
+    }
+
+    .detail-filter-grid {
+      display: grid;
+      grid-template-columns: minmax(180px, 1.4fr) repeat(3, minmax(140px, 1fr));
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    .detail-table-wrap {
+      overflow: auto;
+      max-height: 58vh;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .detail-table-wrap table {
+      min-width: 980px;
     }
 
     .detail-section {
@@ -466,7 +501,7 @@
       </aside>
 
       <section id="content" class="content no-detail">
-        <div class="panel">
+        <div id="results-panel" class="panel">
           <div class="panel-head">
             <h2 id="results-title">Results</h2>
             <span id="result-count" class="small"></span>
@@ -476,7 +511,6 @@
         </div>
 
         <aside id="detail-panel" class="panel detail hidden">
-          <h2>Detail</h2>
           <div id="detail" class="small"></div>
         </aside>
       </section>
@@ -493,7 +527,13 @@
       filteredRows: [],
       visibleRows: [],
       pageIndex: 0,
-      pageSize: 100
+      pageSize: 100,
+      detailHistory: [],
+      detailHistoryIndex: -1,
+      activeDetail: null,
+      detailFilters: { q: "", workType: "", permitType: "", role: "" },
+      detailPageIndex: 0,
+      detailPageSize: 25
     };
 
     const $ = id => document.getElementById(id);
@@ -505,16 +545,51 @@
     const norm = value => clean(value).toLowerCase();
     const enc = value => encodeURIComponent(clean(value)).replace(/'/g, "%27");
 
-    function showDetail(html) {
+    function showDetail(html, pushHistory = true) {
       $("content").classList.remove("no-detail");
+      $("content").classList.add("detail-mode");
       $("detail-panel").classList.remove("hidden");
       $("detail").innerHTML = html;
+      if (pushHistory) {
+        state.detailHistory = state.detailHistory.slice(0, state.detailHistoryIndex + 1);
+        state.detailHistory.push(html);
+        state.detailHistoryIndex = state.detailHistory.length - 1;
+      }
     }
 
     function hideDetail() {
       $("detail").innerHTML = "";
       $("detail-panel").classList.add("hidden");
+      $("content").classList.remove("detail-mode");
       $("content").classList.add("no-detail");
+    }
+
+    function detailShell(body) {
+      return `
+        <div class="detail-nav">
+          <button onclick="closeDetail()">Back to results</button>
+          <div class="pager-controls">
+            <button onclick="detailBack()">Back</button>
+            <button onclick="detailForward()">Forward</button>
+          </div>
+        </div>
+        ${body}`;
+    }
+
+    function closeDetail() {
+      hideDetail();
+    }
+
+    function detailBack() {
+      if (state.detailHistoryIndex <= 0) return;
+      state.detailHistoryIndex -= 1;
+      showDetail(state.detailHistory[state.detailHistoryIndex], false);
+    }
+
+    function detailForward() {
+      if (state.detailHistoryIndex >= state.detailHistory.length - 1) return;
+      state.detailHistoryIndex += 1;
+      showDetail(state.detailHistory[state.detailHistoryIndex], false);
     }
 
     async function loadJson(name, quiet = false) {
@@ -701,7 +776,7 @@
     async function selectContact(index) {
       const row = state.visibleRows[index];
       state.selected = row;
-      showDetail(`<p class="small">Loading matching open permits for ${esc(row.contact_name)}...</p>`);
+      showDetail(detailShell(`<p class="small">Loading matching open permits for ${esc(row.contact_name)}...</p>`), false);
       let allRelated = [];
       let related = [];
       let relatedError = "";
@@ -714,7 +789,20 @@
       } catch (error) {
         relatedError = error.message || "Open permit details could not be loaded.";
       }
-      showDetail(`
+      state.activeDetail = { type: "contact", row, permits: allRelated, relatedError, mode: state.mode };
+      state.detailFilters = { q: "", workType: "", permitType: "", role: "" };
+      state.detailPageIndex = 0;
+      renderContactDetail();
+    }
+
+    function renderContactDetail(pushHistory = true) {
+      const { row, permits, relatedError, mode } = state.activeDetail;
+      const filtered = filterDetailPermits(permits);
+      const totalPages = Math.max(1, Math.ceil(filtered.length / state.detailPageSize));
+      state.detailPageIndex = Math.min(state.detailPageIndex, totalPages - 1);
+      const start = state.detailPageIndex * state.detailPageSize;
+      const pageRows = filtered.slice(start, start + state.detailPageSize);
+      showDetail(detailShell(`
         <h3>${esc(row.contact_name)}</h3>
         <div class="tag-row">
           <span class="tag">${fmt(row.open_jobs)} open jobs</span>
@@ -725,14 +813,92 @@
         <p>${esc(row.sample_contact_type)}<br>${esc([row.city, row.state, row.zipcode].filter(Boolean).join(", "))}</p>
         ${renderSpecialties(row)}
         <div class="detail-section">
-          <h4>Open permits in static index</h4>
-          ${relatedError ? `<p class="small">${esc(relatedError)}</p>` : related.length ? related.map(renderPermitCard).join("") : `<p class="small">No open permits matched this profile in the exported open-permit index.</p>`}
-          ${allRelated.length > related.length ? `<p class="small">Showing ${fmt(related.length)} of ${fmt(allRelated.length)} matching open permits.</p>` : ""}
+          <h4>Open permits</h4>
+          ${relatedError ? `<p class="small">${esc(relatedError)}</p>` : detailPermitFilters(permits)}
+          ${relatedError ? "" : detailPermitTable(pageRows, filtered.length)}
         </div>
         <div class="detail-section">
-          <h4>${state.mode === "general_contractors" ? "Associated Open Techs" : "Associated General Contractors"}</h4>
-          ${relatedError ? `<p class="small">${esc(relatedError)}</p>` : associationTags(allRelated, state.mode === "general_contractors" ? "open_techs" : "general_contractors", state.mode === "general_contractors" ? "open_techs" : "general_contractors")}
-        </div>`);
+          <h4>${mode === "general_contractors" ? "Associated Open Techs" : "Associated General Contractors"}</h4>
+          ${relatedError ? `<p class="small">${esc(relatedError)}</p>` : associationTags(permits, mode === "general_contractors" ? "open_techs" : "general_contractors", mode === "general_contractors" ? "open_techs" : "general_contractors")}
+        </div>`), pushHistory);
+    }
+
+    function detailPermitFilters(permits) {
+      const workTypes = optionList(permits.map(p => p.work_type));
+      const permitTypes = optionList(permits.map(p => p.permit_type));
+      const roleNames = optionList(permits.flatMap(p => [...clean(p.general_contractors).split("|"), ...clean(p.open_techs).split("|")].map(x => x.trim())));
+      return `
+        <div class="detail-filter-grid">
+          <label>Permit search
+            <input id="detail-q" value="${esc(state.detailFilters.q)}" placeholder="Permit, address, description..." oninput="setDetailFilter('q', this.value)">
+          </label>
+          <label>Work type
+            <select id="detail-work" onchange="setDetailFilter('workType', this.value)">
+              <option value="">All work types</option>${workTypes.map(v => `<option value="${esc(v)}" ${state.detailFilters.workType === v ? "selected" : ""}>${esc(v)}</option>`).join("")}
+            </select>
+          </label>
+          <label>Permit type
+            <select id="detail-permit-type" onchange="setDetailFilter('permitType', this.value)">
+              <option value="">All permit types</option>${permitTypes.map(v => `<option value="${esc(v)}" ${state.detailFilters.permitType === v ? "selected" : ""}>${esc(v)}</option>`).join("")}
+            </select>
+          </label>
+          <label>Contract role
+            <select id="detail-role" onchange="setDetailFilter('role', this.value)">
+              <option value="">All roles</option>${roleNames.map(v => `<option value="${esc(v)}" ${state.detailFilters.role === v ? "selected" : ""}>${esc(v)}</option>`).join("")}
+            </select>
+          </label>
+        </div>`;
+    }
+
+    function optionList(values) {
+      return Array.from(new Set(values.map(v => clean(v).trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    }
+
+    function setDetailFilter(key, value) {
+      state.detailFilters[key] = value;
+      state.detailPageIndex = 0;
+      renderContactDetail(false);
+    }
+
+    function filterDetailPermits(permits) {
+      const q = norm(state.detailFilters.q);
+      return permits.filter(row => {
+        if (state.detailFilters.workType && clean(row.work_type) !== state.detailFilters.workType) return false;
+        if (state.detailFilters.permitType && clean(row.permit_type) !== state.detailFilters.permitType) return false;
+        if (state.detailFilters.role && ![...clean(row.general_contractors).split("|"), ...clean(row.open_techs).split("|")].map(x => x.trim()).includes(state.detailFilters.role)) return false;
+        if (!q) return true;
+        return norm([row.permit_number, row.address, row.work_description, row.permit_type, row.work_type, row.review_type, row.general_contractors, row.open_techs].join(" ")).includes(q);
+      });
+    }
+
+    function detailPermitTable(rows, total) {
+      if (!total) return `<p class="small">No permits match these detail filters.</p>`;
+      const start = state.detailPageIndex * state.detailPageSize + 1;
+      const end = Math.min((state.detailPageIndex + 1) * state.detailPageSize, total);
+      const totalPages = Math.max(1, Math.ceil(total / state.detailPageSize));
+      return `
+        <div class="panel-head">
+          <span class="small">${fmt(start)}-${fmt(end)} of ${fmt(total)} permits</span>
+          <div class="pager-controls">
+            <button onclick="changeDetailPage(-1)" ${state.detailPageIndex === 0 ? "disabled" : ""}>Previous</button>
+            <button onclick="changeDetailPage(1)" ${state.detailPageIndex >= totalPages - 1 ? "disabled" : ""}>Next</button>
+          </div>
+        </div>
+        <div class="detail-table-wrap">
+          <table>
+            <thead><tr><th>Permit</th><th>Issued</th><th>Address</th><th>Work Type</th><th>Permit Type</th><th>Cost</th></tr></thead>
+            <tbody>${rows.map((row, i) => `<tr onclick="showPermitFromEncoded('${enc(JSON.stringify(row))}')"><td><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_status)}</span></td><td>${esc(row.issue_date)}</td><td>${esc(row.address)}</td><td>${esc(row.work_type)}</td><td>${esc(row.permit_type)}</td><td class="money">${money(row.reported_cost)}</td></tr>`).join("")}</tbody>
+          </table>
+        </div>`;
+    }
+
+    function changeDetailPage(delta) {
+      const total = filterDetailPermits(state.activeDetail.permits).length;
+      const totalPages = Math.max(1, Math.ceil(total / state.detailPageSize));
+      const next = Math.min(Math.max(state.detailPageIndex + delta, 0), totalPages - 1);
+      if (next === state.detailPageIndex) return;
+      state.detailPageIndex = next;
+      renderContactDetail(false);
     }
 
     function namesFrom(value) {
@@ -832,7 +998,8 @@
     }
 
     function showPermitDetail(row) {
-      showDetail(`
+      state.activeDetail = { type: "permit", row };
+      showDetail(detailShell(`
         <h3>${esc(row.permit_number)}</h3>
         <div class="tag-row">
           <span class="tag">${esc(row.permit_status)}</span>
@@ -868,7 +1035,7 @@
         </div>
         ${row.work_description ? `<div class="detail-section"><h4>Work description</h4><p class="permit-description small">${esc(row.work_description)}</p></div>` : ""}
         <div class="detail-section"><h4>General contractors</h4>${nameTags(row.general_contractors, "general_contractors")}</div>
-        <div class="detail-section"><h4>Open techs</h4>${nameTags(row.open_techs, "open_techs")}</div>`);
+        <div class="detail-section"><h4>Open techs</h4>${nameTags(row.open_techs, "open_techs")}</div>`));
     }
 
     async function openContactProfile(encodedName, mode) {
