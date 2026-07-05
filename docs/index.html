@@ -182,6 +182,10 @@
       gap: 14px;
     }
 
+    .content.no-detail {
+      grid-template-columns: 1fr;
+    }
+
     .panel-head {
       display: flex;
       gap: 10px;
@@ -255,11 +259,34 @@
       font-weight: 700;
     }
 
+    .tag.clickable,
+    .permit-card.clickable {
+      cursor: pointer;
+    }
+
+    .tag.clickable {
+      border-color: var(--teal);
+      color: var(--teal);
+      text-decoration: underline;
+      text-decoration-thickness: 2px;
+      text-underline-offset: 3px;
+    }
+
+    .tag.clickable:hover,
+    .permit-card.clickable:hover {
+      background: #eef7ef;
+      border-color: var(--teal);
+    }
+
     .detail {
       position: sticky;
       top: 12px;
       max-height: calc(100vh - 24px);
       overflow: auto;
+    }
+
+    .detail.hidden {
+      display: none;
     }
 
     .detail-section {
@@ -412,7 +439,7 @@
         <p class="small"><a href="https://github.com/dkaruri/chicago-building-permits-mcp">Repository</a> &middot; <a href="https://data.cityofchicago.org/Buildings/Building-Permits/ydr8-5enu">Source dataset</a></p>
       </aside>
 
-      <section class="content">
+      <section id="content" class="content no-detail">
         <div class="panel">
           <div class="panel-head">
             <h2 id="results-title">Results</h2>
@@ -421,9 +448,9 @@
           <div id="results" class="table-wrap"><div class="empty">Loading data...</div></div>
         </div>
 
-        <aside class="panel detail">
+        <aside id="detail-panel" class="panel detail hidden">
           <h2>Detail</h2>
-          <div id="detail" class="small">Select a result.</div>
+          <div id="detail" class="small"></div>
         </aside>
       </section>
     </section>
@@ -445,6 +472,19 @@
     const clean = value => (value == null ? "" : String(value));
     const esc = value => clean(value).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
     const norm = value => clean(value).toLowerCase();
+    const enc = value => encodeURIComponent(clean(value));
+
+    function showDetail(html) {
+      $("content").classList.remove("no-detail");
+      $("detail-panel").classList.remove("hidden");
+      $("detail").innerHTML = html;
+    }
+
+    function hideDetail() {
+      $("detail").innerHTML = "";
+      $("detail-panel").classList.add("hidden");
+      $("content").classList.add("no-detail");
+    }
 
     async function loadJson(name, quiet = false) {
       if (!state.data[name]) {
@@ -481,7 +521,7 @@
       ["general_contractors", "open_techs", "open_permits"].forEach(name => $("tab-" + name).classList.remove("active"));
       $("tab-" + mode).classList.add("active");
       $("sort").value = mode === "open_permits" ? "latest_issue_date" : "open_jobs";
-      $("detail").innerHTML = "Select a result.";
+      hideDetail();
       search();
     }
 
@@ -573,7 +613,7 @@
     async function selectContact(index) {
       const row = state.visibleRows[index];
       state.selected = row;
-      $("detail").innerHTML = `<p class="small">Loading matching open permits for ${esc(row.contact_name)}...</p>`;
+      showDetail(`<p class="small">Loading matching open permits for ${esc(row.contact_name)}...</p>`);
       let related = [];
       let relatedError = "";
       try {
@@ -584,7 +624,7 @@
       } catch (error) {
         relatedError = error.message || "Open permit details could not be loaded.";
       }
-      $("detail").innerHTML = `
+      showDetail(`
         <h3>${esc(row.contact_name)}</h3>
         <div class="tag-row">
           <span class="tag">${fmt(row.open_jobs)} open jobs</span>
@@ -597,7 +637,7 @@
         <div class="detail-section">
           <h4>Open permits in static index</h4>
           ${relatedError ? `<p class="small">${esc(relatedError)}</p>` : related.length ? related.map(renderPermitCard).join("") : `<p class="small">No open permits matched this profile in the exported open-permit index.</p>`}
-        </div>`;
+        </div>`);
     }
 
     function namesFrom(value) {
@@ -619,8 +659,9 @@
     }
 
     function renderPermitCard(row) {
+      const payload = enc(JSON.stringify(row));
       return `
-        <article class="permit-card">
+        <article class="permit-card clickable" onclick="showPermitFromEncoded('${payload}')">
           <header>
             <div>
               <h5>${esc(row.permit_number)}</h5>
@@ -638,6 +679,10 @@
           ])}
           ${row.work_description ? `<p class="permit-description small">${esc(row.work_description)}</p>` : ""}
         </article>`;
+    }
+
+    function showPermitFromEncoded(encoded) {
+      showPermitDetail(JSON.parse(decodeURIComponent(encoded)));
     }
 
     function permitFacts(row, facts) {
@@ -672,13 +717,16 @@
     }
 
     function selectPermit(index) {
-      const row = state.visibleRows[index];
-      $("detail").innerHTML = `
+      showPermitDetail(state.visibleRows[index]);
+    }
+
+    function showPermitDetail(row) {
+      showDetail(`
         <h3>${esc(row.permit_number)}</h3>
         <div class="tag-row">
           <span class="tag">${esc(row.permit_status)}</span>
           <span class="tag">${esc(row.permit_type)}</span>
-          ${row.ward ? `<span class="tag">Ward ${esc(row.ward)}</span>` : ""}
+          ${row.ward ? `<span class="tag clickable" onclick="searchWard('${enc(row.ward)}')">Ward ${esc(row.ward)}</span>` : ""}
           ${row.reported_cost ? `<span class="tag">${money(row.reported_cost)}</span>` : ""}
         </div>
         <div class="detail-section">
@@ -708,14 +756,45 @@
           ])}
         </div>
         ${row.work_description ? `<div class="detail-section"><h4>Work description</h4><p class="permit-description small">${esc(row.work_description)}</p></div>` : ""}
-        <div class="detail-section"><h4>General contractors</h4>${nameTags(row.general_contractors)}</div>
-        <div class="detail-section"><h4>Open techs</h4>${nameTags(row.open_techs)}</div>`;
+        <div class="detail-section"><h4>General contractors</h4>${nameTags(row.general_contractors, "general_contractors")}</div>
+        <div class="detail-section"><h4>Open techs</h4>${nameTags(row.open_techs, "open_techs")}</div>`);
     }
 
-    function nameTags(value) {
+    async function openContactProfile(encodedName, mode) {
+      const name = decodeURIComponent(encodedName);
+      state.mode = mode;
+      state.selected = null;
+      ["general_contractors", "open_techs", "open_permits"].forEach(tabName => $("tab-" + tabName).classList.remove("active"));
+      $("tab-" + mode).classList.add("active");
+      $("sort").value = "open_jobs";
+      $("q").value = name;
+      $("ward").value = "";
+      await search();
+      const index = (state.visibleRows || []).findIndex(row => norm(row.contact_name) === norm(name));
+      if (index >= 0) {
+        await selectContact(index);
+      } else {
+        showDetail(`<p class="small">No profile matched ${esc(name)} in ${mode === "general_contractors" ? "General Contractors" : "Open Techs"}.</p>`);
+      }
+    }
+
+    async function searchWard(encodedWard) {
+      const ward = decodeURIComponent(encodedWard);
+      state.mode = "open_permits";
+      state.selected = null;
+      ["general_contractors", "open_techs", "open_permits"].forEach(tabName => $("tab-" + tabName).classList.remove("active"));
+      $("tab-open_permits").classList.add("active");
+      $("sort").value = "latest_issue_date";
+      $("q").value = "";
+      $("ward").value = ward;
+      hideDetail();
+      await search();
+    }
+
+    function nameTags(value, mode) {
       const names = clean(value).split("|").map(x => x.trim()).filter(Boolean);
       if (!names.length) return `<span class="small">No public contact listed in this category.</span>`;
-      return `<div class="tag-row">${names.map(name => `<span class="tag">${esc(name)}</span>`).join("")}</div>`;
+      return `<div class="tag-row">${names.map(name => `<span class="tag clickable" onclick="openContactProfile('${enc(name)}', '${mode}')">${esc(name)}</span>`).join("")}</div>`;
     }
 
     init().catch(error => {
