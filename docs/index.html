@@ -322,7 +322,7 @@
 
     .permit-facts {
       display: grid;
-      gap: 5px;
+      gap: 10px;
       margin: 8px 0 0;
       padding-left: 20px;
       color: var(--ink);
@@ -333,7 +333,17 @@
     }
 
     .permit-facts b {
+      display: block;
       color: var(--steel);
+      font-size: 0.76rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .permit-fact-value {
+      display: block;
+      margin-top: 2px;
+      line-height: 1.42;
     }
 
     .permit-description {
@@ -633,7 +643,7 @@
     function permitFacts(row, facts) {
       const items = facts
         .filter(([label, value]) => clean(value) !== "")
-        .map(([label, value]) => `<li><b>${esc(label)}:</b> ${esc(value)}</li>`)
+        .map(([label, value]) => `<li><b>${esc(label)}</b><span class="permit-fact-value">${esc(value)}</span></li>`)
         .join("");
       return items ? `<ul class="permit-facts">${items}</ul>` : "";
     }
