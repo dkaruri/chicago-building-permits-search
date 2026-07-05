@@ -210,6 +210,31 @@
       border-radius: 8px;
     }
 
+    .pager {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+    }
+
+    .pager-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .pager button {
+      width: auto;
+      min-height: 36px;
+      padding: 7px 12px;
+    }
+
+    .pager button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -447,6 +472,7 @@
             <span id="result-count" class="small"></span>
           </div>
           <div id="results" class="table-wrap"><div class="empty">Loading data...</div></div>
+          <div id="pager" class="pager"></div>
         </div>
 
         <aside id="detail-panel" class="panel detail hidden">
@@ -466,7 +492,8 @@
       selected: null,
       filteredRows: [],
       visibleRows: [],
-      visibleLimit: 0
+      pageIndex: 0,
+      pageSize: 100
     };
 
     const $ = id => document.getElementById(id);
@@ -505,7 +532,6 @@
     async function init() {
       state.manifest = await fetch("data/manifest.json").then(r => r.json());
       renderStatus();
-      $("results").addEventListener("scroll", maybeLoadMore);
       await search();
     }
 
@@ -564,7 +590,8 @@
 
     async function search() {
       if (!state.manifest) return;
-      state.visibleLimit = state.mode === "open_permits" ? 150 : 100;
+      state.pageIndex = 0;
+      state.pageSize = state.mode === "open_permits" ? 150 : 100;
       if (state.mode === "open_permits") {
         const rows = await loadJson("open_permits");
         state.filteredRows = filterPermits(rows);
@@ -600,34 +627,55 @@
     }
 
     function visibleSlice() {
-      state.visibleRows = state.filteredRows.slice(0, state.visibleLimit);
+      const start = state.pageIndex * state.pageSize;
+      state.visibleRows = state.filteredRows.slice(start, start + state.pageSize);
       return state.visibleRows;
     }
 
     function resultCountText() {
-      const shown = Math.min(state.visibleLimit, state.filteredRows.length);
-      return `${fmt(shown)} of ${fmt(state.filteredRows.length)} shown`;
+      if (!state.filteredRows.length) return "0 shown";
+      const start = state.pageIndex * state.pageSize + 1;
+      const end = Math.min((state.pageIndex + 1) * state.pageSize, state.filteredRows.length);
+      return `${fmt(start)}-${fmt(end)} of ${fmt(state.filteredRows.length)} shown`;
     }
 
-    function maybeLoadMore() {
-      const el = $("results");
-      if (!state.filteredRows.length || state.visibleLimit >= state.filteredRows.length) return;
-      if (el.scrollTop + el.clientHeight < el.scrollHeight - 80) return;
-      state.visibleLimit += state.mode === "open_permits" ? 150 : 100;
+    function pageCount() {
+      return Math.max(1, Math.ceil(state.filteredRows.length / state.pageSize));
+    }
+
+    function changePage(delta) {
+      const next = Math.min(Math.max(state.pageIndex + delta, 0), pageCount() - 1);
+      if (next === state.pageIndex) return;
+      state.pageIndex = next;
+      hideDetail();
       if (state.mode === "open_permits") {
-        renderPermits(true);
+        renderPermits();
       } else {
-        renderContacts(true);
+        renderContacts();
       }
     }
 
-    function renderContacts(keepScroll = false) {
-      const previousScroll = $("results").scrollTop;
+    function renderPager() {
+      if (!state.filteredRows.length) {
+        $("pager").innerHTML = "";
+        return;
+      }
+      const totalPages = pageCount();
+      $("pager").innerHTML = `
+        <span class="small">Page ${fmt(state.pageIndex + 1)} of ${fmt(totalPages)} &middot; ${fmt(state.pageSize)} per page</span>
+        <div class="pager-controls">
+          <button onclick="changePage(-1)" ${state.pageIndex === 0 ? "disabled" : ""}>Previous</button>
+          <button onclick="changePage(1)" ${state.pageIndex >= totalPages - 1 ? "disabled" : ""}>Next</button>
+        </div>`;
+    }
+
+    function renderContacts() {
       const rows = visibleSlice();
       $("results-title").textContent = state.mode === "general_contractors" ? "General Contractors" : "Open Techs";
       $("result-count").textContent = resultCountText();
       if (!rows.length) {
         $("results").innerHTML = `<div class="empty">No matching profiles.</div>`;
+        renderPager();
         return;
       }
       $("results").innerHTML = `
@@ -642,7 +690,8 @@
               <td>${days(row.avg_processing_days)}</td>
             </tr>`).join("")}</tbody>
         </table>`;
-      $("results").scrollTop = keepScroll ? previousScroll : 0;
+      $("results").scrollTop = 0;
+      renderPager();
     }
 
     function specialtySummary(row) {
@@ -752,13 +801,13 @@
       return items ? `<ul class="permit-facts">${items}</ul>` : "";
     }
 
-    function renderPermits(keepScroll = false) {
-      const previousScroll = $("results").scrollTop;
+    function renderPermits() {
       const rows = visibleSlice();
       $("results-title").textContent = "Open Permits";
       $("result-count").textContent = resultCountText();
       if (!rows.length) {
         $("results").innerHTML = `<div class="empty">No matching permits.</div>`;
+        renderPager();
         return;
       }
       $("results").innerHTML = `
@@ -774,7 +823,8 @@
               <td class="money">${money(row.reported_cost)}</td>
             </tr>`).join("")}</tbody>
         </table>`;
-      $("results").scrollTop = keepScroll ? previousScroll : 0;
+      $("results").scrollTop = 0;
+      renderPager();
     }
 
     function selectPermit(index) {
@@ -832,8 +882,8 @@
       $("ward").value = "";
       await search();
       const filteredIndex = (state.filteredRows || []).findIndex(row => norm(row.contact_name) === norm(name));
-      if (filteredIndex >= state.visibleRows.length) {
-        state.visibleLimit = filteredIndex + 1;
+      if (filteredIndex >= 0) {
+        state.pageIndex = Math.floor(filteredIndex / state.pageSize);
         renderContacts();
       }
       const index = (state.visibleRows || []).findIndex(row => norm(row.contact_name) === norm(name));
