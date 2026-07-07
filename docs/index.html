@@ -235,6 +235,24 @@
       padding: 7px 12px;
     }
 
+    .icon-button {
+      width: 38px;
+      min-height: 38px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-color: var(--teal);
+      color: var(--teal);
+      background: #ffffff;
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+
+    .icon-button:hover {
+      background: #eef7ef;
+    }
+
     .pager button:disabled {
       cursor: not-allowed;
       opacity: 0.45;
@@ -263,6 +281,35 @@
       font-size: 0.72rem;
       letter-spacing: 0.09em;
       text-transform: uppercase;
+    }
+
+    .sort-header {
+      width: auto;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
+      display: inline-flex;
+      gap: 5px;
+      align-items: center;
+      justify-content: flex-start;
+      font: inherit;
+      font-weight: 850;
+      letter-spacing: inherit;
+      text-align: left;
+      text-transform: inherit;
+    }
+
+    .sort-header:hover {
+      color: var(--teal);
+    }
+
+    .sort-icon {
+      min-width: 12px;
+      font-size: 0.82rem;
+      line-height: 1;
     }
 
     tbody tr {
@@ -326,8 +373,10 @@
       margin-bottom: 12px;
     }
 
-    .detail-nav .pager-controls {
-      margin-left: auto;
+    .detail-nav-left {
+      display: flex;
+      gap: 8px;
+      align-items: center;
     }
 
     .detail-filter-grid {
@@ -347,6 +396,20 @@
 
     .detail-table-wrap table {
       min-width: 980px;
+    }
+
+    .detail-table-wrap.compact {
+      max-height: 240px;
+    }
+
+    .detail-table-wrap.compact table {
+      min-width: 520px;
+    }
+
+    .detail-table-wrap.compact th:nth-child(n+2),
+    .detail-table-wrap.compact td:nth-child(n+2) {
+      text-align: right;
+      white-space: nowrap;
     }
 
     .detail-section {
@@ -486,7 +549,7 @@
           <input id="ward" placeholder="Open permits only" oninput="scheduleSearch()">
         </label>
         <label>Sort
-          <select id="sort" onchange="search()">
+          <select id="sort" onchange="clearColumnSort(); search()">
             <option value="open_jobs">Open jobs</option>
             <option value="total_jobs">Total jobs</option>
             <option value="avg_processing_days">Avg processing days</option>
@@ -528,6 +591,7 @@
       visibleRows: [],
       pageIndex: 0,
       pageSize: 100,
+      resultSort: { key: null, direction: null },
       detailHistory: [],
       detailHistoryIndex: -1,
       activeDetail: null,
@@ -544,6 +608,20 @@
     const esc = value => clean(value).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
     const norm = value => clean(value).toLowerCase();
     const enc = value => encodeURIComponent(clean(value)).replace(/'/g, "%27");
+
+    function dateTimeLabel(value) {
+      if (!value) return "";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return clean(value);
+      return date.toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        timeZoneName: "short"
+      });
+    }
 
     function showDetail(html, pushHistory = true) {
       $("content").classList.remove("no-detail");
@@ -567,10 +645,10 @@
     function detailShell(body) {
       return `
         <div class="detail-nav">
-          <button onclick="closeDetail()">Back to results</button>
-          <div class="pager-controls">
-            <button onclick="detailBack()">Back</button>
-            <button onclick="detailForward()">Forward</button>
+          <div class="detail-nav-left">
+            <button class="icon-button" title="Back to results" aria-label="Back to results" onclick="closeDetail()">&larr;</button>
+            <button class="icon-button" title="Back" aria-label="Back" onclick="detailBack()">&lsaquo;</button>
+            <button class="icon-button" title="Forward" aria-label="Forward" onclick="detailForward()">&rsaquo;</button>
           </div>
         </div>
         ${body}`;
@@ -617,13 +695,14 @@
         <div class="metric"><span>Open Permits</span><strong>${fmt(m.open_permit_count)}</strong></div>
         <div class="metric"><span>Contractors</span><strong>${fmt(m.general_contractor_count)}</strong></div>
         <div class="metric"><span>Open Techs</span><strong>${fmt(m.open_tech_count)}</strong></div>
-        <div class="metric"><span>Exported</span><strong>${clean(m.exported_at).slice(0, 10)}</strong></div>
+        <div class="metric"><span>Exported</span><strong>${esc(dateTimeLabel(m.exported_at))}</strong></div>
       `;
     }
 
     function setMode(mode) {
       state.mode = mode;
       state.selected = null;
+      state.resultSort = { key: null, direction: null };
       ["general_contractors", "open_techs", "open_permits"].forEach(name => $("tab-" + name).classList.remove("active"));
       $("tab-" + mode).classList.add("active");
       $("sort").value = mode === "open_permits" ? "latest_issue_date" : "open_jobs";
@@ -634,8 +713,13 @@
     function clearSearch() {
       $("q").value = "";
       $("ward").value = "";
+      state.resultSort = { key: null, direction: null };
       hideDetail();
       search();
+    }
+
+    function clearColumnSort() {
+      state.resultSort = { key: null, direction: null };
     }
 
     function scheduleSearch() {
@@ -656,11 +740,58 @@
     function sortRows(rows) {
       const key = $("sort").value;
       const copy = rows.slice();
+      if (state.resultSort.key) {
+        const direction = state.resultSort.direction === "asc" ? 1 : -1;
+        copy.sort((a, b) => compareValues(sortValue(a, state.resultSort.key), sortValue(b, state.resultSort.key), state.resultSort.key) * direction);
+        return copy;
+      }
       copy.sort((a, b) => {
         if (key === "latest_issue_date") return clean(b.latest_issue_date || b.issue_date).localeCompare(clean(a.latest_issue_date || a.issue_date));
         return Number(b[key] || 0) - Number(a[key] || 0);
       });
       return copy;
+    }
+
+    function sortValue(row, key) {
+      if (key === "public_contact") return [row.city, row.state, row.zipcode].filter(Boolean).join(", ");
+      if (key === "contact_type") return row.sample_contact_type;
+      if (key === "issued") return row.issue_date || row.latest_issue_date;
+      if (key === "cost") return row.reported_cost;
+      return row[key];
+    }
+
+    function compareValues(a, b, key) {
+      const numericKeys = new Set(["open_jobs", "total_jobs", "avg_processing_days", "ward", "cost", "reported_cost", "processing_time", "total_fee"]);
+      if (numericKeys.has(key)) {
+        const left = Number(a);
+        const right = Number(b);
+        const leftMissing = Number.isNaN(left);
+        const rightMissing = Number.isNaN(right);
+        if (leftMissing && rightMissing) return 0;
+        if (leftMissing) return 1;
+        if (rightMissing) return -1;
+        return left - right;
+      }
+      return clean(a).localeCompare(clean(b), undefined, { numeric: true, sensitivity: "base" });
+    }
+
+    function setResultSort(key) {
+      if (state.resultSort.key !== key) {
+        state.resultSort = { key, direction: "asc" };
+      } else if (state.resultSort.direction === "asc") {
+        state.resultSort = { key, direction: "desc" };
+      } else {
+        state.resultSort = { key: null, direction: null };
+      }
+      state.pageIndex = 0;
+      hideDetail();
+      search();
+    }
+
+    function sortHeader(label, key) {
+      const active = state.resultSort.key === key;
+      const icon = !active ? "&#8597;" : state.resultSort.direction === "asc" ? "&#8595;" : "&#8593;";
+      return `<button class="sort-header" onclick="setResultSort('${key}')" aria-label="Sort ${esc(label)}"><span>${esc(label)}</span><span class="sort-icon">${icon}</span></button>`;
     }
 
     async function search() {
@@ -755,7 +886,7 @@
       }
       $("results").innerHTML = `
         <table>
-          <thead><tr><th>Name</th><th>Type</th><th>Public Contact</th><th>Open Jobs</th><th>Avg Days</th></tr></thead>
+          <thead><tr><th>${sortHeader("Name", "contact_name")}</th><th>${sortHeader("Type", "contact_type")}</th><th>${sortHeader("Public Contact", "public_contact")}</th><th>${sortHeader("Open Jobs", "open_jobs")}</th><th>${sortHeader("Avg Days", "avg_processing_days")}</th></tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr onclick="selectContact(${i})">
               <td><strong>${esc(row.contact_name)}</strong><br><span class="small">${esc(specialtySummary(row))}</span></td>
@@ -829,8 +960,8 @@
       const roleNames = optionList(permits.flatMap(p => [...clean(p.general_contractors).split("|"), ...clean(p.open_techs).split("|")].map(x => x.trim())));
       return `
         <div class="detail-filter-grid">
-          <label>Permit search
-            <input id="detail-q" value="${esc(state.detailFilters.q)}" placeholder="Permit, address, description..." oninput="setDetailFilter('q', this.value)">
+          <label>Permit / address search
+            <input id="detail-q" value="${esc(state.detailFilters.q)}" placeholder="Permit, address, work description..." oninput="setDetailFilter('q', this.value)">
           </label>
           <label>Work type
             <select id="detail-work" onchange="setDetailFilter('workType', this.value)">
@@ -907,16 +1038,27 @@
 
     function renderSpecialties(row) {
       return `
-        <div class="detail-section"><h4>Specializes in work types</h4>${tags(row.work_types, "work_type")}</div>
-        <div class="detail-section"><h4>Permit mix</h4>${tags(row.permit_types, "permit_type")}</div>
-        <div class="detail-section"><h4>Public contact roles</h4>${tags(row.contact_types, "contact_type")}</div>
+        <div class="detail-section"><h4>Specializes in work types</h4>${specialtyTable(row.work_types, "work_type", "Work type", true)}</div>
+        <div class="detail-section"><h4>Permit mix</h4>${specialtyTable(row.permit_types, "permit_type", "Permit type", true)}</div>
+        <div class="detail-section"><h4>Public contact roles</h4>${specialtyTable(row.contact_types, "contact_type", "Contact role", false)}</div>
       `;
     }
 
-    function tags(rows, key) {
+    function specialtyTable(rows, key, label, includeOpenJobs) {
       const items = rows || [];
       if (!items.length) return `<span class="small">No clear pattern in available records.</span>`;
-      return `<div class="tag-row">${items.map(x => `<span class="tag">${esc(x[key])} &middot; ${fmt(x.jobs)} jobs${x.open_jobs ? `, ${fmt(x.open_jobs)} open` : ""}</span>`).join("")}</div>`;
+      return `
+        <div class="detail-table-wrap compact">
+          <table>
+            <thead><tr><th>${esc(label)}</th><th>Jobs</th>${includeOpenJobs ? "<th>Open Jobs</th>" : ""}</tr></thead>
+            <tbody>${items.map(item => `
+              <tr>
+                <td>${esc(item[key])}</td>
+                <td>${fmt(item.jobs)}</td>
+                ${includeOpenJobs ? `<td>${fmt(item.open_jobs || 0)}</td>` : ""}
+              </tr>`).join("")}</tbody>
+          </table>
+        </div>`;
     }
 
     function renderPermitCard(row) {
@@ -978,7 +1120,7 @@
       }
       $("results").innerHTML = `
         <table>
-          <thead><tr><th>Permit</th><th>Status</th><th>Issued</th><th>Address</th><th>Ward</th><th>Cost</th></tr></thead>
+          <thead><tr><th>${sortHeader("Permit", "permit_number")}</th><th>${sortHeader("Status", "permit_status")}</th><th>${sortHeader("Issued", "issued")}</th><th>${sortHeader("Address", "address")}</th><th>${sortHeader("Ward", "ward")}</th><th>${sortHeader("Cost", "cost")}</th></tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr onclick="selectPermit(${i})">
               <td><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span></td>
@@ -1042,6 +1184,7 @@
       const name = decodeURIComponent(encodedName);
       state.mode = mode;
       state.selected = null;
+      state.resultSort = { key: null, direction: null };
       ["general_contractors", "open_techs", "open_permits"].forEach(tabName => $("tab-" + tabName).classList.remove("active"));
       $("tab-" + mode).classList.add("active");
       $("sort").value = "open_jobs";
@@ -1065,6 +1208,7 @@
       const ward = decodeURIComponent(encodedWard);
       state.mode = "open_permits";
       state.selected = null;
+      state.resultSort = { key: null, direction: null };
       ["general_contractors", "open_techs", "open_permits"].forEach(tabName => $("tab-" + tabName).classList.remove("active"));
       $("tab-open_permits").classList.add("active");
       $("sort").value = "latest_issue_date";
