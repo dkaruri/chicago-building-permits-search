@@ -178,14 +178,14 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{border-bottom:1px
 </style>
 </head>
 <body>
-<header><div class="kicker">Chicago Building Permits MCP</div><h1>Open Permits + Contacts</h1><p class="sub">Search open permits, General Contractors, and open technical/trade contacts using the local DuckDB generated from Chicago Data Portal Building Permits.</p></header>
+<header><div class="kicker">Chicago Building Permits Search</div><h1>Open Permits + Contacts</h1><p class="sub">Search open permits, General Contractors, and Open Subs using the local DuckDB generated from Chicago Data Portal Building Permits.</p></header>
 <main>
   <section class="status" id="status">Loading status...</section>
   <section class="grid">
     <aside class="panel controls">
       <div class="tabs">
         <button id="tab-gc" class="active" onclick="setMode('general_contractor')">General Contractors</button>
-        <button id="tab-tech" onclick="setMode('open_tech')">Open Techs</button>
+        <button id="tab-tech" onclick="setMode('open_tech')">Open Subs</button>
         <button id="tab-open" onclick="setMode('open_permits')">Open Permits</button>
       </div>
       <label>Search <input id="q" placeholder="Name, permit, address, work..." onkeydown="if(event.key==='Enter') search()"></label>
@@ -220,7 +220,7 @@ async function search(){
  }
 }
 function renderContacts(rows){
- $('results-title').textContent=mode==='general_contractor'?'General Contractors':'Open Techs';
+ $('results-title').textContent=mode==='general_contractor'?'General Contractors':'Open Subs';
  $('results').innerHTML=`<table><thead><tr><th>Name</th><th>Type</th><th>Contact</th><th>Open Jobs</th><th>Avg Days</th></tr></thead><tbody>${rows.map(r=>`<tr onclick='detail(${JSON.stringify(r.contact_name)})'><td>${r.contact_name||''}</td><td>${r.sample_contact_type||''}</td><td>${[r.city,r.state,r.zipcode].filter(Boolean).join(', ')}</td><td>${fmt(r.open_jobs)}</td><td>${r.avg_processing_days==null?'':Number(r.avg_processing_days).toFixed(1)}</td></tr>`).join('')}</tbody></table>`;
 }
 async function detail(name){

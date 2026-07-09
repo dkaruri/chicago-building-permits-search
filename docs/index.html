@@ -589,7 +589,7 @@
       <aside class="panel controls">
         <div class="tabs">
           <button id="tab-general_contractors" class="active" onclick="setMode('general_contractors')">General Contractors</button>
-          <button id="tab-open_techs" onclick="setMode('open_techs')">Open Techs</button>
+          <button id="tab-open_subs" onclick="setMode('open_subs')">Open Subs</button>
           <button id="tab-open_permits" onclick="setMode('open_permits')">Open Permits</button>
         </div>
         <label>Search
@@ -610,7 +610,7 @@
         <button class="primary" onclick="search()">Search</button>
         <button onclick="clearSearch()">Clear results</button>
         <p class="small">Data refreshes by GitHub Actions. Source contact fields are public portal fields only: name, type, city, state, and ZIP.</p>
-        <p class="small"><a href="https://github.com/dkaruri/chicago-building-permits-mcp">Repository</a> &middot; <a href="https://data.cityofchicago.org/Buildings/Building-Permits/ydr8-5enu">Source dataset</a></p>
+        <p class="small"><a href="https://github.com/dkaruri/chicago-building-permits-search">Repository</a> &middot; <a href="https://data.cityofchicago.org/Buildings/Building-Permits/ydr8-5enu">Source dataset</a></p>
       </aside>
 
       <section id="content" class="content no-detail">
@@ -768,7 +768,7 @@
         <div class="metric"><span>Permits Loaded</span><strong>${fmt(m.row_count)}</strong></div>
         <div class="metric"><span>Open Permits</span><strong>${fmt(m.open_permit_count)}</strong></div>
         <div class="metric"><span>Contractors</span><strong>${fmt(m.general_contractor_count)}</strong></div>
-        <div class="metric"><span>Open Techs</span><strong>${fmt(m.open_tech_count)}</strong></div>
+        <div class="metric"><span>Open Subs</span><strong>${fmt(m.open_sub_count)}</strong></div>
         <div class="metric"><span>Exported</span><strong>${esc(dateTimeLabel(m.exported_at))}</strong></div>
       `;
     }
@@ -777,7 +777,7 @@
       state.mode = mode;
       state.selected = null;
       state.resultSort = { key: null, direction: null };
-      ["general_contractors", "open_techs", "open_permits"].forEach(name => $("tab-" + name).classList.remove("active"));
+      ["general_contractors", "open_subs", "open_permits"].forEach(name => $("tab-" + name).classList.remove("active"));
       $("tab-" + mode).classList.add("active");
       $("sort").value = mode === "open_permits" ? "latest_issue_date" : "open_jobs";
       hideDetail();
@@ -918,7 +918,7 @@
         if (ward && clean(row.ward) !== ward) return false;
         return matchesTerms(row, [
           "permit_number", "permit_status", "permit_type", "review_type", "address", "work_type",
-          "work_description", "general_contractors", "open_techs"
+          "work_description", "general_contractors", "open_subs"
         ], terms);
       });
     }
@@ -976,7 +976,7 @@
 
     function renderContacts() {
       const rows = visibleSlice();
-      $("results-title").textContent = state.mode === "general_contractors" ? "General Contractors" : "Open Techs";
+      $("results-title").textContent = state.mode === "general_contractors" ? "General Contractors" : "Open Subs";
       $("result-count").textContent = resultCountText();
       if (!rows.length) {
         $("results").innerHTML = `<div class="empty">No matching profiles.</div>`;
@@ -1012,7 +1012,7 @@
       let relatedError = "";
       try {
         const openPermits = await loadJson("open_permits", true);
-        const field = state.mode === "general_contractors" ? "general_contractors" : "open_techs";
+        const field = state.mode === "general_contractors" ? "general_contractors" : "open_subs";
         const contactKey = norm(row.contact_name);
         allRelated = openPermits.filter(p => namesFrom(p[field]).includes(contactKey));
         related = allRelated.slice(0, 40);
@@ -1048,15 +1048,15 @@
           ${relatedError ? "" : detailPermitTable(pageRows, filtered.length)}
         </div>
         <div class="detail-section">
-          <h4>${mode === "general_contractors" ? "Associated Open Techs" : "Associated General Contractors"}</h4>
-          ${relatedError ? `<p class="small">${esc(relatedError)}</p>` : associationTags(permits, mode === "general_contractors" ? "open_techs" : "general_contractors", mode === "general_contractors" ? "open_techs" : "general_contractors")}
+          <h4>Associations</h4>
+          ${relatedError ? `<p class="small">${esc(relatedError)}</p>` : associationTags(permits, mode === "general_contractors" ? "open_subs" : "general_contractors", mode === "general_contractors" ? "open_subs" : "general_contractors")}
         </div>`), pushHistory);
     }
 
     function detailPermitFilters(permits) {
       const workTypes = optionList(permits.map(p => p.work_type));
       const permitTypes = optionList(permits.map(p => p.permit_type));
-      const roleNames = optionList(permits.flatMap(p => [...clean(p.general_contractors).split("|"), ...clean(p.open_techs).split("|")].map(x => x.trim())));
+      const roleNames = optionList(permits.flatMap(p => [...clean(p.general_contractors).split("|"), ...clean(p.open_subs).split("|")].map(x => x.trim())));
       return `
         <div class="detail-filter-grid">
           <label>Permit / address search
@@ -1095,9 +1095,9 @@
       return permits.filter(row => {
         if (state.detailFilters.workType && clean(row.work_type) !== state.detailFilters.workType) return false;
         if (state.detailFilters.permitType && clean(row.permit_type) !== state.detailFilters.permitType) return false;
-        if (state.detailFilters.role && ![...clean(row.general_contractors).split("|"), ...clean(row.open_techs).split("|")].map(x => x.trim()).includes(state.detailFilters.role)) return false;
+        if (state.detailFilters.role && ![...clean(row.general_contractors).split("|"), ...clean(row.open_subs).split("|")].map(x => x.trim()).includes(state.detailFilters.role)) return false;
         if (!q) return true;
-        return norm([row.permit_number, row.address, row.work_description, row.permit_type, row.work_type, row.review_type, row.general_contractors, row.open_techs].join(" ")).includes(q);
+        return norm([row.permit_number, row.address, row.work_description, row.permit_type, row.work_type, row.review_type, row.general_contractors, row.open_subs].join(" ")).includes(q);
       });
     }
 
@@ -1193,7 +1193,17 @@
       });
       const rows = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 24);
       if (!rows.length) return `<span class="small">No associated contacts found on this contact's open permits.</span>`;
-      return `<div class="tag-row">${rows.map(([name, count]) => `<span class="tag clickable" onclick="openContactProfile('${enc(name)}', '${mode}')">${esc(name)} &middot; ${fmt(count)} shared open permits</span>`).join("")}</div>`;
+      return `
+        <div class="detail-table-wrap compact">
+          <table>
+            <thead><tr><th>Name</th><th>Shared Open Permits</th></tr></thead>
+            <tbody>${rows.map(([name, count]) => `
+              <tr onclick="openContactProfile('${enc(name)}', '${mode}')">
+                <td><span class="tag clickable">${esc(name)}</span></td>
+                <td>${fmt(count)}</td>
+              </tr>`).join("")}</tbody>
+          </table>
+        </div>`;
     }
 
     function showPermitFromEncoded(encoded) {
@@ -1276,7 +1286,7 @@
         </div>
         ${row.work_description ? `<div class="detail-section"><h4>Work description</h4><p class="permit-description small">${esc(row.work_description)}</p></div>` : ""}
         <div class="detail-section"><h4>General contractors</h4>${nameTags(row.general_contractors, "general_contractors")}</div>
-        <div class="detail-section"><h4>Open techs</h4>${nameTags(row.open_techs, "open_techs")}</div>`));
+        <div class="detail-section"><h4>Open subs</h4>${nameTags(row.open_subs, "open_subs")}</div>`));
     }
 
     async function openContactProfile(encodedName, mode) {
@@ -1284,7 +1294,7 @@
       state.mode = mode;
       state.selected = null;
       state.resultSort = { key: null, direction: null };
-      ["general_contractors", "open_techs", "open_permits"].forEach(tabName => $("tab-" + tabName).classList.remove("active"));
+      ["general_contractors", "open_subs", "open_permits"].forEach(tabName => $("tab-" + tabName).classList.remove("active"));
       $("tab-" + mode).classList.add("active");
       $("sort").value = "open_jobs";
       $("q").value = name;
@@ -1299,7 +1309,7 @@
       if (index >= 0) {
         await selectContact(index);
       } else {
-        showDetail(`<p class="small">No profile matched ${esc(name)} in ${mode === "general_contractors" ? "General Contractors" : "Open Techs"}.</p>`);
+        showDetail(`<p class="small">No profile matched ${esc(name)} in ${mode === "general_contractors" ? "General Contractors" : "Open Subs"}.</p>`);
       }
     }
 
@@ -1308,7 +1318,7 @@
       state.mode = "open_permits";
       state.selected = null;
       state.resultSort = { key: null, direction: null };
-      ["general_contractors", "open_techs", "open_permits"].forEach(tabName => $("tab-" + tabName).classList.remove("active"));
+      ["general_contractors", "open_subs", "open_permits"].forEach(tabName => $("tab-" + tabName).classList.remove("active"));
       $("tab-open_permits").classList.add("active");
       $("sort").value = "latest_issue_date";
       $("q").value = "";

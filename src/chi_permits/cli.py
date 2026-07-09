@@ -7,7 +7,7 @@ from .db import connect
 from .ingest import run_ingest
 from .static_export import export_static
 
-app = typer.Typer(help="Chicago Building Permits MCP utilities")
+app = typer.Typer(help="Chicago Building Permits data utilities")
 
 
 @app.command()
@@ -49,4 +49,4 @@ def export_static_command(
     typer.echo(f"Exported static Pages data to {out_dir}")
     typer.echo(f"Open permits: {manifest['files']['open_permits']['rows']}")
     typer.echo(f"General contractors: {manifest['files']['general_contractors']['rows']}")
-    typer.echo(f"Open techs: {manifest['files']['open_techs']['rows']}")
+    typer.echo(f"Open subs: {manifest['files']['open_subs']['rows']}")

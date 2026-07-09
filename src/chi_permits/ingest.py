@@ -154,7 +154,7 @@ INSERT_CONTACTS_FROM_PAGE_SQL = f"INSERT INTO contacts {CONTACT_INSERT_SQL}"
 
 
 def _headers() -> dict[str, str]:
-    headers = {"User-Agent": "chi-permits-mcp/0.1"}
+    headers = {"User-Agent": "chi-permits-search/0.1"}
     token = app_token()
     if token:
         headers["X-App-Token"] = token
