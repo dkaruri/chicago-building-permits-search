@@ -146,7 +146,7 @@
       gap: 8px;
     }
 
-    button, input, select {
+    button, input, select, textarea {
       width: 100%;
       min-height: 42px;
       border: 1px solid var(--line);
@@ -189,11 +189,17 @@
       text-transform: uppercase;
     }
 
-    input, select {
+    input, select, textarea {
       padding: 9px 10px;
       text-transform: none;
       letter-spacing: 0;
       font-weight: 500;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 72px;
+      line-height: 1.35;
     }
 
     .check-row {
@@ -212,7 +218,7 @@
       accent-color: var(--teal);
     }
 
-    input:focus, select:focus, button:focus-visible {
+    input:focus, select:focus, textarea:focus, button:focus-visible {
       outline: 2px solid rgba(79, 210, 232, 0.55);
       outline-offset: 2px;
     }
@@ -650,6 +656,16 @@
       max-height: 46vh;
     }
 
+    .list-note {
+      margin: 8px 0 10px;
+    }
+
+    .permit-note {
+      min-width: 240px;
+      min-height: 58px;
+      font-size: 0.82rem;
+    }
+
     @media (max-width: 1120px) {
       .status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .layout, .content { grid-template-columns: 1fr; }
@@ -677,6 +693,9 @@
           <span id="user-list-count" class="small"></span>
         </div>
       </div>
+      <label class="list-note">List note
+        <textarea id="user-list-note" placeholder="Add an overall note for this permit list..." oninput="saveListNote(this.value)"></textarea>
+      </label>
       <div id="user-list" class="table-wrap"><div class="empty">No permits added yet.</div></div>
     </section>
 
@@ -751,7 +770,9 @@
       detailPageSize: 25,
       selectedPermitNumbers: new Set(),
       userPermitNumbers: [],
-      userPermitMap: new Map()
+      userPermitMap: new Map(),
+      userListNote: "",
+      userPermitNotes: {}
     };
 
     const $ = id => document.getElementById(id);
@@ -765,6 +786,7 @@
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
     const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const userListKey = "chi_permit_user_list";
+    const userNotesKey = "chi_permit_user_notes";
     const userListLimit = 220;
 
     addEventListener("scroll", () => {
@@ -864,6 +886,7 @@
     async function init() {
       state.manifest = await fetch("data/manifest.json").then(r => r.json());
       loadUserListCookie();
+      loadUserNotes();
       renderStatus();
       await renderUserList();
       await search();
@@ -1069,6 +1092,53 @@
       }
     }
 
+    function loadUserNotes() {
+      let raw = "";
+      try {
+        raw = localStorage.getItem(userNotesKey) || "";
+      } catch (error) {
+        raw = "";
+      }
+      if (!raw) raw = readCookie(userNotesKey);
+      if (!raw) return;
+      try {
+        const saved = JSON.parse(raw);
+        state.userListNote = clean(saved.list);
+        state.userPermitNotes = saved.permits && typeof saved.permits === "object" ? saved.permits : {};
+      } catch (error) {
+        state.userListNote = "";
+        state.userPermitNotes = {};
+      }
+    }
+
+    function saveUserNotes() {
+      const payload = JSON.stringify({
+        list: state.userListNote,
+        permits: state.userPermitNotes
+      });
+      try {
+        localStorage.setItem(userNotesKey, payload);
+      } catch (error) {
+        writeCookie(userNotesKey, payload);
+      }
+    }
+
+    function saveListNote(value) {
+      state.userListNote = clean(value);
+      saveUserNotes();
+    }
+
+    function savePermitNote(encodedNumber, value) {
+      const number = decodeURIComponent(encodedNumber);
+      const note = clean(value);
+      if (note) {
+        state.userPermitNotes[number] = note;
+      } else {
+        delete state.userPermitNotes[number];
+      }
+      saveUserNotes();
+    }
+
     function isInUserList(permitNumber) {
       return state.userPermitNumbers.includes(clean(permitNumber));
     }
@@ -1107,7 +1177,9 @@
     async function removePermitFromUserList(encodedNumber) {
       const number = decodeURIComponent(encodedNumber);
       state.userPermitNumbers = state.userPermitNumbers.filter(item => item !== number);
+      delete state.userPermitNotes[number];
       saveUserListCookie();
+      saveUserNotes();
       await renderUserList();
       renderCurrentMode();
       if (state.activeDetail?.type === "permit") {
@@ -1117,7 +1189,10 @@
 
     async function clearUserList() {
       state.userPermitNumbers = [];
+      state.userListNote = "";
+      state.userPermitNotes = {};
       saveUserListCookie();
+      saveUserNotes();
       await renderUserList();
       renderCurrentMode();
       if (state.activeDetail?.type === "permit") {
@@ -1127,6 +1202,7 @@
 
     async function renderUserList() {
       await ensurePermitMap();
+      $("user-list-note").value = state.userListNote;
       const rows = state.userPermitNumbers.map(number => state.userPermitMap.get(number)).filter(Boolean);
       $("user-list-count").textContent = rows.length ? `${fmt(rows.length)} saved` : "";
       if (!rows.length) {
@@ -1136,6 +1212,7 @@
       $("user-list").innerHTML = permitTable(rows, {
         select: false,
         remove: true,
+        notes: true,
         sortable: false,
         emptyText: "No permits added yet."
       });
@@ -1533,10 +1610,11 @@
       if (!rows.length) return `<div class="empty">${esc(options.emptyText || "No permits.")}</div>`;
       const selectHead = options.select ? "<th class=\"select-cell\">Select</th>" : "";
       const removeHead = options.remove ? "<th class=\"select-cell\">Remove</th>" : "";
+      const notesHead = options.notes ? "<th>Notes</th>" : "";
       const head = (label, key) => options.sortable === false ? esc(label) : sortHeader(label, key);
       return `
         <table>
-          <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th><th>${head("Ward", "ward")}</th><th>${head("Cost", "cost")}</th></tr></thead>
+          <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th><th>${head("Ward", "ward")}</th><th>${head("Cost", "cost")}</th>${notesHead}</tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr onclick="${options.select ? `selectPermit(${i})` : `showPermitFromEncoded('${enc(JSON.stringify(row))}')`}">
               ${options.remove ? `<td class="select-cell"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
@@ -1547,6 +1625,7 @@
               <td>${esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
               <td>${esc(row.ward)}</td>
               <td class="money">${money(row.reported_cost)}</td>
+              ${options.notes ? `<td><textarea class="permit-note" placeholder="Add note..." onclick="event.stopPropagation()" oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[clean(row.permit_number)] || "")}</textarea></td>` : ""}
             </tr>`).join("")}</tbody>
         </table>`;
     }
