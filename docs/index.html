@@ -191,6 +191,22 @@
       font-weight: 500;
     }
 
+    .check-row {
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      align-items: center;
+      gap: 10px;
+      min-height: 34px;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .check-row input {
+      width: 18px;
+      min-height: 18px;
+      accent-color: var(--teal);
+    }
+
     input:focus, select:focus, button:focus-visible {
       outline: 2px solid rgba(79, 210, 232, 0.55);
       outline-offset: 2px;
@@ -598,6 +614,10 @@
         <label>Ward
           <input id="ward" placeholder="Open permits only" oninput="scheduleSearch()">
         </label>
+        <label class="check-row">
+          <input id="usable-processing" type="checkbox" onchange="search()">
+          <span>Only usable processing times</span>
+        </label>
         <label>Sort
           <select id="sort" onchange="clearColumnSort(); search()">
             <option value="open_jobs">Open jobs</option>
@@ -609,7 +629,7 @@
         </label>
         <button class="primary" onclick="search()">Search</button>
         <button onclick="clearSearch()">Clear results</button>
-        <p class="small">Data refreshes by GitHub Actions. Permit contact fields come from the Chicago Data Portal. General Contractor license details come from the City licensed contractor registry when a name match is available.</p>
+        <p class="small">Data refreshes by GitHub Actions. Permit contact fields come from the Chicago Data Portal. License details come from the City licensed contractor registries when a name match is available.</p>
         <p class="small"><a href="https://github.com/dkaruri/chicago-building-permits-search">Repository</a> &middot; <a href="https://data.cityofchicago.org/Buildings/Building-Permits/ydr8-5enu">Source dataset</a></p>
       </aside>
 
@@ -787,6 +807,7 @@
     function clearSearch() {
       $("q").value = "";
       $("ward").value = "";
+      $("usable-processing").checked = false;
       state.resultSort = { key: null, direction: null };
       hideDetail();
       search();
@@ -803,6 +824,18 @@
 
     function queryTerms() {
       return norm($("q").value).split(/\s+/).filter(Boolean);
+    }
+
+    function usableProcessingOnly() {
+      return $("usable-processing") && $("usable-processing").checked;
+    }
+
+    function hasUsableProcessing(row) {
+      return Number(row.processing_time) > 0;
+    }
+
+    function hasUsableProfileProcessing(row) {
+      return Number(row.usable_processing_jobs) > 0 || Number(row.avg_usable_processing_days) > 0;
     }
 
     function matchesTerms(row, fields, terms) {
@@ -902,9 +935,12 @@
 
     function filterContacts(rows) {
       const terms = queryTerms();
-      return rows.filter(row => matchesTerms(row, [
+      return rows.filter(row => {
+        if (usableProcessingOnly() && !hasUsableProfileProcessing(row)) return false;
+        return matchesTerms(row, [
         "contact_name", "sample_contact_type", "city", "state", "zipcode"
-      ], terms) || specialtyText(row).includes(terms.join(" ")));
+        ], terms) || specialtyText(row).includes(terms.join(" "));
+      });
     }
 
     function specialtyText(row) {
@@ -916,6 +952,7 @@
       const ward = $("ward").value.trim();
       return rows.filter(row => {
         if (ward && clean(row.ward) !== ward) return false;
+        if (usableProcessingOnly() && !hasUsableProcessing(row)) return false;
         return matchesTerms(row, [
           "permit_number", "permit_status", "permit_type", "review_type", "address", "work_type",
           "work_description", "general_contractors", "open_subs"
@@ -992,7 +1029,7 @@
               <td>${esc(row.sample_contact_type)}</td>
               <td>${esc([row.city, row.state, row.zipcode].filter(Boolean).join(", "))}</td>
               <td>${fmt(row.open_jobs)}</td>
-              <td>${avgDaysLabel(row.avg_processing_days)}</td>
+              <td>${profileAvgDays(row)}</td>
             </tr>`).join("")}</tbody>
         </table>`;
       $("results").scrollTop = 0;
@@ -1037,11 +1074,12 @@
         <div class="tag-row">
           <span class="tag">${fmt(row.open_jobs)} open jobs</span>
           <span class="tag">${fmt(row.total_jobs)} total jobs</span>
-          <span class="tag">${avgDaysLabel(row.avg_processing_days)} avg processing days</span>
+          <span class="tag">${profileAvgDays(row)} avg processing days</span>
+          <span class="tag">${fmt(row.usable_processing_jobs || 0)} usable timing records</span>
           <span class="tag">${money(row.reported_cost_total)} reported cost</span>
         </div>
         <p>${esc(row.sample_contact_type)}<br>${esc([row.city, row.state, row.zipcode].filter(Boolean).join(", "))}</p>
-        ${mode === "general_contractors" ? renderLicenseMatches(row) : ""}
+        ${renderLicenseMatches(row)}
         ${renderSpecialties(row)}
         <div class="detail-section">
           <h4>Open permits</h4>
@@ -1091,6 +1129,13 @@
       return Math.max(number, 1).toFixed(1);
     }
 
+    function profileAvgDays(row) {
+      if (usableProcessingOnly() && Number(row.avg_usable_processing_days) > 0) {
+        return Number(row.avg_usable_processing_days).toFixed(1);
+      }
+      return avgDaysLabel(row.avg_processing_days);
+    }
+
     function setDetailFilter(key, value) {
       state.detailFilters[key] = value;
       state.detailPageIndex = 0;
@@ -1100,6 +1145,7 @@
     function filterDetailPermits(permits) {
       const q = norm(state.detailFilters.q);
       return permits.filter(row => {
+        if (usableProcessingOnly() && !hasUsableProcessing(row)) return false;
         if (state.detailFilters.workType && clean(row.work_type) !== state.detailFilters.workType) return false;
         if (state.detailFilters.permitType && clean(row.permit_type) !== state.detailFilters.permitType) return false;
         if (state.detailFilters.role && ![...clean(row.general_contractors).split("|"), ...clean(row.open_subs).split("|")].map(x => x.trim()).includes(state.detailFilters.role)) return false;
@@ -1158,20 +1204,20 @@
         return `
           <div class="detail-section">
             <h4>City license source</h4>
-            <p class="small">No exact normalized match was found in the City licensed General Contractors registry. <a href="https://webapps1.chicago.gov/licensedcontractors/general" target="_blank" rel="noopener">Search the source</a>.</p>
+            <p class="small">No exact normalized match was found in the City licensed contractor registries. <a href="https://webapps1.chicago.gov/licensedcontractors/active" target="_blank" rel="noopener">Search the source</a>.</p>
           </div>`;
       }
       return `
         <div class="detail-section">
           <h4>City license source</h4>
-          <p class="small">${sourceNote} &middot; <a href="https://webapps1.chicago.gov/licensedcontractors/general" target="_blank" rel="noopener">Official source</a></p>
+          <p class="small">${sourceNote} &middot; <a href="https://webapps1.chicago.gov/licensedcontractors/active" target="_blank" rel="noopener">Official source</a></p>
           <div class="detail-table-wrap compact">
             <table>
-              <thead><tr><th>License</th><th>Type</th><th>Phone</th><th>Expires</th><th>Insurance</th></tr></thead>
+              <thead><tr><th>License</th><th>Type</th><th>Phone</th><th>Expires</th><th>Insurance / Bond</th></tr></thead>
               <tbody>${matches.map(item => `
                 <tr>
                   <td><strong>${esc(item.license_number)}</strong><br><span class="small">${esc(item.name)}</span></td>
-                  <td>${esc(item.license_type)}</td>
+                  <td>${esc(item.license_type)}<br><span class="small">${esc((item.source_categories || [item.license_category]).join(", "))}</span></td>
                   <td>${esc(item.phone)}</td>
                   <td>${esc(item.license_expiration_date)}</td>
                   <td>${esc(item.insurance_expiration_date)}</td>

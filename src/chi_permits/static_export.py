@@ -9,7 +9,7 @@ import duckdb
 
 from .config import DATASET_ID, OPEN_STATUSES, SOCRATA_DOMAIN
 from .db import connect
-from .licensed_contractors import fetch_general_contractor_licenses, normalize_license_name
+from .licensed_contractors import fetch_licensed_contractors, normalize_license_name
 
 
 def _jsonable(value: Any) -> Any:
@@ -112,6 +112,8 @@ def _contact_profiles(
                 count(*) AS total_jobs,
                 count(CASE WHEN permit_status IN {tuple(OPEN_STATUSES)} THEN permit_number END) AS open_jobs,
                 coalesce(avg(CASE WHEN processing_time > 0 THEN processing_time WHEN processing_time = 0 THEN 1.0 END), 1.0) AS avg_processing_days,
+                count(CASE WHEN processing_time > 0 THEN permit_number END) AS usable_processing_jobs,
+                avg(CASE WHEN processing_time > 0 THEN processing_time END) AS avg_usable_processing_days,
                 min(issue_date) AS first_issue_date,
                 max(issue_date) AS latest_issue_date,
                 sum(reported_cost) AS reported_cost_total,
@@ -179,13 +181,11 @@ def _contact_profiles(
 
 
 def _open_permits(con: duckdb.DuckDBPyConnection) -> list[dict]:
-    company_filter = _company_name_condition("contact_name")
-    person_filter = _person_name_condition("contact_name")
     return _rows(con, f"""
         WITH contact_names AS (
             SELECT permit_number,
-                   string_agg(DISTINCT contact_name, ' | ') FILTER (WHERE contact_category = 'general_contractor' AND {company_filter}) AS general_contractors,
-                   string_agg(DISTINCT contact_name, ' | ') FILTER (WHERE contact_category = 'open_tech' AND {person_filter}) AS open_subs
+                   string_agg(DISTINCT contact_name, ' | ') FILTER (WHERE contact_category = 'general_contractor') AS general_contractors,
+                   string_agg(DISTINCT contact_name, ' | ') FILTER (WHERE contact_category = 'open_tech') AS open_subs
             FROM contacts
             WHERE nullif(trim(coalesce(contact_name, '')), '') IS NOT NULL
             GROUP BY permit_number
@@ -229,7 +229,7 @@ def export_static(out_dir: Path | str = "docs/data") -> dict:
                    AND nullif(trim(coalesce(contact_name, '')), '') IS NOT NULL) AS open_sub_count
         """)[0]
         exported_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-        licenses = fetch_general_contractor_licenses()
+        licenses = fetch_licensed_contractors()
         license_index: dict[str, list[dict]] = {}
         for row in licenses["rows"]:
             license_index.setdefault(normalize_license_name(row.get("name")), []).append(row)
@@ -240,6 +240,7 @@ def export_static(out_dir: Path | str = "docs/data") -> dict:
             "dataset_api": f"https://{SOCRATA_DOMAIN}/api/v3/views/{DATASET_ID}/query.json",
             "license_source": {
                 "source_url": licenses["source_url"],
+                "sources": licenses["sources"],
                 "fetched_at": licenses["fetched_at"],
                 "rows": len(licenses["rows"]),
             },
@@ -248,8 +249,8 @@ def export_static(out_dir: Path | str = "docs/data") -> dict:
         files = {
             "open_permits": _open_permits(con),
             "general_contractors": _contact_profiles(con, "general_contractor", company_filter, license_index),
-            "open_subs": _contact_profiles(con, "open_tech", person_filter),
-            "general_contractor_licenses": licenses["rows"],
+            "open_subs": _contact_profiles(con, "open_tech", person_filter, license_index),
+            "contractor_licenses": licenses["rows"],
         }
         for name, payload in files.items():
             rel = f"{name}.json"
