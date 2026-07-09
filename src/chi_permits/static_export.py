@@ -9,6 +9,7 @@ import duckdb
 
 from .config import DATASET_ID, OPEN_STATUSES, SOCRATA_DOMAIN
 from .db import connect
+from .licensed_contractors import fetch_general_contractor_licenses, normalize_license_name
 
 
 def _jsonable(value: Any) -> Any:
@@ -74,7 +75,12 @@ def _person_name_condition(column: str = "contact_name") -> str:
     )
 
 
-def _contact_profiles(con: duckdb.DuckDBPyConnection, category: str, entity_filter: str) -> list[dict]:
+def _contact_profiles(
+    con: duckdb.DuckDBPyConnection,
+    category: str,
+    entity_filter: str,
+    license_index: dict[str, list[dict]] | None = None,
+) -> list[dict]:
     profiles = _rows(con, f"""
         WITH contact_permits AS (
             SELECT
@@ -105,7 +111,7 @@ def _contact_profiles(con: duckdb.DuckDBPyConnection, category: str, entity_filt
                 any_value(zipcode) AS zipcode,
                 count(*) AS total_jobs,
                 count(CASE WHEN permit_status IN {tuple(OPEN_STATUSES)} THEN permit_number END) AS open_jobs,
-                avg(CASE WHEN processing_time > 0 THEN processing_time END) AS avg_processing_days,
+                coalesce(avg(CASE WHEN processing_time > 0 THEN processing_time WHEN processing_time = 0 THEN 1.0 END), 1.0) AS avg_processing_days,
                 min(issue_date) AS first_issue_date,
                 max(issue_date) AS latest_issue_date,
                 sum(reported_cost) AS reported_cost_total,
@@ -164,6 +170,11 @@ def _contact_profiles(con: duckdb.DuckDBPyConnection, category: str, entity_filt
         profile["work_types"] = json.loads(profile.pop("work_types_json") or "[]")
         profile["permit_types"] = json.loads(profile.pop("permit_types_json") or "[]")
         profile["contact_types"] = json.loads(profile.pop("contact_types_json") or "[]")
+        if license_index is not None:
+            key = normalize_license_name(profile.get("contact_name"))
+            matches = license_index.get(key, [])
+            profile["license_matches"] = matches[:5]
+            profile["license_match_count"] = len(matches)
     return profiles
 
 
@@ -218,17 +229,27 @@ def export_static(out_dir: Path | str = "docs/data") -> dict:
                    AND nullif(trim(coalesce(contact_name, '')), '') IS NOT NULL) AS open_sub_count
         """)[0]
         exported_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        licenses = fetch_general_contractor_licenses()
+        license_index: dict[str, list[dict]] = {}
+        for row in licenses["rows"]:
+            license_index.setdefault(normalize_license_name(row.get("name")), []).append(row)
         manifest = {
             **meta,
             **span,
             "exported_at": exported_at,
             "dataset_api": f"https://{SOCRATA_DOMAIN}/api/v3/views/{DATASET_ID}/query.json",
+            "license_source": {
+                "source_url": licenses["source_url"],
+                "fetched_at": licenses["fetched_at"],
+                "rows": len(licenses["rows"]),
+            },
             "files": {},
         }
         files = {
             "open_permits": _open_permits(con),
-            "general_contractors": _contact_profiles(con, "general_contractor", company_filter),
+            "general_contractors": _contact_profiles(con, "general_contractor", company_filter, license_index),
             "open_subs": _contact_profiles(con, "open_tech", person_filter),
+            "general_contractor_licenses": licenses["rows"],
         }
         for name, payload in files.items():
             rel = f"{name}.json"

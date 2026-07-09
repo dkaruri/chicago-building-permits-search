@@ -609,7 +609,7 @@
         </label>
         <button class="primary" onclick="search()">Search</button>
         <button onclick="clearSearch()">Clear results</button>
-        <p class="small">Data refreshes by GitHub Actions. Source contact fields are public portal fields only: name, type, city, state, and ZIP.</p>
+        <p class="small">Data refreshes by GitHub Actions. Permit contact fields come from the Chicago Data Portal. General Contractor license details come from the City licensed contractor registry when a name match is available.</p>
         <p class="small"><a href="https://github.com/dkaruri/chicago-building-permits-search">Repository</a> &middot; <a href="https://data.cityofchicago.org/Buildings/Building-Permits/ydr8-5enu">Source dataset</a></p>
       </aside>
 
@@ -992,7 +992,7 @@
               <td>${esc(row.sample_contact_type)}</td>
               <td>${esc([row.city, row.state, row.zipcode].filter(Boolean).join(", "))}</td>
               <td>${fmt(row.open_jobs)}</td>
-              <td>${days(row.avg_processing_days)}</td>
+              <td>${avgDaysLabel(row.avg_processing_days)}</td>
             </tr>`).join("")}</tbody>
         </table>`;
       $("results").scrollTop = 0;
@@ -1037,10 +1037,11 @@
         <div class="tag-row">
           <span class="tag">${fmt(row.open_jobs)} open jobs</span>
           <span class="tag">${fmt(row.total_jobs)} total jobs</span>
-          <span class="tag">${days(row.avg_processing_days)} avg processing days</span>
+          <span class="tag">${avgDaysLabel(row.avg_processing_days)} avg processing days</span>
           <span class="tag">${money(row.reported_cost_total)} reported cost</span>
         </div>
         <p>${esc(row.sample_contact_type)}<br>${esc([row.city, row.state, row.zipcode].filter(Boolean).join(", "))}</p>
+        ${mode === "general_contractors" ? renderLicenseMatches(row) : ""}
         ${renderSpecialties(row)}
         <div class="detail-section">
           <h4>Open permits</h4>
@@ -1082,6 +1083,12 @@
 
     function optionList(values) {
       return Array.from(new Set(values.map(v => clean(v).trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    }
+
+    function avgDaysLabel(value) {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return "1.0";
+      return Math.max(number, 1).toFixed(1);
     }
 
     function setDetailFilter(key, value) {
@@ -1141,6 +1148,38 @@
         <div class="detail-section"><h4>Permit mix</h4>${specialtyTable(row.permit_types, "permit_type", "Permit type", true)}</div>
         <div class="detail-section"><h4>Public contact roles</h4>${specialtyTable(row.contact_types, "contact_type", "Contact role", false)}</div>
       `;
+    }
+
+    function renderLicenseMatches(row) {
+      const matches = row.license_matches || [];
+      const source = state.manifest.license_source || {};
+      const sourceNote = source.fetched_at ? `Fetched ${esc(dateTimeLabel(source.fetched_at))}` : "Source: City licensed contractor registry";
+      if (!matches.length) {
+        return `
+          <div class="detail-section">
+            <h4>City license source</h4>
+            <p class="small">No exact normalized match was found in the City licensed General Contractors registry. <a href="https://webapps1.chicago.gov/licensedcontractors/general" target="_blank" rel="noopener">Search the source</a>.</p>
+          </div>`;
+      }
+      return `
+        <div class="detail-section">
+          <h4>City license source</h4>
+          <p class="small">${sourceNote} &middot; <a href="https://webapps1.chicago.gov/licensedcontractors/general" target="_blank" rel="noopener">Official source</a></p>
+          <div class="detail-table-wrap compact">
+            <table>
+              <thead><tr><th>License</th><th>Type</th><th>Phone</th><th>Expires</th><th>Insurance</th></tr></thead>
+              <tbody>${matches.map(item => `
+                <tr>
+                  <td><strong>${esc(item.license_number)}</strong><br><span class="small">${esc(item.name)}</span></td>
+                  <td>${esc(item.license_type)}</td>
+                  <td>${esc(item.phone)}</td>
+                  <td>${esc(item.license_expiration_date)}</td>
+                  <td>${esc(item.insurance_expiration_date)}</td>
+                </tr>`).join("")}</tbody>
+            </table>
+          </div>
+          ${row.license_match_count > matches.length ? `<p class="small">${fmt(row.license_match_count - matches.length)} additional license rows matched this profile name.</p>` : ""}
+        </div>`;
     }
 
     function specialtyTable(rows, key, label, includeOpenJobs) {

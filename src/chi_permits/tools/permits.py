@@ -247,7 +247,7 @@ def contact_summary_from(con: duckdb.DuckDBPyConnection, category: str = "genera
                any_value(contact_zipcode) AS zipcode,
                count(DISTINCT permit_number) AS total_jobs,
                count(DISTINCT CASE WHEN permit_status IN {OPEN_STATUS_SQL} THEN permit_number END) AS open_jobs,
-               avg(CASE WHEN processing_time > 0 THEN processing_time END) AS avg_processing_days,
+               coalesce(avg(CASE WHEN processing_time > 0 THEN processing_time WHEN processing_time = 0 THEN 1.0 END), 1.0) AS avg_processing_days,
                max(issue_date) AS latest_issue_date,
                sum(reported_cost) AS reported_cost_total,
                sum(total_fee) AS total_fee_total
@@ -283,7 +283,7 @@ def contact_detail_from(con: duckdb.DuckDBPyConnection, contact_name: str,
         SELECT contact_name,
                count(DISTINCT permit_number) AS total_jobs,
                count(DISTINCT CASE WHEN permit_status IN {OPEN_STATUS_SQL} THEN permit_number END) AS open_jobs,
-               avg(CASE WHEN processing_time > 0 THEN processing_time END) AS avg_processing_days,
+               coalesce(avg(CASE WHEN processing_time > 0 THEN processing_time WHEN processing_time = 0 THEN 1.0 END), 1.0) AS avg_processing_days,
                min(issue_date) AS first_issue_date,
                max(issue_date) AS latest_issue_date
         FROM contacts
