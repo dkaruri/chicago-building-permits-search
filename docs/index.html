@@ -275,6 +275,23 @@
       padding: 6px 10px;
     }
 
+    #result-count {
+      min-width: 280px;
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+      text-align: right;
+    }
+
+    #result-count button {
+      width: auto;
+      min-height: 34px;
+      padding: 6px 10px;
+      white-space: nowrap;
+    }
+
     h2, h3 {
       margin: 0;
       letter-spacing: 0;
@@ -322,6 +339,21 @@
     .select-cell {
       width: 42px;
       text-align: center;
+    }
+
+    .move-cell {
+      width: 86px;
+      text-align: center;
+    }
+
+    .move-controls {
+      display: inline-flex;
+      gap: 5px;
+    }
+
+    .move-controls .icon-button {
+      width: 34px;
+      min-height: 34px;
     }
 
     td.select-cell {
@@ -1259,6 +1291,20 @@
       await renderUserList();
     }
 
+    async function moveSavedPermitByOffset(encodedNumber, delta) {
+      const number = decodeURIComponent(encodedNumber);
+      const index = state.userPermitNumbers.indexOf(number);
+      if (index < 0) return;
+      const nextIndex = Math.min(Math.max(index + delta, 0), state.userPermitNumbers.length - 1);
+      if (nextIndex === index) return;
+      const next = state.userPermitNumbers.slice();
+      next.splice(index, 1);
+      next.splice(nextIndex, 0, number);
+      state.userPermitNumbers = next;
+      saveUserListCookie();
+      await renderUserList();
+    }
+
     function permitDragStart(event, encodedNumber) {
       const number = decodeURIComponent(encodedNumber);
       state.draggedPermitNumber = number;
@@ -1386,6 +1432,7 @@
         remove: true,
         notes: true,
         reorder: true,
+        move: true,
         sortable: false,
         emptyText: "No permits added yet."
       });
@@ -1775,20 +1822,21 @@
       const countText = resultCountText();
       if (!count) return countText;
       return `
-        <span>${countText}</span>
-        <button onclick="event.stopPropagation(); addSelectedPermits()">${fmt(count)} selected &middot; Add to list</button>`;
+        <button onclick="event.stopPropagation(); addSelectedPermits()">${fmt(count)} selected &middot; Add to list</button>
+        <span>${countText}</span>`;
     }
 
     function permitTable(rows, options = {}) {
       if (!rows.length) return `<div class="empty">${esc(options.emptyText || "No permits.")}</div>`;
-      const selectHead = options.select ? "<th class=\"select-cell\">Select</th>" : "";
-      const removeHead = options.remove ? "<th class=\"select-cell\">Remove</th>" : "";
+      const selectHead = options.select ? "<th class=\"select-cell\" aria-label=\"Select permits\"></th>" : "";
+      const removeHead = options.remove ? "<th class=\"select-cell\" aria-label=\"Remove permits\"></th>" : "";
       const notesHead = options.notes ? "<th>Notes</th>" : "";
+      const moveHead = options.move ? "<th class=\"move-cell\" aria-label=\"Move permits\"></th>" : "";
       const head = (label, key) => options.sortable === false ? esc(label) : sortHeader(label, key);
       const tableClass = options.select ? "results-table permits-table" : "";
       return `
         <table class="${tableClass}">
-          <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th><th>${head("Ward", "ward")}</th><th>${head("Cost", "cost")}</th>${notesHead}</tr></thead>
+          <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th><th>${head("Ward", "ward")}</th><th>${head("Cost", "cost")}</th>${notesHead}${moveHead}</tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr
               draggable="${options.select || options.reorder ? "true" : "false"}"
@@ -1806,6 +1854,7 @@
               <td>${esc(row.ward)}</td>
               <td class="money">${money(row.reported_cost)}</td>
               ${options.notes ? `<td><textarea class="permit-note" draggable="false" placeholder="Add note..." onclick="event.stopPropagation()" ondragstart="event.stopPropagation()" oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[clean(row.permit_number)] || "")}</textarea></td>` : ""}
+              ${options.move ? `<td class="move-cell"><div class="move-controls"><button class="icon-button" title="Move up" aria-label="Move ${esc(row.permit_number)} up" ${i === 0 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', -1)">&uarr;</button><button class="icon-button" title="Move down" aria-label="Move ${esc(row.permit_number)} down" ${i >= rows.length - 1 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', 1)">&darr;</button></div></td>` : ""}
             </tr>`).join("")}</tbody>
         </table>`;
     }
