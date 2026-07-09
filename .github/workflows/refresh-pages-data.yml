@@ -3,6 +3,7 @@ name: Refresh GitHub Pages data
 on:
   workflow_dispatch:
   schedule:
+    # Daily at 3:22 AM America/Chicago during daylight saving time.
     - cron: "22 8 * * *"
 
 permissions:
@@ -31,12 +32,14 @@ jobs:
           CHI_SOCRATA_APP_TOKEN: ${{ secrets.CHI_SOCRATA_APP_TOKEN }}
         run: uv run chi-permits init
 
-      - name: Export static Pages indexes
+      - name: Export static Pages indexes and license registries
         run: uv run chi-permits export-static
+
+      - name: Run data accuracy check
+        run: uv run python scripts/accuracy_check.py
 
       - name: Commit refreshed data
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: Refresh Chicago permits static data
           file_pattern: docs/data/*.json
-

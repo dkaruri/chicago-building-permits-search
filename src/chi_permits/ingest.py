@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import json
 import os
 import shutil
@@ -224,18 +223,18 @@ def run_ingest(*, limit: int | None = None) -> dict:
                         break
                     page_limit = min(page_limit, remaining)
                 text = _csv_page(client, offset=offset, limit=page_limit)
-                line_count = max(0, text.count("\n") - 1)
-                if line_count == 0:
-                    break
                 page_file = page_dir / f"permits_{offset}.csv"
                 page_file.write_text(text, encoding="utf-8", newline="")
                 con.execute("DROP TABLE IF EXISTS page")
                 con.execute("CREATE TEMP TABLE page AS SELECT * FROM read_csv_auto(?, all_varchar=true)", [str(page_file)])
+                page_count = con.execute("SELECT count(*) FROM page").fetchone()[0]
+                if page_count == 0:
+                    break
                 con.execute(INSERT_FROM_PAGE_SQL)
                 con.execute(INSERT_CONTACTS_FROM_PAGE_SQL)
-                total += line_count
-                offset += line_count
-                if line_count < page_limit:
+                total += page_count
+                offset += page_count
+                if page_count < page_limit:
                     break
             con.execute("CREATE INDEX permits_issue_date_idx ON permits(issue_date)")
             con.execute("CREATE INDEX permits_number_idx ON permits(permit_number)")
