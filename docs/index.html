@@ -253,6 +253,16 @@
       justify-content: flex-end;
     }
 
+    .panel-actions.align-left {
+      justify-content: flex-start;
+    }
+
+    .user-list-head {
+      align-items: flex-start;
+      justify-content: flex-start;
+      flex-direction: column;
+    }
+
     .panel-actions button {
       width: auto;
       min-height: 34px;
@@ -323,6 +333,16 @@
 
     .icon-button:hover {
       background: rgba(79, 210, 232, 0.14);
+    }
+
+    .icon-button.danger {
+      border-color: #ff5f6d;
+      color: #ffd7dc;
+      background: rgba(255, 95, 109, 0.16);
+    }
+
+    .icon-button.danger:hover {
+      background: rgba(255, 95, 109, 0.26);
     }
 
     .pager button:disabled {
@@ -613,7 +633,7 @@
     }
 
     .user-list-panel {
-      margin-top: 14px;
+      margin-bottom: 14px;
     }
 
     .user-list-panel .table-wrap {
@@ -638,6 +658,17 @@
 
   <main>
     <section id="status" class="status"></section>
+
+    <section id="user-list-panel" class="panel user-list-panel">
+      <div class="panel-head user-list-head">
+        <h2>My Permit List</h2>
+        <div class="panel-actions align-left">
+          <button onclick="clearUserList()">Clear list</button>
+          <span id="user-list-count" class="small"></span>
+        </div>
+      </div>
+      <div id="user-list" class="table-wrap"><div class="empty">No permits added yet.</div></div>
+    </section>
 
     <section class="layout">
       <aside class="panel controls">
@@ -687,16 +718,6 @@
       </section>
     </section>
 
-    <section id="user-list-panel" class="panel user-list-panel">
-      <div class="panel-head">
-        <h2>My Permit List</h2>
-        <div class="panel-actions">
-          <span id="user-list-count" class="small"></span>
-          <button onclick="clearUserList()">Clear list</button>
-        </div>
-      </div>
-      <div id="user-list" class="table-wrap"><div class="empty">No permits added yet.</div></div>
-    </section>
   </main>
 
   <script>
@@ -733,7 +754,7 @@
     const enc = value => encodeURIComponent(clean(value)).replace(/'/g, "%27");
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
     const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const userListCookie = "chi_permit_user_list";
+    const userListKey = "chi_permit_user_list";
     const userListLimit = 220;
 
     addEventListener("scroll", () => {
@@ -1014,7 +1035,14 @@
     }
 
     function loadUserListCookie() {
-      state.userPermitNumbers = readCookie(userListCookie)
+      let raw = "";
+      try {
+        raw = localStorage.getItem(userListKey) || "";
+      } catch (error) {
+        raw = "";
+      }
+      if (!raw) raw = readCookie(userListKey);
+      state.userPermitNumbers = raw
         .split("|")
         .map(value => value.trim())
         .filter(Boolean)
@@ -1023,7 +1051,12 @@
 
     function saveUserListCookie() {
       state.userPermitNumbers = Array.from(new Set(state.userPermitNumbers)).slice(0, userListLimit);
-      writeCookie(userListCookie, state.userPermitNumbers.join("|"));
+      const value = state.userPermitNumbers.join("|");
+      try {
+        localStorage.setItem(userListKey, value);
+      } catch (error) {
+        writeCookie(userListKey, value);
+      }
     }
 
     function isInUserList(permitNumber) {
@@ -1483,19 +1516,20 @@
       if (!count) return countText;
       return `
         <span>${countText}</span>
-        <button onclick="addSelectedPermits()">${fmt(count)} selected &middot; Add to list</button>`;
+        <button onclick="event.stopPropagation(); addSelectedPermits()">${fmt(count)} selected &middot; Add to list</button>`;
     }
 
     function permitTable(rows, options = {}) {
       if (!rows.length) return `<div class="empty">${esc(options.emptyText || "No permits.")}</div>`;
-      const selectHead = options.select ? "<th class=\"select-cell\">Add</th>" : "";
+      const selectHead = options.select ? "<th class=\"select-cell\">Select</th>" : "";
       const removeHead = options.remove ? "<th class=\"select-cell\">Remove</th>" : "";
       const head = (label, key) => options.sortable === false ? esc(label) : sortHeader(label, key);
       return `
         <table>
-          <thead><tr>${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th><th>${head("Ward", "ward")}</th><th>${head("Cost", "cost")}</th>${removeHead}</tr></thead>
+          <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th><th>${head("Ward", "ward")}</th><th>${head("Cost", "cost")}</th></tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr onclick="${options.select ? `selectPermit(${i})` : `showPermitFromEncoded('${enc(JSON.stringify(row))}')`}">
+              ${options.remove ? `<td class="select-cell"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""} onclick="event.stopPropagation()" onchange="togglePermitSelection('${enc(row.permit_number)}', this.checked)"></td>` : ""}
               <td><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span></td>
               <td>${esc(row.permit_status)}</td>
@@ -1503,7 +1537,6 @@
               <td>${esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
               <td>${esc(row.ward)}</td>
               <td class="money">${money(row.reported_cost)}</td>
-              ${options.remove ? `<td class="select-cell"><button class="icon-button" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
             </tr>`).join("")}</tbody>
         </table>`;
     }
