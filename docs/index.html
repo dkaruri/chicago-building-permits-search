@@ -168,6 +168,11 @@
       box-shadow: inset 0 0 0 1px rgba(79, 210, 232, 0.35);
     }
 
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
     button.primary {
       border-color: var(--coral);
       background: rgba(255, 107, 61, 0.18);
@@ -240,6 +245,20 @@
       margin-bottom: 8px;
     }
 
+    .panel-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .panel-actions button {
+      width: auto;
+      min-height: 34px;
+      padding: 6px 10px;
+    }
+
     h2, h3 {
       margin: 0;
       letter-spacing: 0;
@@ -275,6 +294,17 @@
       width: auto;
       min-height: 36px;
       padding: 7px 12px;
+    }
+
+    .permit-check {
+      width: 18px;
+      min-height: 18px;
+      accent-color: var(--mint);
+    }
+
+    .select-cell {
+      width: 42px;
+      text-align: center;
     }
 
     .icon-button {
@@ -582,6 +612,14 @@
       transition: opacity 0.18s ease;
     }
 
+    .user-list-panel {
+      margin-top: 14px;
+    }
+
+    .user-list-panel .table-wrap {
+      max-height: 46vh;
+    }
+
     @media (max-width: 1120px) {
       .status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .layout, .content { grid-template-columns: 1fr; }
@@ -648,6 +686,17 @@
         </aside>
       </section>
     </section>
+
+    <section id="user-list-panel" class="panel user-list-panel">
+      <div class="panel-head">
+        <h2>My Permit List</h2>
+        <div class="panel-actions">
+          <span id="user-list-count" class="small"></span>
+          <button onclick="clearUserList()">Clear list</button>
+        </div>
+      </div>
+      <div id="user-list" class="table-wrap"><div class="empty">No permits added yet.</div></div>
+    </section>
   </main>
 
   <script>
@@ -668,7 +717,10 @@
       activeDetail: null,
       detailFilters: { q: "", workType: "", permitType: "", role: "" },
       detailPageIndex: 0,
-      detailPageSize: 25
+      detailPageSize: 25,
+      selectedPermitNumbers: new Set(),
+      userPermitNumbers: [],
+      userPermitMap: new Map()
     };
 
     const $ = id => document.getElementById(id);
@@ -681,6 +733,8 @@
     const enc = value => encodeURIComponent(clean(value)).replace(/'/g, "%27");
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
     const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const userListCookie = "chi_permit_user_list";
+    const userListLimit = 220;
 
     addEventListener("scroll", () => {
       const doc = document.documentElement;
@@ -778,7 +832,9 @@
 
     async function init() {
       state.manifest = await fetch("data/manifest.json").then(r => r.json());
+      loadUserListCookie();
       renderStatus();
+      await renderUserList();
       await search();
     }
 
@@ -797,6 +853,7 @@
       state.mode = mode;
       state.selected = null;
       state.resultSort = { key: null, direction: null };
+      state.selectedPermitNumbers.clear();
       ["general_contractors", "open_subs", "open_permits"].forEach(name => $("tab-" + name).classList.remove("active"));
       $("tab-" + mode).classList.add("active");
       $("sort").value = mode === "open_permits" ? "latest_issue_date" : "open_jobs";
@@ -809,6 +866,7 @@
       $("ward").value = "";
       $("usable-processing").checked = false;
       state.resultSort = { key: null, direction: null };
+      state.selectedPermitNumbers.clear();
       hideDetail();
       search();
     }
@@ -918,6 +976,7 @@
       setBusy(state.resultSort.key ? "Sorting" : "Loading");
       await nextFrame();
       state.pageIndex = 0;
+      state.selectedPermitNumbers.clear();
       state.pageSize = state.mode === "open_permits" ? 150 : 100;
       if (state.mode === "open_permits") {
         const rows = await loadJson("open_permits");
@@ -940,6 +999,102 @@
         return matchesTerms(row, [
         "contact_name", "sample_contact_type", "city", "state", "zipcode"
         ], terms) || specialtyText(row).includes(terms.join(" "));
+      });
+    }
+
+    function readCookie(name) {
+      const prefix = `${name}=`;
+      const entry = document.cookie.split("; ").find(item => item.startsWith(prefix));
+      return entry ? decodeURIComponent(entry.slice(prefix.length)) : "";
+    }
+
+    function writeCookie(name, value, days = 365) {
+      const expires = new Date(Date.now() + days * 864e5).toUTCString();
+      document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+    }
+
+    function loadUserListCookie() {
+      state.userPermitNumbers = readCookie(userListCookie)
+        .split("|")
+        .map(value => value.trim())
+        .filter(Boolean)
+        .slice(0, userListLimit);
+    }
+
+    function saveUserListCookie() {
+      state.userPermitNumbers = Array.from(new Set(state.userPermitNumbers)).slice(0, userListLimit);
+      writeCookie(userListCookie, state.userPermitNumbers.join("|"));
+    }
+
+    function isInUserList(permitNumber) {
+      return state.userPermitNumbers.includes(clean(permitNumber));
+    }
+
+    async function ensurePermitMap() {
+      if (state.userPermitMap.size) return;
+      const rows = await loadJson("open_permits", true);
+      state.userPermitMap = new Map(rows.map(row => [clean(row.permit_number), row]));
+    }
+
+    async function addPermitsToUserList(rows) {
+      const numbers = rows.map(row => clean(row.permit_number)).filter(Boolean);
+      const next = [...state.userPermitNumbers];
+      numbers.forEach(number => {
+        if (!next.includes(number)) next.unshift(number);
+      });
+      state.userPermitNumbers = next.slice(0, userListLimit);
+      saveUserListCookie();
+      state.selectedPermitNumbers.clear();
+      await renderUserList();
+      renderCurrentMode();
+      if (state.activeDetail?.type === "permit") {
+        showPermitDetail(state.activeDetail.row, false);
+      }
+    }
+
+    async function addSelectedPermits() {
+      const selected = state.filteredRows.filter(row => state.selectedPermitNumbers.has(clean(row.permit_number)));
+      await addPermitsToUserList(selected);
+    }
+
+    async function addPermitFromEncoded(encoded) {
+      await addPermitsToUserList([JSON.parse(decodeURIComponent(encoded))]);
+    }
+
+    async function removePermitFromUserList(encodedNumber) {
+      const number = decodeURIComponent(encodedNumber);
+      state.userPermitNumbers = state.userPermitNumbers.filter(item => item !== number);
+      saveUserListCookie();
+      await renderUserList();
+      renderCurrentMode();
+      if (state.activeDetail?.type === "permit") {
+        showPermitDetail(state.activeDetail.row, false);
+      }
+    }
+
+    async function clearUserList() {
+      state.userPermitNumbers = [];
+      saveUserListCookie();
+      await renderUserList();
+      renderCurrentMode();
+      if (state.activeDetail?.type === "permit") {
+        showPermitDetail(state.activeDetail.row, false);
+      }
+    }
+
+    async function renderUserList() {
+      await ensurePermitMap();
+      const rows = state.userPermitNumbers.map(number => state.userPermitMap.get(number)).filter(Boolean);
+      $("user-list-count").textContent = rows.length ? `${fmt(rows.length)} saved` : "";
+      if (!rows.length) {
+        $("user-list").innerHTML = `<div class="empty">No permits added yet.</div>`;
+        return;
+      }
+      $("user-list").innerHTML = permitTable(rows, {
+        select: false,
+        remove: true,
+        sortable: false,
+        emptyText: "No permits added yet."
       });
     }
 
@@ -1306,37 +1461,78 @@
     function renderPermits() {
       const rows = visibleSlice();
       $("results-title").textContent = "Open Permits";
-      $("result-count").textContent = resultCountText();
+      $("result-count").innerHTML = selectedPermitAction();
       if (!rows.length) {
         $("results").innerHTML = `<div class="empty">No matching permits.</div>`;
         renderPager();
         return;
       }
-      $("results").innerHTML = `
+      $("results").innerHTML = permitTable(rows, {
+        select: true,
+        remove: false,
+        sortable: true,
+        emptyText: "No matching permits."
+      });
+      $("results").scrollTop = 0;
+      renderPager();
+    }
+
+    function selectedPermitAction() {
+      const count = state.selectedPermitNumbers.size;
+      const countText = resultCountText();
+      if (!count) return countText;
+      return `
+        <span>${countText}</span>
+        <button onclick="addSelectedPermits()">${fmt(count)} selected &middot; Add to list</button>`;
+    }
+
+    function permitTable(rows, options = {}) {
+      if (!rows.length) return `<div class="empty">${esc(options.emptyText || "No permits.")}</div>`;
+      const selectHead = options.select ? "<th class=\"select-cell\">Add</th>" : "";
+      const removeHead = options.remove ? "<th class=\"select-cell\">Remove</th>" : "";
+      const head = (label, key) => options.sortable === false ? esc(label) : sortHeader(label, key);
+      return `
         <table>
-          <thead><tr><th>${sortHeader("Permit", "permit_number")}</th><th>${sortHeader("Status", "permit_status")}</th><th>${sortHeader("Issued", "issued")}</th><th>${sortHeader("Address", "address")}</th><th>${sortHeader("Ward", "ward")}</th><th>${sortHeader("Cost", "cost")}</th></tr></thead>
+          <thead><tr>${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th><th>${head("Ward", "ward")}</th><th>${head("Cost", "cost")}</th>${removeHead}</tr></thead>
           <tbody>${rows.map((row, i) => `
-            <tr onclick="selectPermit(${i})">
+            <tr onclick="${options.select ? `selectPermit(${i})` : `showPermitFromEncoded('${enc(JSON.stringify(row))}')`}">
+              ${options.select ? `<td class="select-cell"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""} onclick="event.stopPropagation()" onchange="togglePermitSelection('${enc(row.permit_number)}', this.checked)"></td>` : ""}
               <td><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span></td>
               <td>${esc(row.permit_status)}</td>
               <td>${esc(row.issue_date)}</td>
               <td>${esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
               <td>${esc(row.ward)}</td>
               <td class="money">${money(row.reported_cost)}</td>
+              ${options.remove ? `<td class="select-cell"><button class="icon-button" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
             </tr>`).join("")}</tbody>
         </table>`;
-      $("results").scrollTop = 0;
-      renderPager();
+    }
+
+    function togglePermitSelection(encodedNumber, checked) {
+      const number = decodeURIComponent(encodedNumber);
+      if (checked) {
+        state.selectedPermitNumbers.add(number);
+      } else {
+        state.selectedPermitNumbers.delete(number);
+      }
+      $("result-count").innerHTML = selectedPermitAction();
     }
 
     function selectPermit(index) {
       showPermitDetail(state.visibleRows[index]);
     }
 
-    function showPermitDetail(row) {
+    function showPermitDetail(row, pushHistory = true) {
       state.activeDetail = { type: "permit", row };
+      const payload = enc(JSON.stringify(row));
+      const saved = isInUserList(row.permit_number);
       showDetail(detailShell(`
-        <h3>${esc(row.permit_number)}</h3>
+        <div class="panel-head">
+          <h3>${esc(row.permit_number)}</h3>
+          <div class="panel-actions">
+            <button class="primary" onclick="addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "Saved in list" : "Add to list"}</button>
+          </div>
+        </div>
         <div class="tag-row">
           <span class="tag">${esc(row.permit_status)}</span>
           <span class="tag">${esc(row.permit_type)}</span>
@@ -1371,7 +1567,7 @@
         </div>
         ${row.work_description ? `<div class="detail-section"><h4>Work description</h4><p class="permit-description small">${esc(row.work_description)}</p></div>` : ""}
         <div class="detail-section"><h4>General contractors</h4>${nameTags(row.general_contractors, "general_contractors")}</div>
-        <div class="detail-section"><h4>Open subs</h4>${nameTags(row.open_subs, "open_subs")}</div>`));
+        <div class="detail-section"><h4>Open subs</h4>${nameTags(row.open_subs, "open_subs")}</div>`), pushHistory);
     }
 
     async function openContactProfile(encodedName, mode) {
