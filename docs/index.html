@@ -661,6 +661,11 @@
       max-height: 46vh;
     }
 
+    .user-list-panel.is-collapsed .list-note,
+    .user-list-panel.is-collapsed .table-wrap {
+      display: none;
+    }
+
     .list-note {
       margin: 8px 0 10px;
     }
@@ -703,6 +708,7 @@
       <div class="panel-head user-list-head">
         <h2>My Permit List</h2>
         <div class="panel-actions align-left">
+          <button id="user-list-toggle" aria-expanded="true" onclick="toggleUserList()">Hide list</button>
           <button onclick="clearUserList()">Clear list</button>
           <span id="user-list-count" class="small"></span>
         </div>
@@ -841,6 +847,13 @@
       $("detail-panel").classList.add("hidden");
       $("content").classList.remove("detail-mode");
       $("content").classList.add("no-detail");
+    }
+
+    function toggleUserList() {
+      const panel = $("user-list-panel");
+      const collapsed = panel.classList.toggle("is-collapsed");
+      $("user-list-toggle").textContent = collapsed ? "Open list" : "Hide list";
+      $("user-list-toggle").setAttribute("aria-expanded", String(!collapsed));
     }
 
     function setBusy(label = "Loading") {
