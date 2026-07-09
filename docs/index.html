@@ -373,11 +373,30 @@
       font-size: 0.86rem;
     }
 
+    .results-table {
+      table-layout: fixed;
+    }
+
+    .contacts-table th:nth-child(1), .contacts-table td:nth-child(1) { width: 34%; }
+    .contacts-table th:nth-child(2), .contacts-table td:nth-child(2) { width: 20%; }
+    .contacts-table th:nth-child(3), .contacts-table td:nth-child(3) { width: 24%; }
+    .contacts-table th:nth-child(4), .contacts-table td:nth-child(4) { width: 11%; }
+    .contacts-table th:nth-child(5), .contacts-table td:nth-child(5) { width: 11%; }
+
+    .permits-table th:nth-child(1), .permits-table td:nth-child(1) { width: 56px; }
+    .permits-table th:nth-child(2), .permits-table td:nth-child(2) { width: 18%; }
+    .permits-table th:nth-child(3), .permits-table td:nth-child(3) { width: 15%; }
+    .permits-table th:nth-child(4), .permits-table td:nth-child(4) { width: 12%; }
+    .permits-table th:nth-child(5), .permits-table td:nth-child(5) { width: 31%; }
+    .permits-table th:nth-child(6), .permits-table td:nth-child(6) { width: 10%; }
+    .permits-table th:nth-child(7), .permits-table td:nth-child(7) { width: 14%; }
+
     th, td {
       padding: 9px 8px;
       border-bottom: 1px solid rgba(136, 166, 204, 0.18);
       text-align: left;
       vertical-align: top;
+      overflow-wrap: anywhere;
     }
 
     th {
@@ -392,14 +411,15 @@
     }
 
     .sort-header {
-      width: auto;
+      width: 100%;
       min-height: 0;
       padding: 0;
       border: 0;
       border-radius: 0;
       background: transparent;
       color: inherit;
-      display: inline-flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 16px;
       gap: 5px;
       align-items: center;
       justify-content: flex-start;
@@ -415,9 +435,10 @@
     }
 
     .sort-icon {
-      min-width: 12px;
+      width: 16px;
       font-size: 0.82rem;
       line-height: 1;
+      text-align: center;
     }
 
     tbody tr {
@@ -1419,7 +1440,7 @@
         return;
       }
       $("results").innerHTML = `
-        <table>
+        <table class="results-table contacts-table">
           <thead><tr><th>${sortHeader("Name", "contact_name")}</th><th>${sortHeader("Type", "contact_type")}</th><th>${sortHeader("Public Contact", "public_contact")}</th><th>${sortHeader("Open Jobs", "open_jobs")}</th><th>${sortHeader("Avg Days", "avg_processing_days")}</th></tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr onclick="selectContact(${i})">
@@ -1735,8 +1756,9 @@
       const removeHead = options.remove ? "<th class=\"select-cell\">Remove</th>" : "";
       const notesHead = options.notes ? "<th>Notes</th>" : "";
       const head = (label, key) => options.sortable === false ? esc(label) : sortHeader(label, key);
+      const tableClass = options.select ? "results-table permits-table" : "";
       return `
-        <table>
+        <table class="${tableClass}">
           <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th><th>${head("Ward", "ward")}</th><th>${head("Cost", "cost")}</th>${notesHead}</tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr
