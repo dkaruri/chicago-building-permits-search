@@ -310,11 +310,21 @@
       width: 18px;
       min-height: 18px;
       accent-color: var(--mint);
+      pointer-events: none;
     }
 
     .select-cell {
       width: 42px;
       text-align: center;
+    }
+
+    td.select-cell {
+      cursor: pointer;
+      vertical-align: middle;
+    }
+
+    td.select-cell:hover {
+      background: rgba(123, 226, 182, 0.08);
     }
 
     .icon-button {
@@ -1530,7 +1540,7 @@
           <tbody>${rows.map((row, i) => `
             <tr onclick="${options.select ? `selectPermit(${i})` : `showPermitFromEncoded('${enc(JSON.stringify(row))}')`}">
               ${options.remove ? `<td class="select-cell"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
-              ${options.select ? `<td class="select-cell"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""} onclick="event.stopPropagation()" onchange="togglePermitSelection('${enc(row.permit_number)}', this.checked)"></td>` : ""}
+              ${options.select ? `<td class="select-cell" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
               <td><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span></td>
               <td>${esc(row.permit_status)}</td>
               <td>${esc(row.issue_date)}</td>
@@ -1549,6 +1559,15 @@
         state.selectedPermitNumbers.delete(number);
       }
       $("result-count").innerHTML = selectedPermitAction();
+    }
+
+    function togglePermitSelectionCell(event, cell, encodedNumber) {
+      event.stopPropagation();
+      const number = decodeURIComponent(encodedNumber);
+      const checked = !state.selectedPermitNumbers.has(number);
+      const input = cell.querySelector("input");
+      if (input) input.checked = checked;
+      togglePermitSelection(encodedNumber, checked);
     }
 
     function selectPermit(index) {
