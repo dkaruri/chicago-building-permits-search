@@ -652,6 +652,11 @@
       margin-bottom: 14px;
     }
 
+    .user-list-panel.is-drop-target {
+      border-color: var(--mint);
+      box-shadow: 0 0 0 1px rgba(123, 226, 182, 0.45), 0 18px 42px var(--shadow);
+    }
+
     .user-list-panel .table-wrap {
       max-height: 46vh;
     }
@@ -664,6 +669,15 @@
       min-width: 240px;
       min-height: 58px;
       font-size: 0.82rem;
+    }
+
+    tr[draggable="true"] {
+      cursor: grab;
+    }
+
+    tr.is-drag-over {
+      outline: 2px solid rgba(123, 226, 182, 0.68);
+      outline-offset: -2px;
     }
 
     @media (max-width: 1120px) {
@@ -685,7 +699,7 @@
   <main>
     <section id="status" class="status"></section>
 
-    <section id="user-list-panel" class="panel user-list-panel">
+    <section id="user-list-panel" class="panel user-list-panel" ondragover="permitListDragOver(event)" ondragleave="permitListDragLeave(event)" ondrop="permitListDrop(event)">
       <div class="panel-head user-list-head">
         <h2>My Permit List</h2>
         <div class="panel-actions align-left">
@@ -772,7 +786,8 @@
       userPermitNumbers: [],
       userPermitMap: new Map(),
       userListNote: "",
-      userPermitNotes: {}
+      userPermitNotes: {},
+      draggedPermitNumber: ""
     };
 
     const $ = id => document.getElementById(id);
@@ -1067,14 +1082,18 @@
       document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
     }
 
+    function deleteCookie(name) {
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+    }
+
     function loadUserListCookie() {
       let raw = "";
       try {
-        raw = localStorage.getItem(userListKey) || "";
+        const stored = localStorage.getItem(userListKey);
+        raw = stored == null ? readCookie(userListKey) : stored;
       } catch (error) {
-        raw = "";
+        raw = readCookie(userListKey);
       }
-      if (!raw) raw = readCookie(userListKey);
       state.userPermitNumbers = raw
         .split("|")
         .map(value => value.trim())
@@ -1087,6 +1106,7 @@
       const value = state.userPermitNumbers.join("|");
       try {
         localStorage.setItem(userListKey, value);
+        deleteCookie(userListKey);
       } catch (error) {
         writeCookie(userListKey, value);
       }
@@ -1149,6 +1169,23 @@
       state.userPermitMap = new Map(rows.map(row => [clean(row.permit_number), row]));
     }
 
+    async function addPermitNumberToUserList(number, insertBefore = "") {
+      await ensurePermitMap();
+      const row = state.userPermitMap.get(clean(number));
+      if (!row) return;
+      const filtered = state.userPermitNumbers.filter(item => item !== number);
+      const targetIndex = insertBefore ? filtered.indexOf(insertBefore) : -1;
+      if (targetIndex >= 0) {
+        filtered.splice(targetIndex, 0, number);
+      } else {
+        filtered.unshift(number);
+      }
+      state.userPermitNumbers = filtered.slice(0, userListLimit);
+      saveUserListCookie();
+      await renderUserList();
+      renderCurrentMode();
+    }
+
     async function addPermitsToUserList(rows) {
       const numbers = rows.map(row => clean(row.permit_number)).filter(Boolean);
       const next = [...state.userPermitNumbers];
@@ -1162,6 +1199,78 @@
       renderCurrentMode();
       if (state.activeDetail?.type === "permit") {
         showPermitDetail(state.activeDetail.row, false);
+      }
+    }
+
+    async function moveSavedPermit(draggedNumber, targetNumber) {
+      if (!draggedNumber || !targetNumber || draggedNumber === targetNumber) return;
+      const next = state.userPermitNumbers.filter(number => number !== draggedNumber);
+      const targetIndex = next.indexOf(targetNumber);
+      if (targetIndex < 0) return;
+      next.splice(targetIndex, 0, draggedNumber);
+      state.userPermitNumbers = next;
+      saveUserListCookie();
+      await renderUserList();
+    }
+
+    function permitDragStart(event, encodedNumber) {
+      const number = decodeURIComponent(encodedNumber);
+      state.draggedPermitNumber = number;
+      event.dataTransfer.effectAllowed = "copyMove";
+      event.dataTransfer.setData("text/plain", number);
+      event.dataTransfer.setData("application/x-chi-permit-number", number);
+    }
+
+    function permitDragEnd() {
+      state.draggedPermitNumber = "";
+      $("user-list-panel").classList.remove("is-drop-target");
+      document.querySelectorAll("tr.is-drag-over").forEach(row => row.classList.remove("is-drag-over"));
+    }
+
+    function draggedPermitNumber(event) {
+      return event.dataTransfer.getData("application/x-chi-permit-number") || event.dataTransfer.getData("text/plain") || state.draggedPermitNumber;
+    }
+
+    function permitListDragOver(event) {
+      if (!state.draggedPermitNumber && !Array.from(event.dataTransfer.types || []).includes("application/x-chi-permit-number")) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      $("user-list-panel").classList.add("is-drop-target");
+    }
+
+    function permitListDragLeave(event) {
+      if ($("user-list-panel").contains(event.relatedTarget)) return;
+      $("user-list-panel").classList.remove("is-drop-target");
+    }
+
+    async function permitListDrop(event) {
+      event.preventDefault();
+      $("user-list-panel").classList.remove("is-drop-target");
+      const number = draggedPermitNumber(event);
+      if (number) await addPermitNumberToUserList(number);
+    }
+
+    function savedPermitDragOver(event, row) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "move";
+      row.classList.add("is-drag-over");
+    }
+
+    function savedPermitDragLeave(row) {
+      row.classList.remove("is-drag-over");
+    }
+
+    async function savedPermitDrop(event, row, encodedTargetNumber) {
+      event.preventDefault();
+      event.stopPropagation();
+      row.classList.remove("is-drag-over");
+      const dragged = draggedPermitNumber(event);
+      const target = decodeURIComponent(encodedTargetNumber);
+      if (state.userPermitNumbers.includes(dragged)) {
+        await moveSavedPermit(dragged, target);
+      } else {
+        await addPermitNumberToUserList(dragged, target);
       }
     }
 
@@ -1213,6 +1322,7 @@
         select: false,
         remove: true,
         notes: true,
+        reorder: true,
         sortable: false,
         emptyText: "No permits added yet."
       });
@@ -1616,7 +1726,13 @@
         <table>
           <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th><th>${head("Ward", "ward")}</th><th>${head("Cost", "cost")}</th>${notesHead}</tr></thead>
           <tbody>${rows.map((row, i) => `
-            <tr onclick="${options.select ? `selectPermit(${i})` : `showPermitFromEncoded('${enc(JSON.stringify(row))}')`}">
+            <tr
+              draggable="${options.select || options.reorder ? "true" : "false"}"
+              ondragstart="permitDragStart(event, '${enc(row.permit_number)}')"
+              ondragend="permitDragEnd()"
+              ${options.reorder ? `ondragover="savedPermitDragOver(event, this)" ondragleave="savedPermitDragLeave(this)" ondrop="savedPermitDrop(event, this, '${enc(row.permit_number)}')"` : ""}
+              onclick="${options.select ? `selectPermit(${i})` : `showPermitFromEncoded('${enc(JSON.stringify(row))}')`}"
+            >
               ${options.remove ? `<td class="select-cell"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
               <td><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span></td>
@@ -1625,7 +1741,7 @@
               <td>${esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
               <td>${esc(row.ward)}</td>
               <td class="money">${money(row.reported_cost)}</td>
-              ${options.notes ? `<td><textarea class="permit-note" placeholder="Add note..." onclick="event.stopPropagation()" oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[clean(row.permit_number)] || "")}</textarea></td>` : ""}
+              ${options.notes ? `<td><textarea class="permit-note" draggable="false" placeholder="Add note..." onclick="event.stopPropagation()" ondragstart="event.stopPropagation()" oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[clean(row.permit_number)] || "")}</textarea></td>` : ""}
             </tr>`).join("")}</tbody>
         </table>`;
     }
