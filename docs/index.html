@@ -669,6 +669,15 @@
       transition: opacity 0.18s ease;
     }
 
+    body.is-permit-dragging .table-wrap table {
+      opacity: 0.48;
+      transition: opacity 0.14s ease;
+    }
+
+    body.is-permit-dragging .user-list-panel.is-drop-target .table-wrap table {
+      opacity: 0.72;
+    }
+
     .user-list-panel {
       margin-bottom: 14px;
     }
@@ -701,9 +710,12 @@
       cursor: grab;
     }
 
-    tr.is-drag-over {
-      outline: 2px solid rgba(123, 226, 182, 0.68);
-      outline-offset: -2px;
+    tr.drop-before td {
+      border-top: 4px solid rgba(123, 226, 182, 0.92);
+    }
+
+    tr.drop-after td {
+      border-bottom: 4px solid rgba(123, 226, 182, 0.92);
     }
 
     @media (max-width: 1120px) {
@@ -1203,14 +1215,14 @@
       state.userPermitMap = new Map(rows.map(row => [clean(row.permit_number), row]));
     }
 
-    async function addPermitNumberToUserList(number, insertBefore = "") {
+    async function addPermitNumberToUserList(number, targetNumber = "", placement = "before") {
       await ensurePermitMap();
       const row = state.userPermitMap.get(clean(number));
       if (!row) return;
       const filtered = state.userPermitNumbers.filter(item => item !== number);
-      const targetIndex = insertBefore ? filtered.indexOf(insertBefore) : -1;
+      const targetIndex = targetNumber ? filtered.indexOf(targetNumber) : -1;
       if (targetIndex >= 0) {
-        filtered.splice(targetIndex, 0, number);
+        filtered.splice(targetIndex + (placement === "after" ? 1 : 0), 0, number);
       } else {
         filtered.unshift(number);
       }
@@ -1236,12 +1248,12 @@
       }
     }
 
-    async function moveSavedPermit(draggedNumber, targetNumber) {
+    async function moveSavedPermit(draggedNumber, targetNumber, placement = "before") {
       if (!draggedNumber || !targetNumber || draggedNumber === targetNumber) return;
       const next = state.userPermitNumbers.filter(number => number !== draggedNumber);
       const targetIndex = next.indexOf(targetNumber);
       if (targetIndex < 0) return;
-      next.splice(targetIndex, 0, draggedNumber);
+      next.splice(targetIndex + (placement === "after" ? 1 : 0), 0, draggedNumber);
       state.userPermitNumbers = next;
       saveUserListCookie();
       await renderUserList();
@@ -1250,6 +1262,7 @@
     function permitDragStart(event, encodedNumber) {
       const number = decodeURIComponent(encodedNumber);
       state.draggedPermitNumber = number;
+      document.body.classList.add("is-permit-dragging");
       event.dataTransfer.effectAllowed = "copyMove";
       event.dataTransfer.setData("text/plain", number);
       event.dataTransfer.setData("application/x-chi-permit-number", number);
@@ -1257,8 +1270,9 @@
 
     function permitDragEnd() {
       state.draggedPermitNumber = "";
+      document.body.classList.remove("is-permit-dragging");
       $("user-list-panel").classList.remove("is-drop-target");
-      document.querySelectorAll("tr.is-drag-over").forEach(row => row.classList.remove("is-drag-over"));
+      clearDropIndicators();
     }
 
     function draggedPermitNumber(event) {
@@ -1280,31 +1294,46 @@
     async function permitListDrop(event) {
       event.preventDefault();
       $("user-list-panel").classList.remove("is-drop-target");
+      clearDropIndicators();
       const number = draggedPermitNumber(event);
       if (number) await addPermitNumberToUserList(number);
+    }
+
+    function clearDropIndicators() {
+      document.querySelectorAll("tr.drop-before, tr.drop-after").forEach(row => {
+        row.classList.remove("drop-before", "drop-after");
+        delete row.dataset.dropPlacement;
+      });
     }
 
     function savedPermitDragOver(event, row) {
       event.preventDefault();
       event.stopPropagation();
       event.dataTransfer.dropEffect = "move";
-      row.classList.add("is-drag-over");
+      const rect = row.getBoundingClientRect();
+      const placement = event.clientY > rect.top + rect.height / 2 ? "after" : "before";
+      clearDropIndicators();
+      row.dataset.dropPlacement = placement;
+      row.classList.add(placement === "after" ? "drop-after" : "drop-before");
     }
 
     function savedPermitDragLeave(row) {
-      row.classList.remove("is-drag-over");
+      row.classList.remove("drop-before", "drop-after");
+      delete row.dataset.dropPlacement;
     }
 
     async function savedPermitDrop(event, row, encodedTargetNumber) {
       event.preventDefault();
       event.stopPropagation();
-      row.classList.remove("is-drag-over");
+      const placement = row.dataset.dropPlacement || "before";
+      row.classList.remove("drop-before", "drop-after");
+      delete row.dataset.dropPlacement;
       const dragged = draggedPermitNumber(event);
       const target = decodeURIComponent(encodedTargetNumber);
       if (state.userPermitNumbers.includes(dragged)) {
-        await moveSavedPermit(dragged, target);
+        await moveSavedPermit(dragged, target, placement);
       } else {
-        await addPermitNumberToUserList(dragged, target);
+        await addPermitNumberToUserList(dragged, target, placement);
       }
     }
 
