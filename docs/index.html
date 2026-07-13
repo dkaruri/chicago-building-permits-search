@@ -275,6 +275,14 @@
       padding: 6px 10px;
     }
 
+    .route-summary {
+      margin: 8px 0 10px;
+      padding: 9px 10px;
+      border: 1px solid rgba(136, 166, 204, 0.22);
+      border-radius: 6px;
+      background: rgba(11, 17, 29, 0.75);
+    }
+
     #result-count {
       min-width: 280px;
       margin-left: auto;
@@ -725,6 +733,7 @@
     }
 
     .user-list-panel.is-collapsed .list-note,
+    .user-list-panel.is-collapsed .route-summary,
     .user-list-panel.is-collapsed .table-wrap {
       display: none;
     }
@@ -737,6 +746,12 @@
       min-width: 240px;
       min-height: 58px;
       font-size: 0.82rem;
+    }
+
+    .route-leg {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-top: 4px;
     }
 
     tr[draggable="true"] {
@@ -775,10 +790,13 @@
         <h2>My Permit List</h2>
         <div class="panel-actions align-left">
           <button id="user-list-toggle" aria-expanded="true" onclick="toggleUserList()">Hide list</button>
+          <button onclick="calculateUserListRoute()">Drive distances</button>
+          <button onclick="optimizeUserListRoute()">Sort by drive time</button>
           <button onclick="clearUserList()">Clear list</button>
           <span id="user-list-count" class="small"></span>
         </div>
       </div>
+      <div id="user-route-summary" class="route-summary small">Add at least two permits with mapped coordinates to estimate driving distances.</div>
       <label class="list-note">List note
         <textarea id="user-list-note" placeholder="Add an overall note for this permit list..." oninput="saveListNote(this.value)"></textarea>
       </label>
@@ -859,7 +877,9 @@
       userPermitMap: new Map(),
       userListNote: "",
       userPermitNotes: {},
-      draggedPermitNumber: ""
+      draggedPermitNumber: "",
+      userRouteLegs: [],
+      userRouteSummary: ""
     };
 
     const $ = id => document.getElementById(id);
@@ -1242,6 +1262,158 @@
       return state.userPermitNumbers.includes(clean(permitNumber));
     }
 
+    function clearUserRoute(message = "") {
+      state.userRouteLegs = [];
+      state.userRouteSummary = message;
+      renderRouteSummary();
+    }
+
+    function renderRouteSummary() {
+      const fallback = "Add at least two permits with mapped coordinates to estimate driving distances.";
+      $("user-route-summary").textContent = state.userRouteSummary || fallback;
+    }
+
+    function userListRows() {
+      return state.userPermitNumbers.map(number => state.userPermitMap.get(number)).filter(Boolean);
+    }
+
+    function hasCoordinates(row) {
+      return Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude));
+    }
+
+    function routeRows(rows = userListRows()) {
+      return rows.filter(hasCoordinates);
+    }
+
+    function routeCoordinateText(rows) {
+      return rows.map(row => `${Number(row.longitude)},${Number(row.latitude)}`).join(";");
+    }
+
+    function milesLabel(meters) {
+      const miles = Number(meters || 0) / 1609.344;
+      return `${miles.toFixed(miles < 10 ? 1 : 0)} mi`;
+    }
+
+    function minutesLabel(seconds) {
+      const minutes = Number(seconds || 0) / 60;
+      if (minutes < 90) return `${Math.max(1, Math.round(minutes))} min`;
+      const hours = minutes / 60;
+      return `${hours.toFixed(hours < 10 ? 1 : 0)} hr`;
+    }
+
+    function routeLegFor(row) {
+      return state.userRouteLegs.find(leg => leg.from === clean(row.permit_number));
+    }
+
+    function routeLegText(row) {
+      const leg = routeLegFor(row);
+      if (!leg) return "";
+      return `<div class="route-leg">To next: ${milesLabel(leg.distance)} / ${minutesLabel(leg.duration)}</div>`;
+    }
+
+    async function fetchRouteLegBatch(rows) {
+      const url = `https://router.project-osrm.org/route/v1/driving/${routeCoordinateText(rows)}?overview=false&steps=false`;
+      const payload = await fetch(url).then(response => {
+        if (!response.ok) throw new Error("Routing service unavailable.");
+        return response.json();
+      });
+      const route = payload.routes && payload.routes[0];
+      if (!route || !route.legs) throw new Error("No route found for this list.");
+      return route.legs.map((leg, index) => ({
+        from: clean(rows[index].permit_number),
+        to: clean(rows[index + 1].permit_number),
+        distance: leg.distance,
+        duration: leg.duration,
+      }));
+    }
+
+    async function fetchRouteLegs(rows) {
+      const maxBatchSize = 50;
+      const legs = [];
+      for (let start = 0; start < rows.length - 1; start += maxBatchSize - 1) {
+        const batch = rows.slice(start, start + maxBatchSize);
+        legs.push(...await fetchRouteLegBatch(batch));
+      }
+      return legs;
+    }
+
+    async function calculateUserListRoute() {
+      await ensurePermitMap();
+      const rows = userListRows();
+      const routable = routeRows(rows);
+      if (routable.length < 2) {
+        clearUserRoute("At least two saved permits need mapped coordinates to estimate driving distances.");
+        return;
+      }
+      try {
+        state.userRouteSummary = "Calculating driving distances...";
+        renderRouteSummary();
+        state.userRouteLegs = await fetchRouteLegs(routable);
+        const totalDistance = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.distance || 0), 0);
+        const totalDuration = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.duration || 0), 0);
+        const skipped = rows.length - routable.length;
+        state.userRouteSummary = `Current route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} saved permits missing coordinates)` : ""}.`;
+        await renderUserList();
+      } catch (error) {
+        clearUserRoute(error.message || "Driving distances could not be calculated right now.");
+      }
+    }
+
+    async function fetchDurationMatrix(rows) {
+      const url = `https://router.project-osrm.org/table/v1/driving/${routeCoordinateText(rows)}?annotations=duration,distance`;
+      const payload = await fetch(url).then(response => {
+        if (!response.ok) throw new Error("Routing service unavailable.");
+        return response.json();
+      });
+      if (!payload.durations || !payload.distances) throw new Error("No route matrix found for this list.");
+      return payload;
+    }
+
+    function greedyRouteOrder(rows, matrix) {
+      const remaining = new Set(rows.map((_, index) => index));
+      const order = [0];
+      remaining.delete(0);
+      while (remaining.size) {
+        const last = order[order.length - 1];
+        let best = null;
+        remaining.forEach(index => {
+          const duration = matrix.durations[last]?.[index];
+          if (duration == null) return;
+          if (!best || duration < best.duration) best = { index, duration };
+        });
+        const next = best ? best.index : remaining.values().next().value;
+        order.push(next);
+        remaining.delete(next);
+      }
+      return order.map(index => rows[index]);
+    }
+
+    async function optimizeUserListRoute() {
+      await ensurePermitMap();
+      const rows = userListRows();
+      const routable = routeRows(rows);
+      if (routable.length < 2) {
+        clearUserRoute("At least two saved permits need mapped coordinates to sort by driving time.");
+        return;
+      }
+      if (routable.length > 50) {
+        clearUserRoute("Sort by drive time is limited to 50 mapped permits at a time.");
+        return;
+      }
+      try {
+        state.userRouteSummary = "Sorting by estimated driving time...";
+        renderRouteSummary();
+        const matrix = await fetchDurationMatrix(routable);
+        const ordered = greedyRouteOrder(routable, matrix);
+        const missing = rows.filter(row => !hasCoordinates(row)).map(row => clean(row.permit_number));
+        state.userPermitNumbers = [...ordered.map(row => clean(row.permit_number)), ...missing];
+        saveUserListCookie();
+        await calculateUserListRoute();
+      } catch (error) {
+        clearUserRoute(error.message || "The list could not be sorted by driving time right now.");
+      }
+    }
+
     async function ensurePermitMap() {
       if (state.userPermitMap.size) return;
       const rows = await loadJson("open_permits", true);
@@ -1261,6 +1433,7 @@
       }
       state.userPermitNumbers = filtered.slice(0, userListLimit);
       saveUserListCookie();
+      clearUserRoute("List changed. Recalculate driving distances when ready.");
       await renderUserList();
       renderCurrentMode();
     }
@@ -1274,6 +1447,7 @@
       state.userPermitNumbers = next.slice(0, userListLimit);
       saveUserListCookie();
       state.selectedPermitNumbers.clear();
+      clearUserRoute("List changed. Recalculate driving distances when ready.");
       await renderUserList();
       renderCurrentMode();
       if (state.activeDetail?.type === "permit") {
@@ -1289,6 +1463,7 @@
       next.splice(targetIndex + (placement === "after" ? 1 : 0), 0, draggedNumber);
       state.userPermitNumbers = next;
       saveUserListCookie();
+      clearUserRoute("List order changed. Recalculate driving distances when ready.");
       await renderUserList();
     }
 
@@ -1303,6 +1478,7 @@
       next.splice(nextIndex, 0, number);
       state.userPermitNumbers = next;
       saveUserListCookie();
+      clearUserRoute("List order changed. Recalculate driving distances when ready.");
       await renderUserList();
     }
 
@@ -1399,6 +1575,7 @@
       delete state.userPermitNotes[number];
       saveUserListCookie();
       saveUserNotes();
+      clearUserRoute("List changed. Recalculate driving distances when ready.");
       await renderUserList();
       renderCurrentMode();
       if (state.activeDetail?.type === "permit") {
@@ -1412,6 +1589,7 @@
       state.userPermitNotes = {};
       saveUserListCookie();
       saveUserNotes();
+      clearUserRoute();
       await renderUserList();
       renderCurrentMode();
       if (state.activeDetail?.type === "permit") {
@@ -1422,6 +1600,7 @@
     async function renderUserList() {
       await ensurePermitMap();
       $("user-list-note").value = state.userListNote;
+      renderRouteSummary();
       const rows = state.userPermitNumbers.map(number => state.userPermitMap.get(number)).filter(Boolean);
       $("user-list-count").textContent = rows.length ? `${fmt(rows.length)} saved` : "";
       if (!rows.length) {
@@ -1848,7 +2027,7 @@
             >
               ${options.remove ? `<td class="select-cell"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
-              <td><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span></td>
+              <td><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
               <td>${esc(row.permit_status)}</td>
               <td>${esc(row.issue_date)}</td>
               <td>${esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>

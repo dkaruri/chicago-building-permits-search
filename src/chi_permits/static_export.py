@@ -193,6 +193,7 @@ def _open_permits(con: duckdb.DuckDBPyConnection) -> list[dict]:
         SELECT p.permit_number, p.permit_status, p.permit_type, p.review_type,
                p.issue_date, p.address, p.ward, p.community_area, p.work_type,
                p.reported_cost, p.total_fee, p.processing_time,
+               p.latitude, p.longitude,
                left(p.work_description, 260) AS work_description,
                c.general_contractors, c.open_subs
         FROM permits p
