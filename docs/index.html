@@ -269,6 +269,64 @@
       flex-direction: column;
     }
 
+    .user-list-title-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .user-list-toolbar {
+      display: grid;
+      grid-template-columns: minmax(170px, auto) minmax(320px, 1fr) minmax(210px, auto);
+      gap: 10px;
+      align-items: stretch;
+      width: 100%;
+    }
+
+    .action-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid rgba(136, 166, 204, 0.18);
+      border-radius: 8px;
+      background: rgba(11, 17, 29, 0.48);
+    }
+
+    .action-group.route-actions {
+      align-content: flex-start;
+    }
+
+    .action-label {
+      flex: 0 0 100%;
+      color: var(--muted);
+      font-size: 0.68rem;
+      font-weight: 850;
+      letter-spacing: 0.12em;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+
+    .action-group button {
+      width: auto;
+      min-height: 32px;
+      padding: 6px 9px;
+      font-size: 0.78rem;
+    }
+
+    .action-group .subtle-danger {
+      border-color: rgba(255, 114, 118, 0.36);
+      color: #ffd0d2;
+    }
+
+    .action-group .subtle-danger:hover {
+      border-color: rgba(255, 114, 118, 0.7);
+      background: rgba(255, 114, 118, 0.12);
+    }
+
     .panel-actions button {
       width: auto;
       min-height: 34px;
@@ -288,6 +346,17 @@
       color: var(--muted);
       font-size: 0.76rem;
       line-height: 1.35;
+    }
+
+    .route-source summary {
+      cursor: pointer;
+      color: var(--text);
+      font-weight: 750;
+      list-style-position: inside;
+    }
+
+    .route-source p {
+      margin: 6px 0 0;
     }
 
     .route-source a {
@@ -783,6 +852,7 @@
     @media (max-width: 1120px) {
       .status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .layout, .content { grid-template-columns: 1fr; }
+      .user-list-toolbar { grid-template-columns: 1fr; }
       .controls, .detail { position: static; }
       .table-wrap { max-height: none; }
     }
@@ -801,30 +871,44 @@
 
     <section id="user-list-panel" class="panel user-list-panel" ondragover="permitListDragOver(event)" ondragleave="permitListDragLeave(event)" ondrop="permitListDrop(event)">
       <div class="panel-head user-list-head">
-        <h2>My Permit List</h2>
-        <div class="panel-actions align-left">
-          <button id="user-list-toggle" aria-expanded="true" onclick="toggleUserList()">Hide list</button>
-          <button onclick="calculateUserListRoute()">Drive distances</button>
-          <button onclick="optimizeUserListRoute()">Sort by drive time</button>
-          <button onclick="openGoogleMapsRoute()">Open in Google Maps</button>
-          <button onclick="downloadGoogleRouteChunks()">Google route chunks</button>
-          <button onclick="downloadUserListKml()">Download map KML</button>
-          <button onclick="downloadUserListCsv()">Download CSV</button>
-          <button onclick="clearUserList()">Clear list</button>
+        <div class="user-list-title-row">
+          <h2>My Permit List</h2>
           <span id="user-list-count" class="small"></span>
+        </div>
+        <div class="user-list-toolbar" aria-label="My Permit List actions">
+          <div class="action-group" aria-label="List controls">
+            <span class="action-label">List</span>
+            <button id="user-list-toggle" aria-expanded="true" onclick="toggleUserList()">Hide</button>
+            <button class="subtle-danger" onclick="clearUserList()">Clear</button>
+          </div>
+          <div class="action-group route-actions" aria-label="Route controls">
+            <span class="action-label">Route</span>
+            <button onclick="calculateUserListRoute()">Distances</button>
+            <button onclick="optimizeUserListRoute()">Sort by drive time</button>
+            <button onclick="openGoogleMapsRoute()">Open in Google Maps</button>
+            <button onclick="downloadGoogleRouteChunks()">Google route chunks</button>
+          </div>
+          <div class="action-group" aria-label="Export controls">
+            <span class="action-label">Export</span>
+            <button onclick="downloadUserListKml()">KML map</button>
+            <button onclick="downloadUserListCsv()">CSV</button>
+          </div>
         </div>
       </div>
       <div id="user-route-summary" class="route-summary small">Add at least two permits with mapped coordinates to estimate driving distances.</div>
-      <div class="route-source">
-        Driving estimates use the public
-        <a href="https://project-osrm.org/docs/v5.24.0/api/#route-service" target="_blank" rel="noopener">OSRM Route service</a>
-        for list-order legs and the
-        <a href="https://project-osrm.org/docs/v5.24.0/api/#table-service" target="_blank" rel="noopener">OSRM Table service</a>
-        for drive-time sorting. Results are estimates from OpenStreetMap-based routing and are not traffic-aware.
-        Google Maps route export uses
-        <a href="https://developers.google.com/maps/documentation/urls/get-started#directions-action" target="_blank" rel="noopener">Google Maps URLs</a>;
-        the mobile route link opens the first five mapped stops. Google route chunks create sequential Google Maps links for every mapped stop, while KML and CSV include every saved permit with details.
-      </div>
+      <details class="route-source">
+        <summary>Routing sources and limits</summary>
+        <p>
+          Driving estimates use the public
+          <a href="https://project-osrm.org/docs/v5.24.0/api/#route-service" target="_blank" rel="noopener">OSRM Route service</a>
+          for list-order legs and the
+          <a href="https://project-osrm.org/docs/v5.24.0/api/#table-service" target="_blank" rel="noopener">OSRM Table service</a>
+          for drive-time sorting. Results are estimates from OpenStreetMap-based routing and are not traffic-aware.
+          Google Maps route export uses
+          <a href="https://developers.google.com/maps/documentation/urls/get-started#directions-action" target="_blank" rel="noopener">Google Maps URLs</a>;
+          the mobile route link opens the first five mapped stops. Google route chunks create sequential Google Maps links for every mapped stop, while KML and CSV include every saved permit with details.
+        </p>
+      </details>
       <label class="list-note">List note
         <textarea id="user-list-note" placeholder="Add an overall note for this permit list..." oninput="saveListNote(this.value)"></textarea>
       </label>
@@ -966,7 +1050,7 @@
     function toggleUserList() {
       const panel = $("user-list-panel");
       const collapsed = panel.classList.toggle("is-collapsed");
-      $("user-list-toggle").textContent = collapsed ? "Open list" : "Hide list";
+      $("user-list-toggle").textContent = collapsed ? "Show" : "Hide";
       $("user-list-toggle").setAttribute("aria-expanded", String(!collapsed));
     }
 
