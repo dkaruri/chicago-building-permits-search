@@ -807,6 +807,7 @@
           <button onclick="calculateUserListRoute()">Drive distances</button>
           <button onclick="optimizeUserListRoute()">Sort by drive time</button>
           <button onclick="openGoogleMapsRoute()">Open in Google Maps</button>
+          <button onclick="downloadGoogleRouteChunks()">Google route chunks</button>
           <button onclick="downloadUserListKml()">Download map KML</button>
           <button onclick="downloadUserListCsv()">Download CSV</button>
           <button onclick="clearUserList()">Clear list</button>
@@ -822,7 +823,7 @@
         for drive-time sorting. Results are estimates from OpenStreetMap-based routing and are not traffic-aware.
         Google Maps route export uses
         <a href="https://developers.google.com/maps/documentation/urls/get-started#directions-action" target="_blank" rel="noopener">Google Maps URLs</a>;
-        the mobile route link opens the first five mapped stops, while KML and CSV include every saved permit with details.
+        the mobile route link opens the first five mapped stops. Google route chunks create sequential Google Maps links for every mapped stop, while KML and CSV include every saved permit with details.
       </div>
       <label class="list-note">List note
         <textarea id="user-list-note" placeholder="Add an overall note for this permit list..." oninput="saveListNote(this.value)"></textarea>
@@ -1378,6 +1379,39 @@
       return `chicago-permit-list-${stamp}.${extension}`;
     }
 
+    function googleMapsDirectionsUrl(rows, campaign = "permit_list_directions") {
+      const origin = mapCoordinateText(rows[0]);
+      const destination = mapCoordinateText(rows[rows.length - 1]);
+      const waypoints = rows.slice(1, -1).map(mapCoordinateText);
+      const params = new URLSearchParams({
+        api: "1",
+        origin,
+        destination,
+        travelmode: "driving",
+        dir_action: "navigate",
+        utm_source: "chicago_building_permits_search",
+        utm_campaign: campaign,
+      });
+      if (waypoints.length) params.set("waypoints", waypoints.join("|"));
+      return `https://www.google.com/maps/dir/?${params.toString()}`;
+    }
+
+    function googleRouteChunks(rows, chunkSize = 5) {
+      const chunks = [];
+      for (let start = 0; start < rows.length - 1; start += chunkSize - 1) {
+        const chunk = rows.slice(start, start + chunkSize);
+        if (chunk.length >= 2) chunks.push(chunk);
+      }
+      return chunks;
+    }
+
+    function routeChunkStops(chunk, offset) {
+      return chunk.map((row, index) => {
+        const stopNumber = offset + index + 1;
+        return `<li><strong>${fmt(stopNumber)}.</strong> ${esc(row.address)} <span class="muted">Permit ${esc(row.permit_number)}</span></li>`;
+      }).join("");
+    }
+
     async function openGoogleMapsRoute() {
       await ensurePermitMap();
       const rows = mapExportRows();
@@ -1386,26 +1420,63 @@
         return;
       }
       const routeRows = rows.slice(0, 5);
-      const origin = mapCoordinateText(routeRows[0]);
-      const destination = mapCoordinateText(routeRows[routeRows.length - 1]);
-      const waypoints = routeRows.slice(1, -1).map(mapCoordinateText);
-      const params = new URLSearchParams({
-        api: "1",
-        origin,
-        destination,
-        travelmode: "driving",
-        dir_action: "navigate",
-        utm_source: "chicago_building_permits_search",
-        utm_campaign: "permit_list_directions",
-      });
-      if (waypoints.length) params.set("waypoints", waypoints.join("|"));
-      const url = `https://www.google.com/maps/dir/?${params.toString()}`;
+      const url = googleMapsDirectionsUrl(routeRows);
       const skipped = rows.length - routeRows.length;
       state.userRouteSummary = skipped
         ? `Opened Google Maps for the first ${fmt(routeRows.length)} mapped stops. Download KML or CSV for all ${fmt(rows.length)} mapped permits.`
         : `Opened Google Maps for ${fmt(routeRows.length)} mapped stops.`;
       renderRouteSummary();
       window.open(url, "_blank", "noopener");
+    }
+
+    async function downloadGoogleRouteChunks() {
+      await ensurePermitMap();
+      const rows = mapExportRows();
+      if (rows.length < 2) {
+        clearUserRoute("At least two saved permits need mapped coordinates to create Google route chunks.");
+        return;
+      }
+      const chunkSize = 5;
+      const chunks = googleRouteChunks(rows, chunkSize);
+      const generatedAt = new Date().toLocaleString();
+      const chunkCards = chunks.map((chunk, index) => {
+        const start = index * (chunkSize - 1);
+        const end = start + chunk.length - 1;
+        const url = googleMapsDirectionsUrl(chunk, "permit_list_route_chunks");
+        return `
+          <section class="chunk">
+            <h2>Chunk ${fmt(index + 1)}: stops ${fmt(start + 1)}-${fmt(end + 1)}</h2>
+            <a class="button" href="${esc(url)}" target="_blank" rel="noopener">Open chunk ${fmt(index + 1)} in Google Maps</a>
+            <ol>${routeChunkStops(chunk, start)}</ol>
+          </section>`;
+      }).join("");
+      const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chicago Permit Google Route Chunks</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 18px; color: #172033; background: #f7f9fc; }
+    h1 { margin: 0 0 8px; font-size: 1.4rem; }
+    p { color: #536078; line-height: 1.45; }
+    .chunk { margin: 14px 0; padding: 14px; border: 1px solid #d9e1ec; border-radius: 8px; background: #fff; }
+    .chunk h2 { margin: 0 0 10px; font-size: 1rem; }
+    .button { display: inline-block; margin-bottom: 10px; padding: 9px 12px; border-radius: 6px; background: #1463ff; color: #fff; text-decoration: none; font-weight: 700; }
+    ol { margin: 8px 0 0; padding-left: 22px; }
+    li { margin: 7px 0; }
+    .muted { color: #657086; }
+  </style>
+</head>
+<body>
+  <h1>Chicago Permit Google Route Chunks</h1>
+  <p>Generated ${esc(generatedAt)} from My Permit List. Open each chunk in order; the last stop of each chunk repeats as the first stop of the next chunk so the full route stays sequential.</p>
+  <p>${fmt(rows.length)} mapped permits split into ${fmt(chunks.length)} Google Maps route links.</p>
+  ${chunkCards}
+</body>
+</html>`;
+      downloadBlob(userListFilename("route-chunks.html"), html, "text/html;charset=utf-8");
+      clearUserRoute(`Downloaded ${fmt(chunks.length)} Google Maps route chunks covering ${fmt(rows.length)} mapped permits in list order.`);
     }
 
     async function downloadUserListKml() {
