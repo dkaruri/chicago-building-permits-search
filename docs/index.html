@@ -806,6 +806,9 @@
           <button id="user-list-toggle" aria-expanded="true" onclick="toggleUserList()">Hide list</button>
           <button onclick="calculateUserListRoute()">Drive distances</button>
           <button onclick="optimizeUserListRoute()">Sort by drive time</button>
+          <button onclick="openGoogleMapsRoute()">Open map route</button>
+          <button onclick="downloadUserListKml()">Download map KML</button>
+          <button onclick="downloadUserListCsv()">Download CSV</button>
           <button onclick="clearUserList()">Clear list</button>
           <span id="user-list-count" class="small"></span>
         </div>
@@ -817,6 +820,9 @@
         for list-order legs and the
         <a href="https://project-osrm.org/docs/v5.24.0/api/#table-service" target="_blank" rel="noopener">OSRM Table service</a>
         for drive-time sorting. Results are estimates from OpenStreetMap-based routing and are not traffic-aware.
+        Google Maps route export uses
+        <a href="https://developers.google.com/maps/documentation/urls/get-started#directions-action" target="_blank" rel="noopener">Google Maps URLs</a>;
+        the mobile route link opens the first five mapped stops, while KML and CSV include every saved permit with details.
       </div>
       <label class="list-note">List note
         <textarea id="user-list-note" placeholder="Add an overall note for this permit list..." oninput="saveListNote(this.value)"></textarea>
@@ -1308,6 +1314,169 @@
 
     function routeCoordinateText(rows) {
       return rows.map(row => `${Number(row.longitude)},${Number(row.latitude)}`).join(";");
+    }
+
+    function mapCoordinateText(row) {
+      return `${Number(row.latitude)},${Number(row.longitude)}`;
+    }
+
+    function mapExportRows(rows = userListRows()) {
+      return rows.filter(hasCoordinates);
+    }
+
+    function permitExportDetails(row) {
+      const number = clean(row.permit_number);
+      return [
+        ["Permit", number],
+        ["Status", row.permit_status],
+        ["Issued", row.issue_date],
+        ["Address", row.address],
+        ["Ward", row.ward],
+        ["Permit type", row.permit_type],
+        ["Work type", row.work_type],
+        ["Reported cost", money(row.reported_cost)],
+        ["General contractors", row.general_contractors],
+        ["Open subs", row.open_subs],
+        ["Processing time", clean(row.processing_time) ? `${days(row.processing_time)} days` : ""],
+        ["Note", state.userPermitNotes[number]],
+        ["Description", row.work_description],
+      ].filter(([, value]) => clean(value) !== "");
+    }
+
+    function permitExportDescription(row) {
+      return permitExportDetails(row)
+        .map(([label, value]) => `<p><strong>${esc(label)}:</strong> ${esc(value)}</p>`)
+        .join("");
+    }
+
+    function xmlText(value) {
+      return esc(value);
+    }
+
+    function cdata(value) {
+      return clean(value).replaceAll("]]>", "]]]]><![CDATA[>");
+    }
+
+    function csvCell(value) {
+      return `"${clean(value).replaceAll('"', '""')}"`;
+    }
+
+    function downloadBlob(filename, content, type) {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function userListFilename(extension) {
+      const stamp = new Date().toISOString().slice(0, 10);
+      return `chicago-permit-list-${stamp}.${extension}`;
+    }
+
+    async function openGoogleMapsRoute() {
+      await ensurePermitMap();
+      const rows = mapExportRows();
+      if (rows.length < 2) {
+        clearUserRoute("At least two saved permits need mapped coordinates to open a driving route.");
+        return;
+      }
+      const routeRows = rows.slice(0, 5);
+      const origin = mapCoordinateText(routeRows[0]);
+      const destination = mapCoordinateText(routeRows[routeRows.length - 1]);
+      const waypoints = routeRows.slice(1, -1).map(mapCoordinateText);
+      const params = new URLSearchParams({
+        api: "1",
+        origin,
+        destination,
+        travelmode: "driving",
+        dir_action: "navigate",
+        utm_source: "chicago_building_permits_search",
+        utm_campaign: "permit_list_directions",
+      });
+      if (waypoints.length) params.set("waypoints", waypoints.join("|"));
+      const url = `https://www.google.com/maps/dir/?${params.toString()}`;
+      const skipped = rows.length - routeRows.length;
+      state.userRouteSummary = skipped
+        ? `Opened Google Maps for the first ${fmt(routeRows.length)} mapped stops. Download KML or CSV for all ${fmt(rows.length)} mapped permits.`
+        : `Opened Google Maps for ${fmt(routeRows.length)} mapped stops.`;
+      renderRouteSummary();
+      const opened = window.open(url, "_blank", "noopener");
+      if (!opened) location.href = url;
+    }
+
+    async function downloadUserListKml() {
+      await ensurePermitMap();
+      const rows = mapExportRows();
+      if (!rows.length) {
+        clearUserRoute("At least one saved permit needs mapped coordinates to download a map file.");
+        return;
+      }
+      const listNote = state.userListNote ? `<p><strong>List note:</strong> ${esc(state.userListNote)}</p>` : "";
+      const placemarks = rows.map((row, index) => `
+        <Placemark>
+          <name>${xmlText(`${index + 1}. Permit ${row.permit_number} - ${row.address}`)}</name>
+          <description><![CDATA[${cdata(`${listNote}${permitExportDescription(row)}`)}]]></description>
+          <Point><coordinates>${Number(row.longitude)},${Number(row.latitude)},0</coordinates></Point>
+        </Placemark>`).join("");
+      const line = rows.length > 1 ? `
+        <Placemark>
+          <name>Permit list route order</name>
+          <LineString>
+            <tessellate>1</tessellate>
+            <coordinates>${rows.map(row => `${Number(row.longitude)},${Number(row.latitude)},0`).join(" ")}</coordinates>
+          </LineString>
+        </Placemark>` : "";
+      const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Chicago Permit List</name>
+    <description>${xmlText(state.userListNote || "Saved Chicago building permits")}</description>
+    ${placemarks}
+    ${line}
+  </Document>
+</kml>`;
+      downloadBlob(userListFilename("kml"), kml, "application/vnd.google-earth.kml+xml;charset=utf-8");
+      clearUserRoute(`Downloaded KML with ${fmt(rows.length)} mapped permits and their permit details.`);
+    }
+
+    async function downloadUserListCsv() {
+      await ensurePermitMap();
+      const rows = userListRows();
+      if (!rows.length) {
+        clearUserRoute("Add permits to My Permit List before downloading CSV.");
+        return;
+      }
+      const headers = [
+        "order", "permit_number", "status", "issued", "address", "ward", "permit_type",
+        "work_type", "reported_cost", "processing_time", "latitude", "longitude",
+        "general_contractors", "open_subs", "permit_note", "list_note", "work_description"
+      ];
+      const body = rows.map((row, index) => [
+        index + 1,
+        row.permit_number,
+        row.permit_status,
+        row.issue_date,
+        row.address,
+        row.ward,
+        row.permit_type,
+        row.work_type,
+        row.reported_cost,
+        row.processing_time,
+        row.latitude,
+        row.longitude,
+        row.general_contractors,
+        row.open_subs,
+        state.userPermitNotes[clean(row.permit_number)] || "",
+        state.userListNote,
+        row.work_description,
+      ].map(csvCell).join(","));
+      downloadBlob(userListFilename("csv"), [headers.join(","), ...body].join("\r\n"), "text/csv;charset=utf-8");
+      clearUserRoute(`Downloaded CSV with ${fmt(rows.length)} saved permits and their permit details.`);
     }
 
     function milesLabel(meters) {
