@@ -4,28 +4,103 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chicago Building Permits Search</title>
+  <script>
+    (() => {
+      try {
+        const saved = localStorage.getItem("chi_permit_theme");
+        const prefersDark = matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.theme = saved || (prefersDark ? "dark" : "light");
+      } catch {
+        document.documentElement.dataset.theme = "light";
+      }
+    })();
+  </script>
   <style>
     :root {
+      color-scheme: light;
       --ink: #142033;
       --muted: #526174;
       --paper: #f4f7fb;
       --panel: #ffffff;
       --panel-2: #eef4fb;
+      --surface-subtle: #f8fbff;
+      --field: #ffffff;
+      --header-start: #ffffff;
+      --header-end: #edf4ff;
+      --table-head: #edf4ff;
+      --row-alt: #fbfdff;
+      --cell-line: #e2eaf4;
       --line: #c9d7e8;
       --line-strong: #9eb4ce;
       --primary: #1f4fa3;
       --primary-soft: #e7f0ff;
+      --primary-hover: #143d83;
       --accent: #167a4a;
       --accent-soft: #e7f6ee;
+      --accent-hover: #0f633a;
       --danger: #b4232a;
+      --danger-soft: #fff1f2;
+      --danger-field: #fff6f6;
+      --danger-line: #e6adb0;
       --warning: #a15c06;
+      --warning-soft: #fff7ed;
       --teal: #176b87;
       --steel: #5b718d;
       --white: #ffffff;
+      --tag-border: #b7dec9;
+      --tag-text: #0f5d37;
+      --placeholder: #6b7b90;
+      --focus-ring: rgba(31, 79, 163, 0.32);
+      --progress-glow: rgba(31, 79, 163, 0.35);
+      --drag-ring: rgba(22, 122, 74, 0.18);
       --shadow: rgba(26, 43, 68, 0.12);
     }
 
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --ink: #f4f7fb;
+      --muted: #aab7c9;
+      --paper: #07111f;
+      --panel: #111b2a;
+      --panel-2: #17263a;
+      --surface-subtle: #0c1726;
+      --field: #0b1524;
+      --header-start: #0b1524;
+      --header-end: #101f33;
+      --table-head: #17263a;
+      --row-alt: #0d1827;
+      --cell-line: #22344c;
+      --line: #2b405c;
+      --line-strong: #4b6380;
+      --primary: #8eb8ff;
+      --primary-soft: #162c4e;
+      --primary-hover: #c7dcff;
+      --accent: #62d991;
+      --accent-soft: #123820;
+      --accent-hover: #8af0af;
+      --danger: #ff8a8f;
+      --danger-soft: #3d151a;
+      --danger-field: #2c1317;
+      --danger-line: #7e3b43;
+      --warning: #f6c56d;
+      --warning-soft: #33240f;
+      --teal: #78d5ec;
+      --steel: #b6c8dc;
+      --white: #f8fbff;
+      --tag-border: #316849;
+      --tag-text: #b8f5cf;
+      --placeholder: #8fa0b6;
+      --focus-ring: rgba(142, 184, 255, 0.42);
+      --progress-glow: rgba(142, 184, 255, 0.35);
+      --drag-ring: rgba(98, 217, 145, 0.24);
+      --shadow: rgba(0, 0, 0, 0.32);
+    }
+
     * { box-sizing: border-box; }
+
+    html {
+      background: var(--paper);
+    }
 
     body {
       margin: 0;
@@ -36,6 +111,10 @@
       line-height: 1.5;
     }
 
+    button, input, select, textarea, a {
+      touch-action: manipulation;
+    }
+
     .skip-link {
       position: absolute;
       left: 16px;
@@ -44,7 +123,7 @@
       padding: 10px 14px;
       border-radius: 6px;
       background: var(--primary);
-      color: #fff;
+      color: var(--paper);
       font-weight: 800;
       transition: top 0.16s ease;
     }
@@ -61,15 +140,31 @@
       width: 0;
       height: 3px;
       background: linear-gradient(90deg, var(--primary), var(--accent), var(--teal));
-      box-shadow: 0 0 14px rgba(31, 79, 163, 0.35);
+      box-shadow: 0 0 14px var(--progress-glow);
     }
 
     header {
       padding: 28px max(18px, calc(50vw - 680px)) 24px;
       color: var(--ink);
-      background: linear-gradient(180deg, #ffffff 0%, #edf4ff 100%);
+      background: linear-gradient(180deg, var(--header-start) 0%, var(--header-end) 100%);
       border-bottom: 1px solid var(--line);
-      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+      box-shadow: 0 1px 0 var(--shadow);
+    }
+
+    .header-top {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .theme-toggle {
+      width: auto;
+      min-height: 44px;
+      padding: 7px 12px;
+      border-color: var(--line-strong);
+      white-space: nowrap;
     }
 
     .kicker {
@@ -167,7 +262,7 @@
       min-height: 44px;
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #ffffff;
+      background: var(--field);
       color: var(--ink);
       font: inherit;
     }
@@ -176,7 +271,7 @@
       cursor: pointer;
       font-weight: 800;
       color: var(--primary);
-      background: #ffffff;
+      background: var(--field);
       transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
     }
 
@@ -188,8 +283,8 @@
     button.active {
       border-color: var(--primary);
       background: var(--primary);
-      color: #ffffff;
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+      color: var(--paper);
+      box-shadow: inset 0 0 0 1px var(--shadow);
     }
 
     button:disabled {
@@ -200,12 +295,12 @@
     button.primary {
       border-color: var(--accent);
       background: var(--accent);
-      color: #ffffff;
+      color: var(--paper);
     }
 
     button.primary:hover {
-      background: #0f633a;
-      border-color: #0f633a;
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
     }
 
     label {
@@ -227,7 +322,7 @@
 
     input::placeholder,
     textarea::placeholder {
-      color: #6b7b90;
+      color: var(--placeholder);
       opacity: 1;
     }
 
@@ -254,7 +349,7 @@
     }
 
     input:focus, select:focus, textarea:focus, button:focus-visible {
-      outline: 3px solid rgba(31, 79, 163, 0.32);
+      outline: 3px solid var(--focus-ring);
       outline-offset: 2px;
       border-color: var(--primary);
     }
@@ -329,7 +424,7 @@
       padding: 8px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #f8fbff;
+      background: var(--surface-subtle);
     }
 
     .action-group.route-actions {
@@ -354,13 +449,13 @@
     }
 
     .action-group .subtle-danger {
-      border-color: #e6adb0;
+      border-color: var(--danger-line);
       color: var(--danger);
     }
 
     .action-group .subtle-danger:hover {
       border-color: var(--danger);
-      background: #fff1f2;
+      background: var(--danger-soft);
     }
 
     .panel-actions button {
@@ -374,7 +469,7 @@
       padding: 9px 10px;
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #f8fbff;
+      background: var(--surface-subtle);
     }
 
     .route-source {
@@ -407,7 +502,7 @@
       padding: 12px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #ffffff;
+      background: var(--panel);
     }
 
     .route-chunks.is-visible {
@@ -438,7 +533,7 @@
       padding: 12px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #f8fbff;
+      background: var(--surface-subtle);
     }
 
     .route-chunk-card h4 {
@@ -455,7 +550,7 @@
       padding: 8px 11px;
       border-radius: 6px;
       background: var(--accent);
-      color: #ffffff;
+      color: var(--paper);
       text-decoration: none;
     }
 
@@ -500,7 +595,7 @@
       max-height: 72vh;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #ffffff;
+      background: var(--panel);
     }
 
     .pager {
@@ -569,7 +664,7 @@
       justify-content: center;
       border-color: var(--primary);
       color: var(--primary);
-      background: #ffffff;
+      background: var(--field);
       font-size: 1.1rem;
       line-height: 1;
     }
@@ -579,14 +674,14 @@
     }
 
     .icon-button.danger {
-      border-color: #d99498;
+      border-color: var(--danger-line);
       color: var(--danger);
-      background: #fff6f6;
+      background: var(--danger-field);
     }
 
     .icon-button.danger:hover {
       border-color: var(--danger);
-      background: #fff1f2;
+      background: var(--danger-soft);
     }
 
     .pager button:disabled {
@@ -597,7 +692,7 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      background: #ffffff;
+      background: var(--panel);
       font-size: 0.9rem;
     }
 
@@ -621,7 +716,7 @@
 
     th, td {
       padding: 10px 9px;
-      border-bottom: 1px solid #e2eaf4;
+      border-bottom: 1px solid var(--cell-line);
       text-align: left;
       vertical-align: top;
       overflow-wrap: anywhere;
@@ -631,7 +726,7 @@
       position: sticky;
       top: 0;
       z-index: 1;
-      background: #edf4ff;
+      background: var(--table-head);
       color: var(--primary);
       font-size: 0.72rem;
       letter-spacing: 0.09em;
@@ -660,7 +755,7 @@
     }
 
     .sort-header:hover {
-      color: #143d83;
+      color: var(--primary-hover);
     }
 
     .sort-icon {
@@ -675,7 +770,7 @@
     }
 
     tbody tr:nth-child(even) {
-      background: #fbfdff;
+      background: var(--row-alt);
     }
 
     tbody tr:hover {
@@ -690,10 +785,10 @@
       align-items: center;
       min-height: 24px;
       padding: 3px 8px;
-      border: 1px solid #b7dec9;
+      border: 1px solid var(--tag-border);
       border-radius: 999px;
       background: var(--accent-soft);
-      color: #0f5d37;
+      color: var(--tag-text);
       font-size: 0.78rem;
       font-weight: 700;
     }
@@ -753,7 +848,7 @@
       max-height: 58vh;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #ffffff;
+      background: var(--panel);
     }
 
     .detail-table-wrap table {
@@ -793,7 +888,7 @@
       padding: 12px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #ffffff;
+      background: var(--panel);
     }
 
     .permit-card strong {
@@ -862,7 +957,7 @@
       margin: 10px 0 0;
       padding: 10px;
       border-left: 4px solid var(--warning);
-      background: #fff7ed;
+      background: var(--warning-soft);
       color: var(--ink);
     }
 
@@ -877,7 +972,7 @@
       padding: 20px;
       color: var(--muted);
       text-align: center;
-      background: #ffffff;
+      background: var(--panel);
     }
 
     .panel.is-loading::after {
@@ -889,7 +984,7 @@
       padding: 5px 9px;
       border: 1px solid var(--primary);
       border-radius: 999px;
-      background: #ffffff;
+      background: var(--panel);
       color: var(--primary);
       font-size: 0.72rem;
       font-weight: 850;
@@ -918,7 +1013,7 @@
 
     .user-list-panel.is-drop-target {
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(22, 122, 74, 0.18), 0 18px 42px var(--shadow);
+      box-shadow: 0 0 0 3px var(--drag-ring), 0 18px 42px var(--shadow);
     }
 
     .user-list-panel .table-wrap {
@@ -927,6 +1022,7 @@
 
     .user-list-panel.is-collapsed .list-note,
     .user-list-panel.is-collapsed .route-summary,
+    .user-list-panel.is-collapsed .route-chunks,
     .user-list-panel.is-collapsed .route-source,
     .user-list-panel.is-collapsed .table-wrap {
       display: none;
@@ -970,18 +1066,48 @@
 
     @media (max-width: 640px) {
       main { width: min(100% - 20px, 1360px); }
-      header { padding-inline: 14px; }
+      header { padding: 18px 14px 16px; }
+      .header-top {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .theme-toggle { width: 100%; }
       h1 { font-size: clamp(1.9rem, 12vw, 3rem); }
       .status { grid-template-columns: 1fr; }
+      .panel { padding: 12px; }
+      .tabs {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .tabs button {
+        padding-inline: 6px;
+        font-size: 0.78rem;
+      }
       .user-list-title-row,
       .panel-head {
         align-items: flex-start;
         flex-direction: column;
       }
+      .user-list-toolbar {
+        gap: 8px;
+      }
+      .action-group {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .action-label {
+        grid-column: 1 / -1;
+      }
       .action-group button,
       .panel-actions button,
       #result-count button {
         width: 100%;
+      }
+      .route-chunks-head {
+        flex-direction: column;
+      }
+      .route-chunks-head .icon-button {
+        align-self: flex-start;
       }
       #result-count {
         min-width: 0;
@@ -989,7 +1115,93 @@
         justify-content: flex-start;
         text-align: left;
       }
-      th, td { padding: 10px 8px; }
+      .table-wrap {
+        max-height: none;
+        overflow: visible;
+        border: 0;
+        background: transparent;
+      }
+      .results-table,
+      .user-list-panel table {
+        display: block;
+        background: transparent;
+        font-size: 0.94rem;
+      }
+      .results-table thead,
+      .user-list-panel table thead {
+        display: none;
+      }
+      .results-table tbody,
+      .results-table tr,
+      .user-list-panel table tbody,
+      .user-list-panel table tr {
+        display: block;
+      }
+      .results-table tr,
+      .user-list-panel table tr {
+        margin-bottom: 10px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        box-shadow: 0 8px 20px var(--shadow);
+      }
+      .results-table td,
+      .user-list-panel table td {
+        display: grid;
+        grid-template-columns: minmax(88px, 34%) minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        padding: 7px 0;
+        border: 0;
+      }
+      .results-table td::before,
+      .user-list-panel table td::before {
+        content: attr(data-label);
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 850;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .results-table td.select-cell,
+      .results-table td.move-cell,
+      .user-list-panel table td.select-cell,
+      .user-list-panel table td.move-cell {
+        display: flex;
+        width: auto;
+        justify-content: flex-start;
+      }
+      .results-table td.select-cell::before,
+      .results-table td.move-cell::before,
+      .user-list-panel table td.select-cell::before,
+      .user-list-panel table td.move-cell::before {
+        display: none;
+      }
+      .permit-note {
+        min-width: 0;
+        width: 100%;
+      }
+      .pager-controls {
+        width: 100%;
+      }
+      .pager-controls button {
+        flex: 1;
+      }
+      .detail-filter-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+      }
     }
   </style>
 </head>
@@ -997,7 +1209,10 @@
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <div id="progress"></div>
   <header>
-    <div class="kicker">Chicago Data Portal static search</div>
+    <div class="header-top">
+      <div class="kicker">Chicago Data Portal static search</div>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" onclick="toggleTheme()">Dark mode</button>
+    </div>
     <h1>Open Permits + Contractor Profiles</h1>
     <p>Static GitHub Pages tool generated from Chicago Building Permits data. Profiles include public contact fields, open job counts, average processing days, and work specializations.</p>
   </header>
@@ -1144,6 +1359,7 @@
     const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const userListKey = "chi_permit_user_list";
     const userNotesKey = "chi_permit_user_notes";
+    const themeKey = "chi_permit_theme";
     const userListLimit = 220;
 
     addEventListener("scroll", () => {
@@ -1151,6 +1367,32 @@
       const max = doc.scrollHeight - doc.clientHeight;
       $("progress").style.width = (max > 0 ? doc.scrollTop / max * 100 : 0) + "%";
     }, { passive: true });
+
+    function currentTheme() {
+      return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+    }
+
+    function updateThemeButton() {
+      const button = $("theme-toggle");
+      if (!button) return;
+      const isDark = currentTheme() === "dark";
+      button.textContent = isDark ? "Light mode" : "Dark mode";
+      button.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
+      button.setAttribute("aria-pressed", String(isDark));
+    }
+
+    function setTheme(theme) {
+      const next = theme === "dark" ? "dark" : "light";
+      document.documentElement.dataset.theme = next;
+      try {
+        localStorage.setItem(themeKey, next);
+      } catch {}
+      updateThemeButton();
+    }
+
+    function toggleTheme() {
+      setTheme(currentTheme() === "dark" ? "light" : "dark");
+    }
 
     function dateTimeLabel(value) {
       if (!value) return "";
@@ -1248,6 +1490,7 @@
     }
 
     async function init() {
+      updateThemeButton();
       state.manifest = await fetch("data/manifest.json").then(r => r.json());
       loadUserListCookie();
       loadUserNotes();
@@ -2179,11 +2422,11 @@
           <thead><tr><th>${sortHeader("Name", "contact_name")}</th><th>${sortHeader("Type", "contact_type")}</th><th>${sortHeader("Public Contact", "public_contact")}</th><th>${sortHeader("Open Jobs", "open_jobs")}</th><th>${sortHeader("Avg Days", "avg_processing_days")}</th></tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr onclick="selectContact(${i})">
-              <td><strong>${esc(row.contact_name)}</strong><br><span class="small">${esc(specialtySummary(row))}</span></td>
-              <td>${esc(row.sample_contact_type)}</td>
-              <td>${esc([row.city, row.state, row.zipcode].filter(Boolean).join(", "))}</td>
-              <td>${fmt(row.open_jobs)}</td>
-              <td>${profileAvgDays(row)}</td>
+              <td data-label="Name"><strong>${esc(row.contact_name)}</strong><br><span class="small">${esc(specialtySummary(row))}</span></td>
+              <td data-label="Type">${esc(row.sample_contact_type)}</td>
+              <td data-label="Public contact">${esc([row.city, row.state, row.zipcode].filter(Boolean).join(", "))}</td>
+              <td data-label="Open jobs">${fmt(row.open_jobs)}</td>
+              <td data-label="Avg days">${profileAvgDays(row)}</td>
             </tr>`).join("")}</tbody>
         </table>`;
       $("results").scrollTop = 0;
@@ -2492,7 +2735,7 @@
       const notesHead = options.notes ? "<th>Notes</th>" : "";
       const moveHead = options.move ? "<th class=\"move-cell\" aria-label=\"Move permits\"></th>" : "";
       const head = (label, key) => options.sortable === false ? esc(label) : sortHeader(label, key);
-      const tableClass = options.select ? "results-table permits-table" : "";
+      const tableClass = options.select ? "results-table permits-table" : options.notes ? "saved-permits-table" : "";
       return `
         <table class="${tableClass}">
           <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th><th>${head("Ward", "ward")}</th><th>${head("Cost", "cost")}</th>${notesHead}${moveHead}</tr></thead>
@@ -2504,16 +2747,16 @@
               ${options.reorder ? `ondragover="savedPermitDragOver(event, this)" ondragleave="savedPermitDragLeave(this)" ondrop="savedPermitDrop(event, this, '${enc(row.permit_number)}')"` : ""}
               onclick="${options.select ? `selectPermit(${i})` : `showPermitFromEncoded('${enc(JSON.stringify(row))}')`}"
             >
-              ${options.remove ? `<td class="select-cell"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
-              ${options.select ? `<td class="select-cell" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
-              <td><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
-              <td>${esc(row.permit_status)}</td>
-              <td>${esc(row.issue_date)}</td>
-              <td>${esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
-              <td>${esc(row.ward)}</td>
-              <td class="money">${money(row.reported_cost)}</td>
-              ${options.notes ? `<td><textarea class="permit-note" draggable="false" placeholder="Add note..." onclick="event.stopPropagation()" ondragstart="event.stopPropagation()" oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[clean(row.permit_number)] || "")}</textarea></td>` : ""}
-              ${options.move ? `<td class="move-cell"><div class="move-controls"><button class="icon-button" title="Move up" aria-label="Move ${esc(row.permit_number)} up" ${i === 0 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', -1)">&uarr;</button><button class="icon-button" title="Move down" aria-label="Move ${esc(row.permit_number)} down" ${i >= rows.length - 1 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', 1)">&darr;</button></div></td>` : ""}
+              ${options.remove ? `<td class="select-cell" data-label="Remove"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
+              ${options.select ? `<td class="select-cell" data-label="Select" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
+              <td data-label="Permit"><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
+              <td data-label="Status">${esc(row.permit_status)}</td>
+              <td data-label="Issued">${esc(row.issue_date)}</td>
+              <td data-label="Address">${esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
+              <td data-label="Ward">${esc(row.ward)}</td>
+              <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
+              ${options.notes ? `<td data-label="Notes"><textarea class="permit-note" draggable="false" placeholder="Add note..." onclick="event.stopPropagation()" ondragstart="event.stopPropagation()" oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[clean(row.permit_number)] || "")}</textarea></td>` : ""}
+              ${options.move ? `<td class="move-cell" data-label="Move"><div class="move-controls"><button class="icon-button" title="Move up" aria-label="Move ${esc(row.permit_number)} up" ${i === 0 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', -1)">&uarr;</button><button class="icon-button" title="Move down" aria-label="Move ${esc(row.permit_number)} down" ${i >= rows.length - 1 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', 1)">&darr;</button></div></td>` : ""}
             </tr>`).join("")}</tbody>
         </table>`;
     }
