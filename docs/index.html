@@ -401,6 +401,74 @@
       text-underline-offset: 2px;
     }
 
+    .route-chunks {
+      display: none;
+      margin: 0 0 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .route-chunks.is-visible {
+      display: block;
+    }
+
+    .route-chunks-head {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .route-chunks-head h3 {
+      margin: 0;
+      color: var(--ink);
+      font-size: 1rem;
+    }
+
+    .route-chunks-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 10px;
+    }
+
+    .route-chunk-card {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f8fbff;
+    }
+
+    .route-chunk-card h4 {
+      margin: 0 0 8px;
+      color: var(--primary);
+      font-size: 0.92rem;
+    }
+
+    .route-chunk-card a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      margin-bottom: 8px;
+      padding: 8px 11px;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #ffffff;
+      text-decoration: none;
+    }
+
+    .route-chunk-card ol {
+      margin: 6px 0 0;
+      padding-left: 22px;
+    }
+
+    .route-chunk-card li {
+      margin: 7px 0;
+      line-height: 1.35;
+    }
+
     #result-count {
       min-width: 280px;
       margin-left: auto;
@@ -954,7 +1022,7 @@
             <button onclick="calculateUserListRoute()">Distances</button>
             <button onclick="optimizeUserListRoute()">Sort by drive time</button>
             <button onclick="openGoogleMapsRoute()">Open in Google Maps</button>
-            <button onclick="downloadGoogleRouteChunks()">Google route chunks</button>
+            <button onclick="showGoogleRouteChunks()">Google route chunks</button>
           </div>
           <div class="action-group" aria-label="Export controls">
             <span class="action-label">Export</span>
@@ -964,6 +1032,7 @@
         </div>
       </div>
       <div id="user-route-summary" class="route-summary small" aria-live="polite">Add at least two permits with mapped coordinates to estimate driving distances.</div>
+      <div id="user-route-chunks" class="route-chunks" aria-live="polite"></div>
       <details class="route-source">
         <summary>Routing sources and limits</summary>
         <p>
@@ -1059,7 +1128,8 @@
       userPermitNotes: {},
       draggedPermitNumber: "",
       userRouteLegs: [],
-      userRouteSummary: ""
+      userRouteSummary: "",
+      routeChunksVisible: false
     };
 
     const $ = id => document.getElementById(id);
@@ -1445,12 +1515,21 @@
     function clearUserRoute(message = "") {
       state.userRouteLegs = [];
       state.userRouteSummary = message;
+      hideGoogleRouteChunks();
       renderRouteSummary();
     }
 
     function renderRouteSummary() {
       const fallback = "Add at least two permits with mapped coordinates to estimate driving distances.";
       $("user-route-summary").textContent = state.userRouteSummary || fallback;
+    }
+
+    function hideGoogleRouteChunks() {
+      state.routeChunksVisible = false;
+      const container = $("user-route-chunks");
+      if (!container) return;
+      container.classList.remove("is-visible");
+      container.innerHTML = "";
     }
 
     function userListRows() {
@@ -1581,10 +1660,11 @@
       window.open(url, "_blank", "noopener");
     }
 
-    async function downloadGoogleRouteChunks() {
+    async function showGoogleRouteChunks() {
       await ensurePermitMap();
       const rows = mapExportRows();
       if (rows.length < 2) {
+        hideGoogleRouteChunks();
         clearUserRoute("At least two saved permits need mapped coordinates to create Google route chunks.");
         return;
       }
@@ -1596,39 +1676,26 @@
         const end = start + chunk.length - 1;
         const url = googleMapsDirectionsUrl(chunk, "permit_list_route_chunks");
         return `
-          <section class="chunk">
-            <h2>Chunk ${fmt(index + 1)}: stops ${fmt(start + 1)}-${fmt(end + 1)}</h2>
-            <a class="button" href="${esc(url)}" target="_blank" rel="noopener">Open chunk ${fmt(index + 1)} in Google Maps</a>
+          <section class="route-chunk-card">
+            <h4>Chunk ${fmt(index + 1)}: stops ${fmt(start + 1)}-${fmt(end + 1)}</h4>
+            <a href="${esc(url)}" target="_blank" rel="noopener">Open chunk ${fmt(index + 1)} in Google Maps</a>
             <ol>${routeChunkStops(chunk, start)}</ol>
           </section>`;
       }).join("");
-      const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Chicago Permit Google Route Chunks</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 18px; color: #172033; background: #f7f9fc; }
-    h1 { margin: 0 0 8px; font-size: 1.4rem; }
-    p { color: #536078; line-height: 1.45; }
-    .chunk { margin: 14px 0; padding: 14px; border: 1px solid #d9e1ec; border-radius: 8px; background: #fff; }
-    .chunk h2 { margin: 0 0 10px; font-size: 1rem; }
-    .button { display: inline-block; margin-bottom: 10px; padding: 9px 12px; border-radius: 6px; background: #1463ff; color: #fff; text-decoration: none; font-weight: 700; }
-    ol { margin: 8px 0 0; padding-left: 22px; }
-    li { margin: 7px 0; }
-    .muted { color: #657086; }
-  </style>
-</head>
-<body>
-  <h1>Chicago Permit Google Route Chunks</h1>
-  <p>Generated ${esc(generatedAt)} from My Permit List. Open each chunk in order; the last stop of each chunk repeats as the first stop of the next chunk so the full route stays sequential.</p>
-  <p>${fmt(rows.length)} mapped permits split into ${fmt(chunks.length)} Google Maps route links.</p>
-  ${chunkCards}
-</body>
-</html>`;
-      downloadBlob(userListFilename("route-chunks.html"), html, "text/html;charset=utf-8");
-      clearUserRoute(`Downloaded ${fmt(chunks.length)} Google Maps route chunks covering ${fmt(rows.length)} mapped permits in list order.`);
+      state.routeChunksVisible = true;
+      $("user-route-chunks").innerHTML = `
+        <div class="route-chunks-head">
+          <div>
+            <h3>Google Maps Route Chunks</h3>
+            <div class="small">Generated ${esc(generatedAt)}. Open each chunk in order; the last stop repeats as the first stop of the next chunk so the route stays sequential.</div>
+          </div>
+          <button class="icon-button" type="button" aria-label="Close route chunks" onclick="hideGoogleRouteChunks()">&times;</button>
+        </div>
+        <div class="small">${fmt(rows.length)} mapped permits split into ${fmt(chunks.length)} Google Maps route links.</div>
+        <div class="route-chunks-grid">${chunkCards}</div>`;
+      $("user-route-chunks").classList.add("is-visible");
+      state.userRouteSummary = `Showing ${fmt(chunks.length)} Google Maps route chunks covering ${fmt(rows.length)} mapped permits in list order.`;
+      renderRouteSummary();
     }
 
     async function downloadUserListKml() {
