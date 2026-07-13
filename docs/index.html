@@ -806,7 +806,7 @@
           <button id="user-list-toggle" aria-expanded="true" onclick="toggleUserList()">Hide list</button>
           <button onclick="calculateUserListRoute()">Drive distances</button>
           <button onclick="optimizeUserListRoute()">Sort by drive time</button>
-          <button onclick="openGoogleMapsRoute()">Open map route</button>
+          <button onclick="openGoogleMapsRoute()">Open in Google Maps</button>
           <button onclick="downloadUserListKml()">Download map KML</button>
           <button onclick="downloadUserListCsv()">Download CSV</button>
           <button onclick="clearUserList()">Clear list</button>
@@ -1405,8 +1405,7 @@
         ? `Opened Google Maps for the first ${fmt(routeRows.length)} mapped stops. Download KML or CSV for all ${fmt(rows.length)} mapped permits.`
         : `Opened Google Maps for ${fmt(routeRows.length)} mapped stops.`;
       renderRouteSummary();
-      const opened = window.open(url, "_blank", "noopener");
-      if (!opened) location.href = url;
+      window.open(url, "_blank", "noopener");
     }
 
     async function downloadUserListKml() {
