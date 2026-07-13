@@ -6,32 +6,51 @@
   <title>Chicago Building Permits Search</title>
   <style>
     :root {
-      --ink: #fff3dc;
-      --muted: #9aa8bc;
-      --paper: #080c14;
-      --panel: #101826;
-      --panel-2: #151f31;
-      --line: #2b394d;
-      --mint: #74f0b0;
-      --coral: #ff6b3d;
-      --plum: #bca7ff;
-      --gold: #f2bd4b;
-      --teal: #4fd2e8;
-      --steel: #88a6cc;
-      --white: #fff8e8;
-      --shadow: rgba(0, 0, 0, 0.38);
+      --ink: #142033;
+      --muted: #526174;
+      --paper: #f4f7fb;
+      --panel: #ffffff;
+      --panel-2: #eef4fb;
+      --line: #c9d7e8;
+      --line-strong: #9eb4ce;
+      --primary: #1f4fa3;
+      --primary-soft: #e7f0ff;
+      --accent: #167a4a;
+      --accent-soft: #e7f6ee;
+      --danger: #b4232a;
+      --warning: #a15c06;
+      --teal: #176b87;
+      --steel: #5b718d;
+      --white: #ffffff;
+      --shadow: rgba(26, 43, 68, 0.12);
     }
 
     * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      background:
-        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px) 0 0 / 48px 48px,
-        linear-gradient(180deg, #080c14 0%, #0d1220 46%, #090d15 100%);
+      background: var(--paper);
       color: var(--ink);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      line-height: 1.45;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    .skip-link {
+      position: absolute;
+      left: 16px;
+      top: -48px;
+      z-index: 100;
+      padding: 10px 14px;
+      border-radius: 6px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 800;
+      transition: top 0.16s ease;
+    }
+
+    .skip-link:focus {
+      top: 12px;
     }
 
     #progress {
@@ -41,22 +60,20 @@
       z-index: 20;
       width: 0;
       height: 3px;
-      background: linear-gradient(90deg, var(--teal), var(--mint), var(--gold), var(--coral));
-      box-shadow: 0 0 18px rgba(79, 210, 232, 0.55);
+      background: linear-gradient(90deg, var(--primary), var(--accent), var(--teal));
+      box-shadow: 0 0 14px rgba(31, 79, 163, 0.35);
     }
 
     header {
-      padding: 34px max(18px, calc(50vw - 680px)) 28px;
-      color: var(--white);
-      background:
-        linear-gradient(135deg, rgba(8, 12, 20, 0.96), rgba(20, 30, 48, 0.88)),
-        url("assets/chi_permits_web_loaded.png") center / cover no-repeat;
-      border-bottom: 1px solid rgba(79, 210, 232, 0.35);
-      box-shadow: inset 0 -1px 0 rgba(244, 189, 75, 0.35);
+      padding: 28px max(18px, calc(50vw - 680px)) 24px;
+      color: var(--ink);
+      background: linear-gradient(180deg, #ffffff 0%, #edf4ff 100%);
+      border-bottom: 1px solid var(--line);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
     }
 
     .kicker {
-      color: var(--mint);
+      color: var(--accent);
       font-size: 0.78rem;
       font-weight: 800;
       letter-spacing: 0.1em;
@@ -65,17 +82,16 @@
 
     h1 {
       margin: 8px 0 10px;
-      font-family: Georgia, "Times New Roman", serif;
-      font-size: clamp(2.4rem, 6vw, 5.7rem);
-      font-weight: 500;
-      line-height: 0.9;
+      font-size: clamp(2rem, 4.5vw, 4.2rem);
+      font-weight: 850;
+      line-height: 0.98;
       letter-spacing: 0;
     }
 
     header p {
       max-width: 920px;
       margin: 0;
-      color: #dbe5ef;
+      color: var(--muted);
       font-size: 1rem;
     }
 
@@ -95,8 +111,8 @@
     .metric, .panel {
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: linear-gradient(180deg, rgba(21, 31, 49, 0.98), rgba(12, 18, 30, 0.98));
-      box-shadow: 0 18px 42px var(--shadow);
+      background: var(--panel);
+      box-shadow: 0 12px 28px var(--shadow);
     }
 
     .metric {
@@ -116,7 +132,7 @@
     .metric strong {
       display: block;
       margin-top: 5px;
-      color: var(--gold);
+      color: var(--primary);
       font-size: clamp(1.15rem, 2vw, 1.65rem);
       line-height: 1;
     }
@@ -148,10 +164,10 @@
 
     button, input, select, textarea {
       width: 100%;
-      min-height: 42px;
+      min-height: 44px;
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #0b111d;
+      background: #ffffff;
       color: var(--ink);
       font: inherit;
     }
@@ -159,13 +175,21 @@
     button {
       cursor: pointer;
       font-weight: 800;
+      color: var(--primary);
+      background: #ffffff;
+      transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    button:hover {
+      border-color: var(--primary);
+      background: var(--primary-soft);
     }
 
     button.active {
-      border-color: var(--teal);
-      background: rgba(79, 210, 232, 0.16);
-      color: var(--teal);
-      box-shadow: inset 0 0 0 1px rgba(79, 210, 232, 0.35);
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #ffffff;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
     }
 
     button:disabled {
@@ -174,9 +198,14 @@
     }
 
     button.primary {
-      border-color: var(--coral);
-      background: rgba(255, 107, 61, 0.18);
-      color: #ffd6c9;
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    button.primary:hover {
+      background: #0f633a;
+      border-color: #0f633a;
     }
 
     label {
@@ -194,6 +223,12 @@
       text-transform: none;
       letter-spacing: 0;
       font-weight: 500;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: #6b7b90;
+      opacity: 1;
     }
 
     textarea {
@@ -215,12 +250,13 @@
     .check-row input {
       width: 18px;
       min-height: 18px;
-      accent-color: var(--teal);
+      accent-color: var(--primary);
     }
 
     input:focus, select:focus, textarea:focus, button:focus-visible {
-      outline: 2px solid rgba(79, 210, 232, 0.55);
+      outline: 3px solid rgba(31, 79, 163, 0.32);
       outline-offset: 2px;
+      border-color: var(--primary);
     }
 
     .small {
@@ -291,9 +327,9 @@
       gap: 6px;
       align-items: center;
       padding: 8px;
-      border: 1px solid rgba(136, 166, 204, 0.18);
+      border: 1px solid var(--line);
       border-radius: 8px;
-      background: rgba(11, 17, 29, 0.48);
+      background: #f8fbff;
     }
 
     .action-group.route-actions {
@@ -312,33 +348,33 @@
 
     .action-group button {
       width: auto;
-      min-height: 32px;
-      padding: 6px 9px;
-      font-size: 0.78rem;
+      min-height: 44px;
+      padding: 7px 10px;
+      font-size: 0.82rem;
     }
 
     .action-group .subtle-danger {
-      border-color: rgba(255, 114, 118, 0.36);
-      color: #ffd0d2;
+      border-color: #e6adb0;
+      color: var(--danger);
     }
 
     .action-group .subtle-danger:hover {
-      border-color: rgba(255, 114, 118, 0.7);
-      background: rgba(255, 114, 118, 0.12);
+      border-color: var(--danger);
+      background: #fff1f2;
     }
 
     .panel-actions button {
       width: auto;
-      min-height: 34px;
+      min-height: 44px;
       padding: 6px 10px;
     }
 
     .route-summary {
       margin: 8px 0 10px;
       padding: 9px 10px;
-      border: 1px solid rgba(136, 166, 204, 0.22);
+      border: 1px solid var(--line);
       border-radius: 6px;
-      background: rgba(11, 17, 29, 0.75);
+      background: #f8fbff;
     }
 
     .route-source {
@@ -350,7 +386,7 @@
 
     .route-source summary {
       cursor: pointer;
-      color: var(--text);
+      color: var(--ink);
       font-weight: 750;
       list-style-position: inside;
     }
@@ -360,7 +396,7 @@
     }
 
     .route-source a {
-      color: var(--accent);
+      color: var(--primary);
       text-decoration: underline;
       text-underline-offset: 2px;
     }
@@ -377,7 +413,7 @@
 
     #result-count button {
       width: auto;
-      min-height: 34px;
+      min-height: 44px;
       padding: 6px 10px;
       white-space: nowrap;
     }
@@ -389,14 +425,14 @@
     }
 
     h2 { font-size: 1.2rem; }
-    h3 { color: var(--plum); font-size: 1.35rem; }
+    h3 { color: var(--primary); font-size: 1.35rem; }
 
     .table-wrap {
       overflow: auto;
       max-height: 72vh;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #0a101a;
+      background: #ffffff;
     }
 
     .pager {
@@ -415,14 +451,14 @@
 
     .pager button {
       width: auto;
-      min-height: 36px;
+      min-height: 44px;
       padding: 7px 12px;
     }
 
     .permit-check {
       width: 18px;
       min-height: 18px;
-      accent-color: var(--mint);
+      accent-color: var(--primary);
       pointer-events: none;
     }
 
@@ -443,8 +479,8 @@
     }
 
     .move-controls .icon-button {
-      width: 34px;
-      min-height: 34px;
+      width: 44px;
+      min-height: 44px;
     }
 
     td.select-cell {
@@ -453,35 +489,36 @@
     }
 
     td.select-cell:hover {
-      background: rgba(123, 226, 182, 0.08);
+      background: var(--primary-soft);
     }
 
     .icon-button {
-      width: 38px;
-      min-height: 38px;
+      width: 44px;
+      min-height: 44px;
       padding: 0;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      border-color: var(--teal);
-      color: var(--teal);
-      background: #0b111d;
+      border-color: var(--primary);
+      color: var(--primary);
+      background: #ffffff;
       font-size: 1.1rem;
       line-height: 1;
     }
 
     .icon-button:hover {
-      background: rgba(79, 210, 232, 0.14);
+      background: var(--primary-soft);
     }
 
     .icon-button.danger {
-      border-color: #ff5f6d;
-      color: #ffd7dc;
-      background: rgba(255, 95, 109, 0.16);
+      border-color: #d99498;
+      color: var(--danger);
+      background: #fff6f6;
     }
 
     .icon-button.danger:hover {
-      background: rgba(255, 95, 109, 0.26);
+      border-color: var(--danger);
+      background: #fff1f2;
     }
 
     .pager button:disabled {
@@ -492,8 +529,8 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      background: #0b111d;
-      font-size: 0.86rem;
+      background: #ffffff;
+      font-size: 0.9rem;
     }
 
     .results-table {
@@ -515,8 +552,8 @@
     .permits-table th:nth-child(7), .permits-table td:nth-child(7) { width: 14%; }
 
     th, td {
-      padding: 9px 8px;
-      border-bottom: 1px solid rgba(136, 166, 204, 0.18);
+      padding: 10px 9px;
+      border-bottom: 1px solid #e2eaf4;
       text-align: left;
       vertical-align: top;
       overflow-wrap: anywhere;
@@ -526,11 +563,12 @@
       position: sticky;
       top: 0;
       z-index: 1;
-      background: #151f31;
-      color: var(--teal);
+      background: #edf4ff;
+      color: var(--primary);
       font-size: 0.72rem;
       letter-spacing: 0.09em;
       text-transform: uppercase;
+      box-shadow: inset 0 -1px 0 var(--line);
     }
 
     .sort-header {
@@ -554,7 +592,7 @@
     }
 
     .sort-header:hover {
-      color: var(--teal);
+      color: #143d83;
     }
 
     .sort-icon {
@@ -568,11 +606,15 @@
       cursor: pointer;
     }
 
-    tbody tr:hover {
-      background: rgba(79, 210, 232, 0.08);
+    tbody tr:nth-child(even) {
+      background: #fbfdff;
     }
 
-    .money { color: var(--gold); font-weight: 800; }
+    tbody tr:hover {
+      background: var(--primary-soft);
+    }
+
+    .money { color: var(--warning); font-weight: 800; }
     .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 
     .tag {
@@ -580,10 +622,10 @@
       align-items: center;
       min-height: 24px;
       padding: 3px 8px;
-      border: 1px solid rgba(116, 240, 176, 0.38);
+      border: 1px solid #b7dec9;
       border-radius: 999px;
-      background: rgba(116, 240, 176, 0.08);
-      color: #d9ffe9;
+      background: var(--accent-soft);
+      color: #0f5d37;
       font-size: 0.78rem;
       font-weight: 700;
     }
@@ -594,8 +636,8 @@
     }
 
     .tag.clickable {
-      border-color: var(--teal);
-      color: var(--teal);
+      border-color: var(--primary);
+      color: var(--primary);
       text-decoration: underline;
       text-decoration-thickness: 2px;
       text-underline-offset: 3px;
@@ -603,8 +645,8 @@
 
     .tag.clickable:hover,
     .permit-card.clickable:hover {
-      background: rgba(79, 210, 232, 0.1);
-      border-color: var(--teal);
+      background: var(--primary-soft);
+      border-color: var(--primary);
     }
 
     .detail {
@@ -643,7 +685,7 @@
       max-height: 58vh;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #0b111d;
+      background: #ffffff;
     }
 
     .detail-table-wrap table {
@@ -672,7 +714,7 @@
 
     .detail-section h4 {
       margin: 0 0 7px;
-      color: var(--teal);
+      color: var(--primary);
       font-size: 0.76rem;
       letter-spacing: 0.1em;
       text-transform: uppercase;
@@ -683,11 +725,11 @@
       padding: 12px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #0b111d;
+      background: #ffffff;
     }
 
     .permit-card strong {
-      color: var(--plum);
+      color: var(--primary);
     }
 
     .permit-card header {
@@ -703,7 +745,7 @@
 
     .permit-card h5 {
       margin: 0;
-      color: var(--plum);
+      color: var(--primary);
       font-size: 0.98rem;
       line-height: 1.2;
       letter-spacing: 0;
@@ -715,8 +757,8 @@
       min-height: 24px;
       padding: 3px 8px;
       border-radius: 999px;
-      background: rgba(79, 210, 232, 0.1);
-      color: var(--teal);
+      background: var(--primary-soft);
+      color: var(--primary);
       font-size: 0.72rem;
       font-weight: 850;
       white-space: nowrap;
@@ -751,13 +793,13 @@
     .permit-description {
       margin: 10px 0 0;
       padding: 10px;
-      border-left: 4px solid var(--gold);
-      background: rgba(244, 189, 75, 0.1);
+      border-left: 4px solid var(--warning);
+      background: #fff7ed;
       color: var(--ink);
     }
 
     a {
-      color: var(--teal);
+      color: var(--primary);
       font-weight: 800;
       text-decoration-thickness: 2px;
       text-underline-offset: 3px;
@@ -767,6 +809,7 @@
       padding: 20px;
       color: var(--muted);
       text-align: center;
+      background: #ffffff;
     }
 
     .panel.is-loading::after {
@@ -776,15 +819,15 @@
       right: 12px;
       z-index: 4;
       padding: 5px 9px;
-      border: 1px solid rgba(79, 210, 232, 0.45);
+      border: 1px solid var(--primary);
       border-radius: 999px;
-      background: rgba(8, 12, 20, 0.92);
-      color: var(--teal);
+      background: #ffffff;
+      color: var(--primary);
       font-size: 0.72rem;
       font-weight: 850;
       letter-spacing: 0.12em;
       text-transform: uppercase;
-      box-shadow: 0 0 18px rgba(79, 210, 232, 0.18);
+      box-shadow: 0 8px 22px var(--shadow);
     }
 
     .panel.is-loading .table-wrap {
@@ -806,8 +849,8 @@
     }
 
     .user-list-panel.is-drop-target {
-      border-color: var(--mint);
-      box-shadow: 0 0 0 1px rgba(123, 226, 182, 0.45), 0 18px 42px var(--shadow);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(22, 122, 74, 0.18), 0 18px 42px var(--shadow);
     }
 
     .user-list-panel .table-wrap {
@@ -832,7 +875,7 @@
     }
 
     .route-leg {
-      color: var(--muted);
+      color: var(--steel);
       font-size: 0.78rem;
       margin-top: 4px;
     }
@@ -842,11 +885,11 @@
     }
 
     tr.drop-before td {
-      border-top: 4px solid rgba(123, 226, 182, 0.92);
+      border-top: 4px solid var(--accent);
     }
 
     tr.drop-after td {
-      border-bottom: 4px solid rgba(123, 226, 182, 0.92);
+      border-bottom: 4px solid var(--accent);
     }
 
     @media (max-width: 1120px) {
@@ -856,9 +899,34 @@
       .controls, .detail { position: static; }
       .table-wrap { max-height: none; }
     }
+
+    @media (max-width: 640px) {
+      main { width: min(100% - 20px, 1360px); }
+      header { padding-inline: 14px; }
+      h1 { font-size: clamp(1.9rem, 12vw, 3rem); }
+      .status { grid-template-columns: 1fr; }
+      .user-list-title-row,
+      .panel-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .action-group button,
+      .panel-actions button,
+      #result-count button {
+        width: 100%;
+      }
+      #result-count {
+        min-width: 0;
+        width: 100%;
+        justify-content: flex-start;
+        text-align: left;
+      }
+      th, td { padding: 10px 8px; }
+    }
   </style>
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   <div id="progress"></div>
   <header>
     <div class="kicker">Chicago Data Portal static search</div>
@@ -866,7 +934,7 @@
     <p>Static GitHub Pages tool generated from Chicago Building Permits data. Profiles include public contact fields, open job counts, average processing days, and work specializations.</p>
   </header>
 
-  <main>
+  <main id="main-content">
     <section id="status" class="status"></section>
 
     <section id="user-list-panel" class="panel user-list-panel" ondragover="permitListDragOver(event)" ondragleave="permitListDragLeave(event)" ondrop="permitListDrop(event)">
@@ -895,7 +963,7 @@
           </div>
         </div>
       </div>
-      <div id="user-route-summary" class="route-summary small">Add at least two permits with mapped coordinates to estimate driving distances.</div>
+      <div id="user-route-summary" class="route-summary small" aria-live="polite">Add at least two permits with mapped coordinates to estimate driving distances.</div>
       <details class="route-source">
         <summary>Routing sources and limits</summary>
         <p>
