@@ -1207,6 +1207,88 @@
       .detail-filter-grid {
         grid-template-columns: 1fr;
       }
+      .detail {
+        overflow: visible;
+      }
+      .detail-nav,
+      .detail-nav-left {
+        width: 100%;
+      }
+      .detail-nav-left .icon-button {
+        flex: 1;
+      }
+      .detail-section {
+        margin-top: 16px;
+        padding-top: 14px;
+      }
+      .detail-table-wrap,
+      .detail-table-wrap.compact {
+        max-height: none;
+        overflow: visible;
+        border: 0;
+        background: transparent;
+      }
+      .detail-table-wrap table,
+      .detail-table-wrap.compact table {
+        display: block;
+        min-width: 0;
+        width: 100%;
+        table-layout: auto;
+        background: transparent;
+      }
+      .detail-table-wrap thead {
+        display: none;
+      }
+      .detail-table-wrap tbody,
+      .detail-table-wrap tr {
+        display: block;
+      }
+      .detail-table-wrap tr {
+        margin-bottom: 10px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        box-shadow: 0 8px 20px var(--shadow);
+      }
+      .detail-table-wrap th,
+      .detail-table-wrap td,
+      .detail-table-wrap.compact th:nth-child(n+2),
+      .detail-table-wrap.compact td:nth-child(n+2) {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        text-align: left;
+        white-space: normal;
+      }
+      .detail-table-wrap td {
+        display: block;
+        padding: 8px 0;
+        border: 0;
+        overflow: visible;
+        overflow-wrap: anywhere;
+        word-break: normal;
+      }
+      .detail-table-wrap td::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 2px;
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 850;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .permit-card header {
+        flex-direction: column;
+      }
+      .permit-status {
+        white-space: normal;
+      }
+      .permit-facts {
+        padding-left: 0;
+        list-style: none;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -2583,7 +2665,7 @@
         <div class="detail-table-wrap">
           <table>
             <thead><tr><th>Permit</th><th>Issued</th><th>Address</th><th>Work Type</th><th>Permit Type</th><th>Cost</th></tr></thead>
-            <tbody>${rows.map((row, i) => `<tr onclick="showPermitFromEncoded('${enc(JSON.stringify(row))}')"><td><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_status)}</span></td><td>${esc(row.issue_date)}</td><td>${esc(row.address)}</td><td>${esc(row.work_type)}</td><td>${esc(row.permit_type)}</td><td class="money">${money(row.reported_cost)}</td></tr>`).join("")}</tbody>
+            <tbody>${rows.map((row, i) => `<tr onclick="showPermitFromEncoded('${enc(JSON.stringify(row))}')"><td data-label="Permit"><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_status)}</span></td><td data-label="Issued">${esc(row.issue_date)}</td><td data-label="Address">${esc(row.address)}</td><td data-label="Work type">${esc(row.work_type)}</td><td data-label="Permit type">${esc(row.permit_type)}</td><td data-label="Cost" class="money">${money(row.reported_cost)}</td></tr>`).join("")}</tbody>
           </table>
         </div>`;
     }
@@ -2629,11 +2711,11 @@
               <thead><tr><th>License</th><th>Type</th><th>Phone</th><th>Expires</th><th>Insurance / Bond</th></tr></thead>
               <tbody>${matches.map(item => `
                 <tr>
-                  <td><strong>${esc(item.license_number)}</strong><br><span class="small">${esc(item.name)}</span></td>
-                  <td>${esc(item.license_type)}<br><span class="small">${esc((item.source_categories || [item.license_category]).join(", "))}</span></td>
-                  <td>${esc(item.phone)}</td>
-                  <td>${esc(item.license_expiration_date)}</td>
-                  <td>${esc(item.insurance_expiration_date)}</td>
+                  <td data-label="License"><strong>${esc(item.license_number)}</strong><br><span class="small">${esc(item.name)}</span></td>
+                  <td data-label="Type">${esc(item.license_type)}<br><span class="small">${esc((item.source_categories || [item.license_category]).join(", "))}</span></td>
+                  <td data-label="Phone">${esc(item.phone)}</td>
+                  <td data-label="Expires">${esc(item.license_expiration_date)}</td>
+                  <td data-label="Insurance / bond">${esc(item.insurance_expiration_date)}</td>
                 </tr>`).join("")}</tbody>
             </table>
           </div>
@@ -2650,9 +2732,9 @@
             <thead><tr><th>${esc(label)}</th><th>Jobs</th>${includeOpenJobs ? "<th>Open Jobs</th>" : ""}</tr></thead>
             <tbody>${items.map(item => `
               <tr>
-                <td>${esc(item[key])}</td>
-                <td>${fmt(item.jobs)}</td>
-                ${includeOpenJobs ? `<td>${fmt(item.open_jobs || 0)}</td>` : ""}
+                <td data-label="${esc(label)}">${esc(item[key])}</td>
+                <td data-label="Jobs">${fmt(item.jobs)}</td>
+                ${includeOpenJobs ? `<td data-label="Open jobs">${fmt(item.open_jobs || 0)}</td>` : ""}
               </tr>`).join("")}</tbody>
           </table>
         </div>`;
@@ -2697,8 +2779,8 @@
             <thead><tr><th>Name</th><th>Shared Open Permits</th></tr></thead>
             <tbody>${rows.map(([name, count]) => `
               <tr onclick="openContactProfile('${enc(name)}', '${mode}')">
-                <td><span class="tag clickable">${esc(name)}</span></td>
-                <td>${fmt(count)}</td>
+                <td data-label="Name"><span class="tag clickable">${esc(name)}</span></td>
+                <td data-label="Shared open permits">${fmt(count)}</td>
               </tr>`).join("")}</tbody>
           </table>
         </div>`;
