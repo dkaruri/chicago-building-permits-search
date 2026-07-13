@@ -1124,8 +1124,10 @@
       .results-table,
       .user-list-panel table {
         display: block;
+        width: 100%;
+        table-layout: auto;
         background: transparent;
-        font-size: 0.94rem;
+        font-size: 0.96rem;
       }
       .results-table thead,
       .user-list-panel table thead {
@@ -1140,24 +1142,37 @@
       .results-table tr,
       .user-list-panel table tr {
         margin-bottom: 10px;
-        padding: 12px;
+        padding: 13px;
         border: 1px solid var(--line);
         border-radius: 8px;
         background: var(--panel);
         box-shadow: 0 8px 20px var(--shadow);
       }
+      .contacts-table th,
+      .contacts-table td,
+      .permits-table th,
+      .permits-table td,
+      .saved-permits-table th,
+      .saved-permits-table td {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+      }
       .results-table td,
       .user-list-panel table td {
-        display: grid;
-        grid-template-columns: minmax(88px, 34%) minmax(0, 1fr);
-        gap: 10px;
-        align-items: start;
-        padding: 7px 0;
+        display: block;
+        padding: 9px 0;
         border: 0;
+        white-space: normal;
+        overflow: visible;
+        overflow-wrap: anywhere;
+        word-break: normal;
       }
       .results-table td::before,
       .user-list-panel table td::before {
         content: attr(data-label);
+        display: block;
+        margin-bottom: 2px;
         color: var(--muted);
         font-size: 0.72rem;
         font-weight: 850;
@@ -1171,6 +1186,7 @@
         display: flex;
         width: auto;
         justify-content: flex-start;
+        padding-bottom: 6px;
       }
       .results-table td.select-cell::before,
       .results-table td.move-cell::before,
