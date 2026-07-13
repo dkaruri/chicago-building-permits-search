@@ -42,10 +42,18 @@ def live_socrata_counts() -> dict[str, Any]:
         open_response.raise_for_status()
         live_open_count = int(open_response.json()[0]["count"])
 
+        latest_response = client.get(
+            f"https://{SOCRATA_DOMAIN}/resource/{DATASET_ID}.json",
+            params={"$select": "max(issue_date) as latest_issue_date"},
+        )
+        latest_response.raise_for_status()
+        live_latest_issue_date = latest_response.json()[0]["latest_issue_date"][:10]
+
     return {
         "row_count": live_count,
         "open_permit_count": live_open_count,
         "rows_updated_at": int(meta.get("rowsUpdatedAt") or 0),
+        "latest_issue_date": live_latest_issue_date,
     }
 
 
@@ -137,6 +145,7 @@ def compare() -> dict[str, Any]:
         "export_manifest_matches_db_rows": manifest["row_count"] == local["permits"],
         "export_manifest_matches_live_rows": manifest["row_count"] == live["row_count"],
         "export_manifest_rows_updated_at_matches_live": manifest["rows_updated_at"] == live["rows_updated_at"],
+        "export_latest_issue_date_matches_live": manifest["latest_issue_date"] == live["latest_issue_date"],
         "export_open_permits_match_db": manifest["open_permit_count"] == local["open_permits"],
         "export_open_permits_match_live": manifest["open_permit_count"] == live["open_permit_count"],
         "open_permits_file_count_matches_manifest": exported["open_permits_rows"] == manifest["files"]["open_permits"]["rows"],
@@ -159,6 +168,7 @@ def compare() -> dict[str, Any]:
         "manifest": {
             "exported_at": manifest["exported_at"],
             "row_count": manifest["row_count"],
+            "latest_issue_date": manifest["latest_issue_date"],
             "open_permit_count": manifest["open_permit_count"],
             "license_rows": manifest["license_source"]["rows"],
             "license_sources": [
