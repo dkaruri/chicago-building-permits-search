@@ -283,6 +283,19 @@
       background: rgba(11, 17, 29, 0.75);
     }
 
+    .route-source {
+      margin: -3px 0 10px;
+      color: var(--muted);
+      font-size: 0.76rem;
+      line-height: 1.35;
+    }
+
+    .route-source a {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
     #result-count {
       min-width: 280px;
       margin-left: auto;
@@ -734,6 +747,7 @@
 
     .user-list-panel.is-collapsed .list-note,
     .user-list-panel.is-collapsed .route-summary,
+    .user-list-panel.is-collapsed .route-source,
     .user-list-panel.is-collapsed .table-wrap {
       display: none;
     }
@@ -797,6 +811,13 @@
         </div>
       </div>
       <div id="user-route-summary" class="route-summary small">Add at least two permits with mapped coordinates to estimate driving distances.</div>
+      <div class="route-source">
+        Driving estimates use the public
+        <a href="https://project-osrm.org/docs/v5.24.0/api/#route-service" target="_blank" rel="noopener">OSRM Route service</a>
+        for list-order legs and the
+        <a href="https://project-osrm.org/docs/v5.24.0/api/#table-service" target="_blank" rel="noopener">OSRM Table service</a>
+        for drive-time sorting. Results are estimates from OpenStreetMap-based routing and are not traffic-aware.
+      </div>
       <label class="list-note">List note
         <textarea id="user-list-note" placeholder="Add an overall note for this permit list..." oninput="saveListNote(this.value)"></textarea>
       </label>
