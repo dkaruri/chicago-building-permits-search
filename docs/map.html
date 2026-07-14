@@ -871,7 +871,6 @@
       background: var(--panel-2);
     }
 
-    .map-drawer,
     .map-result-rail,
     .map-detail-sheet,
     .map-status-strip {
@@ -933,13 +932,14 @@
     }
 
     .map-drawer {
-      top: 12px;
-      left: 12px;
-      width: min(380px, calc(100% - 24px));
-      max-height: calc(100% - 24px);
+      width: 100%;
       padding: 12px;
+      color: var(--ink);
+      background: color-mix(in srgb, var(--panel) 96%, transparent);
+      border: 1px solid var(--line);
       border-radius: 8px;
       overflow: auto;
+      box-shadow: 0 10px 24px var(--shadow);
     }
 
     .map-drawer.hidden {
@@ -1684,11 +1684,10 @@
         border-radius: 8px;
       }
       .map-drawer {
-        top: 8px;
-        left: 8px;
-        right: 8px;
         width: auto;
-        max-height: calc(100% - 16px);
+        margin-inline: -12px;
+        border-inline: 0;
+        border-radius: 0;
       }
       .map-filter-grid {
         grid-template-columns: 1fr;
@@ -2988,47 +2987,47 @@
             <button id="map-layer-toggle" onclick="toggleMapDrawer('layers')" aria-expanded="false">Layers</button>
             <span id="map-count-pill" class="map-count-pill">Loading</span>
           </div>
+          <section id="map-filter-drawer" class="map-drawer hidden" aria-label="Map filters">
+            <div class="map-drawer-head">
+              <h3>Filters</h3>
+              <button class="icon-button" onclick="toggleMapDrawer('')" aria-label="Close filters">&times;</button>
+            </div>
+            <div class="map-filter-grid">
+              <label>From
+                <input id="map-date-from" type="date" value="${esc(settings.dateFrom)}">
+              </label>
+              <label>To
+                <input id="map-date-to" type="date" value="${esc(settings.dateTo)}">
+              </label>
+              <label>GC jobs min
+                <input id="map-gc-min" type="number" min="0" inputmode="numeric" value="${esc(settings.gcMin)}" placeholder="0">
+              </label>
+              <label>GC jobs max
+                <input id="map-gc-max" type="number" min="0" inputmode="numeric" value="${esc(settings.gcMax)}" placeholder="Any">
+              </label>
+              <label>Neighborhood / street
+                <input id="map-neighborhood" list="map-neighborhoods" value="${esc(settings.neighborhood)}" placeholder="Search area, id, or street">
+                <datalist id="map-neighborhoods">${neighborhoods}</datalist>
+              </label>
+            </div>
+            <div class="map-filter-actions">
+              <button class="primary" onclick="applyMapFilters()">Apply filters</button>
+              <button onclick="resetMapSettings()">Reset current month</button>
+            </div>
+          </section>
+          <section id="map-layer-drawer" class="map-drawer hidden" aria-label="Map layers">
+            <div class="map-drawer-head">
+              <h3>Layers</h3>
+              <button class="icon-button" onclick="toggleMapDrawer('')" aria-label="Close layers">&times;</button>
+            </div>
+            <div class="map-layer-list">
+              <label class="check-row"><input type="checkbox" ${mapLayerChecked("permits")} onchange="setMapLayer('permits', this.checked)"><span>Individual permit points</span></label>
+              <label class="check-row"><input type="checkbox" ${mapLayerChecked("clusters")} onchange="setMapLayer('clusters', this.checked)"><span>Clusters and counts</span></label>
+              <label class="check-row"><input type="checkbox" ${mapLayerChecked("heat")} onchange="setMapLayer('heat', this.checked)"><span>Density heat layer</span></label>
+            </div>
+          </section>
           <div class="map-app">
             <div id="permit-map" role="region" aria-label="Chicago permit map"></div>
-            <section id="map-filter-drawer" class="map-drawer hidden" aria-label="Map filters">
-              <div class="map-drawer-head">
-                <h3>Filters</h3>
-                <button class="icon-button" onclick="toggleMapDrawer('')" aria-label="Close filters">&times;</button>
-              </div>
-              <div class="map-filter-grid">
-                <label>From
-                  <input id="map-date-from" type="date" value="${esc(settings.dateFrom)}">
-                </label>
-                <label>To
-                  <input id="map-date-to" type="date" value="${esc(settings.dateTo)}">
-                </label>
-                <label>GC jobs min
-                  <input id="map-gc-min" type="number" min="0" inputmode="numeric" value="${esc(settings.gcMin)}" placeholder="0">
-                </label>
-                <label>GC jobs max
-                  <input id="map-gc-max" type="number" min="0" inputmode="numeric" value="${esc(settings.gcMax)}" placeholder="Any">
-                </label>
-                <label>Neighborhood / street
-                  <input id="map-neighborhood" list="map-neighborhoods" value="${esc(settings.neighborhood)}" placeholder="Search area, id, or street">
-                  <datalist id="map-neighborhoods">${neighborhoods}</datalist>
-                </label>
-              </div>
-              <div class="map-filter-actions">
-                <button class="primary" onclick="applyMapFilters()">Apply filters</button>
-                <button onclick="resetMapSettings()">Reset current month</button>
-              </div>
-            </section>
-            <section id="map-layer-drawer" class="map-drawer hidden" aria-label="Map layers">
-              <div class="map-drawer-head">
-                <h3>Layers</h3>
-                <button class="icon-button" onclick="toggleMapDrawer('')" aria-label="Close layers">&times;</button>
-              </div>
-              <div class="map-layer-list">
-                <label class="check-row"><input type="checkbox" ${mapLayerChecked("permits")} onchange="setMapLayer('permits', this.checked)"><span>Individual permit points</span></label>
-                <label class="check-row"><input type="checkbox" ${mapLayerChecked("clusters")} onchange="setMapLayer('clusters', this.checked)"><span>Clusters and counts</span></label>
-                <label class="check-row"><input type="checkbox" ${mapLayerChecked("heat")} onchange="setMapLayer('heat', this.checked)"><span>Density heat layer</span></label>
-              </div>
-            </section>
             <aside id="map-result-rail" class="map-result-rail" aria-label="Visible map results">
               <div class="map-result-head">
                 <div>
