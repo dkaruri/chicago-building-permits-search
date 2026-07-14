@@ -1094,10 +1094,41 @@
 
     .maplibregl-popup-content {
       max-width: min(300px, 84vw);
+      padding: 10px 12px;
       border-radius: 8px;
       background: var(--panel);
       color: var(--ink);
       box-shadow: 0 12px 28px var(--shadow);
+    }
+
+    .map-hover-card {
+      display: grid;
+      gap: 5px;
+      font-size: 0.78rem;
+      line-height: 1.35;
+    }
+
+    .map-hover-card strong {
+      font-size: 0.88rem;
+      line-height: 1.2;
+    }
+
+    .map-hover-card span {
+      color: var(--muted);
+    }
+
+    .map-hover-card .map-hover-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .map-hover-card .map-hover-meta span {
+      padding: 2px 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--ink);
+      background: color-mix(in srgb, var(--panel), var(--bg) 35%);
     }
 
     .maplibregl-ctrl-attrib,
@@ -2337,6 +2368,7 @@
         layers: { permits: true, clusters: false, heat: false },
         settings: null,
         searchLocation: null,
+        hoverPopup: null,
         loadingToken: 0
       }
     };
@@ -2835,6 +2867,22 @@
         <div class="detail-section"><h4>Open subs</h4>${nameTags(permit.open_subs, "open_subs")}</div>`;
     }
 
+    function mapPermitHover(row) {
+      const primaryContact = clean(row.gc || row.os).split(";").map(item => item.trim()).filter(Boolean)[0] || "";
+      return `
+        <div class="map-hover-card">
+          <strong>${esc(row.n)}</strong>
+          <span>${esc(row.a || "Address unavailable")}</span>
+          <div class="map-hover-meta">
+            ${row.s ? `<span>${esc(row.s)}</span>` : ""}
+            ${row.t ? `<span>${esc(row.t)}</span>` : ""}
+            ${row.d ? `<span>${esc(row.d)}</span>` : ""}
+          </div>
+          ${row.wt ? `<span>Work: ${esc(row.wt)}</span>` : ""}
+          <span>${fmt(row.go || 0)} GC open jobs${primaryContact ? ` &middot; ${esc(primaryContact)}` : ""}</span>
+        </div>`;
+    }
+
     function mapLayerChecked(layer) {
       return state.map.layers[layer] ? "checked" : "";
     }
@@ -2945,6 +2993,10 @@
         state.map.pmtilesProtocolAdded = true;
       }
       if (state.map.map) {
+        if (state.map.hoverPopup) {
+          state.map.hoverPopup.remove();
+          state.map.hoverPopup = null;
+        }
         state.map.map.remove();
         state.map.map = null;
         state.map.sourceReady = false;
@@ -3059,6 +3111,22 @@
         state.map.map.on("click", "permit-points", event => {
           const row = event.features[0].properties;
           selectMapPermit(row, true);
+        });
+        state.map.hoverPopup = new maplibregl.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          offset: 12
+        });
+        state.map.map.on("mousemove", "permit-points", event => {
+          const feature = event.features && event.features[0];
+          if (!feature || !state.map.hoverPopup) return;
+          state.map.hoverPopup
+            .setLngLat(feature.geometry.coordinates)
+            .setHTML(mapPermitHover(feature.properties))
+            .addTo(state.map.map);
+        });
+        state.map.map.on("mouseleave", "permit-points", () => {
+          if (state.map.hoverPopup) state.map.hoverPopup.remove();
         });
         ["permit-clusters", "permit-points"].forEach(layer => {
           state.map.map.on("mouseenter", layer, () => { state.map.map.getCanvas().style.cursor = "pointer"; });
