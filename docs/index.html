@@ -1044,6 +1044,17 @@
       background: color-mix(in srgb, #f59e0b 11%, var(--panel));
     }
 
+    .map-result-divider {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--cell-line);
+      background: color-mix(in srgb, var(--primary-soft), var(--panel) 52%);
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 680;
+      line-height: 1.35;
+      text-transform: uppercase;
+    }
+
     .map-result strong {
       display: block;
       color: var(--primary);
@@ -1129,6 +1140,14 @@
       border-radius: 999px;
       color: var(--ink);
       background: color-mix(in srgb, var(--panel), var(--bg) 35%);
+    }
+
+    .map-hover-action {
+      width: 100%;
+      min-height: 31px;
+      margin-top: 4px;
+      padding: 5px 9px;
+      font-size: 0.75rem;
     }
 
     .maplibregl-ctrl-attrib,
@@ -2295,6 +2314,7 @@
         settings: null,
         searchLocation: null,
         hoverPopup: null,
+        hoverCloseTimer: null,
         loadingToken: 0
       }
     };
@@ -2808,6 +2828,9 @@
     }
 
     function mapPermitHover(row) {
+      const permit = mapRowToPermit(row);
+      const payload = enc(JSON.stringify(permit));
+      const saved = isInUserList(permit.permit_number);
       const primaryContact = clean(row.gc || row.os).split(";").map(item => item.trim()).filter(Boolean)[0] || "";
       return `
         <div class="map-hover-card">
@@ -2820,7 +2843,37 @@
           </div>
           ${row.wt ? `<span>Work: ${esc(row.wt)}</span>` : ""}
           <span>${fmt(row.go || 0)} GC open jobs${primaryContact ? ` &middot; ${esc(primaryContact)}` : ""}</span>
+          <button class="primary map-hover-action" onclick="event.stopPropagation(); addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "Saved in list" : "Add to list"}</button>
         </div>`;
+    }
+
+    function showMapPermitHover(feature) {
+      if (!state.map.map || !state.map.hoverPopup) return;
+      clearMapHoverClose();
+      state.map.hoverPopup
+        .setLngLat(feature.geometry.coordinates)
+        .setHTML(mapPermitHover(feature.properties))
+        .addTo(state.map.map);
+      const popupEl = state.map.hoverPopup.getElement();
+      if (popupEl && popupEl.dataset.hoverBound !== "1") {
+        popupEl.dataset.hoverBound = "1";
+        popupEl.addEventListener("mouseenter", clearMapHoverClose);
+        popupEl.addEventListener("mouseleave", scheduleMapHoverClose);
+      }
+    }
+
+    function clearMapHoverClose() {
+      if (!state.map.hoverCloseTimer) return;
+      clearTimeout(state.map.hoverCloseTimer);
+      state.map.hoverCloseTimer = null;
+    }
+
+    function scheduleMapHoverClose() {
+      clearMapHoverClose();
+      state.map.hoverCloseTimer = setTimeout(() => {
+        if (state.map.hoverPopup) state.map.hoverPopup.remove();
+        state.map.hoverCloseTimer = null;
+      }, 260);
     }
 
     function mapLayerChecked(layer) {
@@ -2933,6 +2986,7 @@
         state.map.pmtilesProtocolAdded = true;
       }
       if (state.map.map) {
+        clearMapHoverClose();
         if (state.map.hoverPopup) {
           state.map.hoverPopup.remove();
           state.map.hoverPopup = null;
@@ -3029,6 +3083,21 @@
           }
         });
         state.map.map.addLayer({
+          id: "permit-point-shadows",
+          type: "circle",
+          source: "permit-pins",
+          layout: {
+            "circle-sort-key": ["to-number", ["get", "active"]]
+          },
+          paint: {
+            "circle-color": "rgba(17, 24, 39, 0.52)",
+            "circle-radius": ["case", ["==", ["to-number", ["get", "active"]], 1], 16, ["==", ["to-number", ["get", "m"]], 1], 13, 8],
+            "circle-blur": 0.85,
+            "circle-opacity": ["case", ["==", ["to-number", ["get", "active"]], 1], 0.72, 0.44],
+            "circle-translate": [1.5, 2.5]
+          }
+        }, "permit-points");
+        state.map.map.addLayer({
           id: "map-search-location",
           type: "circle",
           source: "map-search-location",
@@ -3055,18 +3124,15 @@
         state.map.hoverPopup = new maplibregl.Popup({
           closeButton: false,
           closeOnClick: false,
-          offset: 12
+          anchor: "bottom",
+          offset: 16
         });
         state.map.map.on("mousemove", "permit-points", event => {
           const feature = event.features && event.features[0];
-          if (!feature || !state.map.hoverPopup) return;
-          state.map.hoverPopup
-            .setLngLat(feature.geometry.coordinates)
-            .setHTML(mapPermitHover(feature.properties))
-            .addTo(state.map.map);
+          if (feature) showMapPermitHover(feature);
         });
         state.map.map.on("mouseleave", "permit-points", () => {
-          if (state.map.hoverPopup) state.map.hoverPopup.remove();
+          scheduleMapHoverClose();
         });
         ["permit-clusters", "permit-points"].forEach(layer => {
           state.map.map.on("mouseenter", layer, () => { state.map.map.getCanvas().style.cursor = "pointer"; });
@@ -3200,8 +3266,13 @@
     }
 
     function renderMapSideList() {
-      const rows = state.map.visibleRows.length ? state.map.visibleRows : state.map.filteredRows.slice(0, 100);
       const settings = loadMapSettings();
+      const hasSearch = Boolean(clean(settings.q));
+      const searchRows = hasSearch ? state.map.filteredRows.filter(row => Number(row.m || 0) === 1).slice(0, 150) : [];
+      const searchIds = new Set(searchRows.map(row => clean(row.n)));
+      const visibleRows = state.map.visibleRows.length ? state.map.visibleRows : state.map.filteredRows.slice(0, 100);
+      const otherRows = hasSearch ? visibleRows.filter(row => !searchIds.has(clean(row.n))).slice(0, 150) : visibleRows;
+      const rows = hasSearch && searchRows.length ? [...searchRows, ...otherRows] : visibleRows;
       const visibleText = state.map.visibleRows.length ? `${fmt(state.map.visibleRows.length)} visible` : "No visible results";
       $("result-count").textContent = `${fmt(state.map.filteredRows.length)} mapped permits`;
       $("map-count-pill").textContent = `${fmt(state.map.filteredRows.length)} permits`;
@@ -3209,12 +3280,24 @@
       const matches = state.map.filteredRows.filter(row => Number(row.m || 0) === 1).length;
       const geocoded = state.map.searchLocation ? ` | zoomed to address area` : "";
       $("map-status-strip").textContent = `${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` | ${esc(settings.neighborhood)}` : ""}${settings.q ? ` | ${fmt(matches)} highlighted for "${esc(settings.q)}"${geocoded}` : ""}`;
-      $("map-result-list").innerHTML = rows.length ? rows.map(row => `
+      if (hasSearch && searchRows.length) {
+        const searchHeader = `<div class="map-result-divider">Search matches for "${esc(settings.q)}" stay pinned above visible permits.</div>`;
+        const searchMarkup = searchRows.map(mapResultButton).join("");
+        const divider = `<div class="map-result-divider">End of searched permits. Other visible permits below.</div>`;
+        const otherMarkup = otherRows.length ? otherRows.map(mapResultButton).join("") : `<div class="empty">No additional visible permits in the current map view.</div>`;
+        $("map-result-list").innerHTML = searchHeader + searchMarkup + divider + otherMarkup;
+        return;
+      }
+      $("map-result-list").innerHTML = rows.length ? rows.map(mapResultButton).join("") : `<div class="empty">No permits match these map filters.</div>`;
+    }
+
+    function mapResultButton(row) {
+      return `
         <button class="map-result ${state.map.activePermitNumber === row.n ? "is-active" : ""} ${Number(row.m || 0) === 1 ? "is-match" : ""}" onclick="selectMapPermitByNumber('${enc(row.n)}')">
           <strong>${esc(row.n)} &middot; ${esc(row.a)}</strong>
           <span>${esc(row.d)} &middot; ${esc(row.cn || "Unknown neighborhood")} &middot; ${fmt(row.go || 0)} GC open jobs</span>
           <span>${esc(row.wt || row.t || "")}</span>
-        </button>`).join("") : `<div class="empty">No permits match these map filters.</div>`;
+        </button>`;
     }
 
     function selectMapPermitByNumber(encodedNumber) {
@@ -3293,6 +3376,7 @@
 
     function updateMapLayerVisibility() {
       setLayerVisibility("permit-heat", state.map.layers.heat);
+      setLayerVisibility("permit-point-shadows", state.map.layers.permits);
       setLayerVisibility("permit-points", state.map.layers.permits);
       setLayerVisibility("permit-clusters", state.map.layers.clusters);
       setLayerVisibility("cluster-count", state.map.layers.clusters);
