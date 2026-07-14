@@ -961,8 +961,8 @@
 
     .map-drawer {
       width: 100%;
-      max-height: 340px;
-      padding: 12px;
+      max-height: 214px;
+      padding: 10px 12px;
       color: var(--ink);
       background: color-mix(in srgb, var(--panel) 96%, transparent);
       border: 1px solid var(--line);
@@ -1005,12 +1005,12 @@
 
     .map-filter-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 8px;
     }
 
     .map-filter-grid label:nth-child(5) {
-      grid-column: 1 / -1;
+      grid-column: auto;
     }
 
     .map-filter-actions,
@@ -1019,12 +1019,12 @@
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 10px;
+      margin-top: 8px;
     }
 
     .map-drawer-section {
-      padding-top: 12px;
-      margin-top: 12px;
+      padding-top: 8px;
+      margin-top: 8px;
       border-top: 1px solid var(--line);
     }
 
@@ -1036,12 +1036,13 @@
 
     .map-layer-list {
       display: grid;
+      grid-template-columns: repeat(3, minmax(140px, 1fr));
       gap: 8px;
       margin: 0;
     }
 
     .map-layer-list .check-row {
-      padding: 8px;
+      padding: 7px 8px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--surface-subtle);
@@ -1739,13 +1740,15 @@
         border-radius: 0;
       }
       .map-search {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr) auto;
       }
       .map-toolbar button,
-      .map-search button,
       .map-drawer button,
       .map-detail-actions button {
         width: 100%;
+      }
+      .map-search button {
+        width: auto;
       }
       .map-count-pill {
         width: 100%;
@@ -1753,11 +1756,24 @@
       }
       .map-drawer {
         width: auto;
+        max-height: 40dvh;
         margin-inline: -12px;
         border-inline: 0;
         border-radius: 0;
+        overflow: auto;
+        scrollbar-width: thin;
+      }
+      .map-drawer::-webkit-scrollbar {
+        width: 8px;
+      }
+      .map-drawer::-webkit-scrollbar-thumb {
+        background: var(--line);
+        border-radius: 999px;
       }
       .map-filter-grid {
+        grid-template-columns: 1fr;
+      }
+      .map-layer-list {
         grid-template-columns: 1fr;
       }
       .map-result-rail {
