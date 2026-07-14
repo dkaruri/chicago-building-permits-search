@@ -961,18 +961,28 @@
 
     .map-drawer {
       width: 100%;
-      height: 260px;
+      max-height: 340px;
       padding: 12px;
       color: var(--ink);
       background: color-mix(in srgb, var(--panel) 96%, transparent);
       border: 1px solid var(--line);
       border-radius: 8px;
-      overflow: auto;
+      overflow: hidden;
       box-shadow: 0 10px 24px var(--shadow);
+      opacity: 1;
+      transform: translateY(0);
+      transform-origin: top;
+      transition: max-height 220ms ease, padding 220ms ease, border-width 220ms ease, opacity 180ms ease, transform 220ms ease;
     }
 
     .map-drawer.hidden {
-      display: none;
+      max-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border-width: 0;
+      opacity: 0;
+      transform: translateY(-10px);
+      pointer-events: none;
     }
 
     .map-drawer-head,
@@ -1067,6 +1077,12 @@
       background: var(--panel);
       opacity: 1;
       transition: opacity 180ms ease, visibility 180ms ease;
+      scrollbar-width: none;
+    }
+
+    .map-result-list::-webkit-scrollbar {
+      width: 0;
+      height: 0;
     }
 
     .map-result-rail.is-collapsed .map-result-list {
@@ -1737,7 +1753,6 @@
       }
       .map-drawer {
         width: auto;
-        height: auto;
         margin-inline: -12px;
         border-inline: 0;
         border-radius: 0;
@@ -3461,7 +3476,9 @@
       const active = state.map.drawer === "filters";
       const drawer = $("map-filter-drawer");
       const toggle = $("map-filter-toggle");
+      const shell = drawer?.closest(".map-shell");
       if (drawer) drawer.classList.toggle("hidden", !active);
+      if (shell) shell.classList.toggle("has-open-drawer", active);
       if (toggle) toggle.setAttribute("aria-expanded", String(active));
     }
 
