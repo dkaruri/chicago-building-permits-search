@@ -888,9 +888,10 @@
     .map-toolbar {
       top: 12px;
       left: 12px;
-      right: 12px;
+      right: auto;
+      width: min(760px, calc(100% - 112px));
       display: grid;
-      grid-template-columns: minmax(220px, 1fr) auto auto auto;
+      grid-template-columns: minmax(180px, 1fr) auto auto auto;
       gap: 8px;
       align-items: center;
       padding: 10px;
@@ -1036,6 +1037,11 @@
     .map-result.is-active {
       background: var(--primary-soft);
       color: var(--ink);
+    }
+
+    .map-result.is-match {
+      box-shadow: inset 4px 0 0 #f59e0b;
+      background: color-mix(in srgb, #f59e0b 11%, var(--panel));
     }
 
     .map-result strong {
@@ -2762,7 +2768,7 @@
             <div id="permit-map" role="region" aria-label="Chicago permit map"></div>
             <div class="map-toolbar" aria-label="Map controls">
               <div class="map-search">
-                <input id="map-q" value="${esc(settings.q || "")}" placeholder="Search permits, address, contractor, work type..." onkeydown="if(event.key === 'Enter') applyMapFilters()">
+                <input id="map-q" value="${esc(settings.q || "")}" placeholder="Highlight permits, address, street, contractor..." onkeydown="if(event.key === 'Enter') applyMapFilters()">
                 <button class="primary" onclick="applyMapFilters()">Search</button>
               </div>
               <button id="map-filter-toggle" onclick="toggleMapDrawer('filters')" aria-expanded="false">Filters</button>
@@ -2932,11 +2938,11 @@
           type: "circle",
           source: "permit-pins",
           paint: {
-            "circle-color": ["step", ["to-number", ["get", "go"]], "#22a6b3", 5, "#1f4fa3", 20, "#167a4a", 60, "#a15c06"],
-            "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 4, 14, 7, 17, 10],
-            "circle-opacity": 0.86,
+            "circle-color": ["case", ["==", ["to-number", ["get", "m"]], 1], "#f59e0b", ["step", ["to-number", ["get", "go"]], "#22a6b3", 5, "#1f4fa3", 20, "#167a4a", 60, "#a15c06"]],
+            "circle-radius": ["case", ["==", ["to-number", ["get", "m"]], 1], ["interpolate", ["linear"], ["zoom"], 9, 7, 14, 11, 17, 15], ["interpolate", ["linear"], ["zoom"], 9, 4, 14, 7, 17, 10]],
+            "circle-opacity": ["case", ["==", ["to-number", ["get", "m"]], 1], 0.98, 0.72],
             "circle-stroke-color": "#ffffff",
-            "circle-stroke-width": 1.5
+            "circle-stroke-width": ["case", ["==", ["to-number", ["get", "m"]], 1], 3, 1.25]
           }
         });
         state.map.map.on("click", "permit-clusters", event => {
@@ -2984,9 +2990,11 @@
         if (minJobs != null && jobs < minJobs) return false;
         if (maxJobs != null && jobs > maxJobs) return false;
         if (neighborhood && !norm(`${row.cn} ${row.ca} ${row.st}`).includes(neighborhood)) return false;
-        if (text && !norm(`${row.n} ${row.a} ${row.gc} ${row.os} ${row.wt} ${row.t} ${row.x} ${row.cn} ${row.st}`).includes(text)) return false;
         return Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lon));
-      }).sort((a, b) => Number(b.go || 0) - Number(a.go || 0) || clean(b.d).localeCompare(clean(a.d)));
+      }).map(row => ({
+        ...row,
+        m: text && norm(`${row.n} ${row.a} ${row.gc} ${row.os} ${row.wt} ${row.t} ${row.x} ${row.cn} ${row.st}`).includes(text) ? 1 : 0
+      })).sort((a, b) => Number(b.m || 0) - Number(a.m || 0) || Number(b.go || 0) - Number(a.go || 0) || clean(b.d).localeCompare(clean(a.d)));
       state.pageIndex = 0;
       state.map.activePermitNumber = "";
       updateMapSource();
@@ -3035,7 +3043,7 @@
       const bounds = state.map.map.getBounds();
       state.map.visibleRows = state.map.filteredRows
         .filter(row => rowInMapBounds(row, bounds))
-        .sort((a, b) => Number(b.go || 0) - Number(a.go || 0) || clean(b.d).localeCompare(clean(a.d)))
+        .sort((a, b) => Number(b.m || 0) - Number(a.m || 0) || Number(b.go || 0) - Number(a.go || 0) || clean(b.d).localeCompare(clean(a.d)))
         .slice(0, 150);
       renderMapSideList();
     }
@@ -3047,9 +3055,10 @@
       $("result-count").textContent = `${fmt(state.map.filteredRows.length)} mapped permits`;
       $("map-count-pill").textContent = `${fmt(state.map.filteredRows.length)} permits`;
       $("map-visible-summary").textContent = `${visibleText} of ${fmt(state.map.filteredRows.length)} filtered permits`;
-      $("map-status-strip").textContent = `${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` | ${esc(settings.neighborhood)}` : ""}${settings.q ? ` | ${esc(settings.q)}` : ""}`;
+      const matches = state.map.filteredRows.filter(row => Number(row.m || 0) === 1).length;
+      $("map-status-strip").textContent = `${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` | ${esc(settings.neighborhood)}` : ""}${settings.q ? ` | ${fmt(matches)} highlighted for "${esc(settings.q)}"` : ""}`;
       $("map-result-list").innerHTML = rows.length ? rows.map(row => `
-        <button class="map-result ${state.map.activePermitNumber === row.n ? "is-active" : ""}" onclick="selectMapPermitByNumber('${enc(row.n)}')">
+        <button class="map-result ${state.map.activePermitNumber === row.n ? "is-active" : ""} ${Number(row.m || 0) === 1 ? "is-match" : ""}" onclick="selectMapPermitByNumber('${enc(row.n)}')">
           <strong>${esc(row.n)} &middot; ${esc(row.a)}</strong>
           <span>${esc(row.d)} &middot; ${esc(row.cn || "Unknown neighborhood")} &middot; ${fmt(row.go || 0)} GC open jobs</span>
           <span>${esc(row.wt || row.t || "")}</span>
