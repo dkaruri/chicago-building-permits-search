@@ -9,6 +9,7 @@ The project downloads permit records into a local DuckDB database, builds compac
 - Open permits (`ACTIVE`, `SUSPENDED`, `PHASED PERMITTING`)
 - General Contractors, limited to company-like names
 - Open Subs, limited to person-like public contact names
+- A searchable MapLibre permit map that defaults to current-month open permits
 
 For each profile, the site shows public portal contact fields, open jobs, total jobs, average positive permit processing days, specialization summaries, and matched City licensed contractor records when available.
 
@@ -22,6 +23,8 @@ GitHub Pages uses generated JSON indexes from `docs/data/`:
 - `docs/data/general_contractors.json`
 - `docs/data/open_subs.json`
 - `docs/data/contractor_licenses.json`
+- `docs/data/permit_map_index.json`
+- `docs/data/map/permits_YYYY_MM.json`
 - `docs/data/manifest.json`
 
 ## Refresh Data
@@ -33,7 +36,7 @@ uv run chi-permits export-static
 uv run python scripts/accuracy_check.py
 ```
 
-The workflow at `.github/workflows/refresh-pages-data.yml` runs on a daily schedule and can also be triggered manually. It downloads the latest Chicago Data Portal records, exports the static JSON files, fetches the City licensed contractor registries, runs the accuracy check, and commits changes back to the repo so Pages rebuilds.
+The workflow at `.github/workflows/refresh-pages-data.yml` runs on a daily schedule and can also be triggered manually. It downloads the latest Chicago Data Portal records, exports the static JSON files and monthly map shards, fetches the City licensed contractor registries, runs the accuracy check, and commits changes back to the repo so Pages rebuilds.
 
 The accuracy check compares the local DuckDB row counts, generated JSON indexes, live Chicago Data Portal permit counts, and live City licensed contractor registry counts.
 

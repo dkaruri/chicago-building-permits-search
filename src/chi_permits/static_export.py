@@ -11,6 +11,86 @@ from .config import DATASET_ID, OPEN_STATUSES, SOCRATA_DOMAIN
 from .db import connect
 from .licensed_contractors import fetch_licensed_contractors, normalize_license_name
 
+COMMUNITY_AREAS: dict[int, str] = {
+    1: "Rogers Park",
+    2: "West Ridge",
+    3: "Uptown",
+    4: "Lincoln Square",
+    5: "North Center",
+    6: "Lake View",
+    7: "Lincoln Park",
+    8: "Near North Side",
+    9: "Edison Park",
+    10: "Norwood Park",
+    11: "Jefferson Park",
+    12: "Forest Glen",
+    13: "North Park",
+    14: "Albany Park",
+    15: "Portage Park",
+    16: "Irving Park",
+    17: "Dunning",
+    18: "Montclare",
+    19: "Belmont Cragin",
+    20: "Hermosa",
+    21: "Avondale",
+    22: "Logan Square",
+    23: "Humboldt Park",
+    24: "West Town",
+    25: "Austin",
+    26: "West Garfield Park",
+    27: "East Garfield Park",
+    28: "Near West Side",
+    29: "North Lawndale",
+    30: "South Lawndale",
+    31: "Lower West Side",
+    32: "Loop",
+    33: "Near South Side",
+    34: "Armour Square",
+    35: "Douglas",
+    36: "Oakland",
+    37: "Fuller Park",
+    38: "Grand Boulevard",
+    39: "Kenwood",
+    40: "Washington Park",
+    41: "Hyde Park",
+    42: "Woodlawn",
+    43: "South Shore",
+    44: "Chatham",
+    45: "Avalon Park",
+    46: "South Chicago",
+    47: "Burnside",
+    48: "Calumet Heights",
+    49: "Roseland",
+    50: "Pullman",
+    51: "South Deering",
+    52: "East Side",
+    53: "West Pullman",
+    54: "Riverdale",
+    55: "Hegewisch",
+    56: "Garfield Ridge",
+    57: "Archer Heights",
+    58: "Brighton Park",
+    59: "McKinley Park",
+    60: "Bridgeport",
+    61: "New City",
+    62: "West Elsdon",
+    63: "Gage Park",
+    64: "Clearing",
+    65: "West Lawn",
+    66: "Chicago Lawn",
+    67: "West Englewood",
+    68: "Englewood",
+    69: "Greater Grand Crossing",
+    70: "Ashburn",
+    71: "Auburn Gresham",
+    72: "Beverly",
+    73: "Washington Heights",
+    74: "Mount Greenwood",
+    75: "Morgan Park",
+    76: "O'Hare",
+    77: "Edgewater",
+}
+
 
 def _jsonable(value: Any) -> Any:
     if isinstance(value, (date, datetime)):
@@ -33,6 +113,110 @@ def _write_json(path: Path, data: Any) -> int:
     text = json.dumps(_jsonable(data), ensure_ascii=False, separators=(",", ":"))
     path.write_text(text, encoding="utf-8")
     return path.stat().st_size
+
+
+def _clip_text(value: Any, limit: int = 180) -> str:
+    text = str(value or "").strip()
+    return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
+
+
+def _write_map_shards(con: duckdb.DuckDBPyConnection, out: Path) -> dict:
+    map_dir = out / "map"
+    map_dir.mkdir(parents=True, exist_ok=True)
+    for old in map_dir.glob("permits_*.json"):
+        old.unlink()
+    company_filter = _company_name_condition("contact_name")
+    gc_open_rows = _rows(con, f"""
+        SELECT contact_name, count(DISTINCT permit_number) AS open_jobs
+        FROM contacts
+        WHERE contact_category = 'general_contractor'
+          AND nullif(trim(coalesce(contact_name, '')), '') IS NOT NULL
+          AND {company_filter}
+          AND permit_number IN (
+            SELECT permit_number
+            FROM permits
+            WHERE permit_status IN {tuple(OPEN_STATUSES)}
+          )
+        GROUP BY contact_name
+    """)
+    gc_open_jobs = {str(row["contact_name"]).strip().upper(): int(row["open_jobs"] or 0) for row in gc_open_rows}
+    rows = _rows(con, f"""
+        WITH contact_names AS (
+            SELECT permit_number,
+                   string_agg(DISTINCT contact_name, ' | ') FILTER (WHERE contact_category = 'general_contractor') AS general_contractors,
+                   string_agg(DISTINCT contact_name, ' | ') FILTER (WHERE contact_category = 'open_tech') AS open_subs
+            FROM contacts
+            WHERE nullif(trim(coalesce(contact_name, '')), '') IS NOT NULL
+            GROUP BY permit_number
+        )
+        SELECT p.permit_number, p.permit_status, p.permit_type, p.review_type,
+               p.issue_date, p.address, p.ward, p.community_area, p.street_name, p.work_type,
+               p.reported_cost, p.latitude, p.longitude,
+               p.work_description,
+               c.general_contractors, c.open_subs
+        FROM permits p
+        LEFT JOIN contact_names c USING (permit_number)
+        WHERE p.latitude IS NOT NULL
+          AND p.longitude IS NOT NULL
+          AND p.issue_date IS NOT NULL
+        ORDER BY p.issue_date DESC NULLS LAST, p.permit_number
+    """)
+    shards: dict[str, list[dict]] = {}
+    for row in rows:
+        issue = row.get("issue_date")
+        if not issue:
+            continue
+        month = str(issue)[:7]
+        community_area = row.get("community_area")
+        gc_names = [name.strip() for name in str(row.get("general_contractors") or "").split("|") if name.strip()]
+        gc_counts = [gc_open_jobs.get(name.upper(), 0) for name in gc_names]
+        max_gc_open_jobs = max(gc_counts) if gc_counts else 0
+        shards.setdefault(month, []).append({
+            "n": row.get("permit_number"),
+            "s": row.get("permit_status"),
+            "t": row.get("permit_type"),
+            "r": row.get("review_type"),
+            "d": str(issue)[:10],
+            "a": row.get("address"),
+            "w": row.get("ward"),
+            "ca": community_area,
+            "cn": COMMUNITY_AREAS.get(int(community_area)) if community_area is not None else "",
+            "st": row.get("street_name"),
+            "wt": row.get("work_type"),
+            "c": int(row["reported_cost"]) if row.get("reported_cost") is not None else None,
+            "lat": round(float(row.get("latitude")), 6),
+            "lon": round(float(row.get("longitude")), 6),
+            "gc": _clip_text(row.get("general_contractors"), 220),
+            "go": max_gc_open_jobs,
+            "os": _clip_text(row.get("open_subs"), 220),
+            "x": _clip_text(row.get("work_description"), 220),
+        })
+    files = []
+    total_rows = 0
+    total_bytes = 0
+    for month, payload in sorted(shards.items()):
+        rel = f"map/permits_{month.replace('-', '_')}.json"
+        size = _write_json(out / rel, payload)
+        files.append({"month": month, "path": f"data/{rel}", "rows": len(payload), "bytes": size})
+        total_rows += len(payload)
+        total_bytes += size
+    index = {
+        "type": "monthly_geojson_shards",
+        "pmtiles_protocol": True,
+        "rows": total_rows,
+        "bytes": total_bytes,
+        "community_areas": [{"id": key, "name": value} for key, value in COMMUNITY_AREAS.items()],
+        "files": files,
+    }
+    index_size = _write_json(out / "permit_map_index.json", index)
+    return {
+        "path": "data/permit_map_index.json",
+        "rows": total_rows,
+        "bytes": total_bytes + index_size,
+        "months": len(files),
+        "type": "monthly_geojson_shards",
+        "pmtiles_protocol": True,
+    }
 
 
 def _company_name_condition(column: str = "contact_name") -> str:
@@ -261,6 +445,7 @@ def export_static(out_dir: Path | str = "docs/data") -> dict:
                 "rows": len(payload),
                 "bytes": size,
             }
+        manifest["files"]["permit_map"] = _write_map_shards(con, out)
         manifest_size = _write_json(out / "manifest.json", manifest)
         manifest["files"]["manifest"] = {"path": "data/manifest.json", "rows": 1, "bytes": manifest_size}
         _write_json(out / "manifest.json", manifest)

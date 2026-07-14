@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chicago Building Permits Search</title>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
   <script>
     (() => {
       try {
@@ -812,6 +815,121 @@
       border-color: var(--primary);
     }
 
+    .map-shell {
+      display: grid;
+      gap: 12px;
+    }
+
+    .map-filter-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr)) minmax(150px, auto);
+      gap: 10px;
+      align-items: end;
+    }
+
+    .map-filter-actions {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .map-filter-actions button {
+      min-width: 86px;
+      padding-inline: 10px;
+    }
+
+    .map-workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+      gap: 12px;
+      min-height: 660px;
+    }
+
+    #permit-map {
+      min-height: 660px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--panel-2);
+    }
+
+    .map-side {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 10px;
+      min-height: 0;
+    }
+
+    .map-summary {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-subtle);
+    }
+
+    .map-result-list {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .map-result {
+      width: 100%;
+      min-height: 0;
+      padding: 10px;
+      border: 0;
+      border-bottom: 1px solid var(--cell-line);
+      border-radius: 0;
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      font-weight: 500;
+    }
+
+    .map-result:hover,
+    .map-result.is-active {
+      background: var(--primary-soft);
+      color: var(--ink);
+    }
+
+    .map-result strong {
+      display: block;
+      color: var(--primary);
+      line-height: 1.25;
+    }
+
+    .map-result span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.3;
+    }
+
+    .maplibregl-popup-content {
+      max-width: min(300px, 84vw);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      box-shadow: 0 12px 28px var(--shadow);
+    }
+
+    .maplibregl-ctrl-attrib,
+    .maplibregl-ctrl button {
+      color: #1f2937;
+    }
+
+    .maplibregl-ctrl button {
+      width: 29px;
+      min-height: 29px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
     .detail {
       max-height: none;
       overflow: auto;
@@ -1076,7 +1194,7 @@
       .status { grid-template-columns: 1fr; }
       .panel { padding: 12px; }
       .tabs {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 6px;
       }
       .tabs button {
@@ -1289,6 +1407,29 @@
         padding-left: 0;
         list-style: none;
       }
+      .map-filter-grid,
+      .map-workspace {
+        grid-template-columns: 1fr;
+      }
+      .map-filter-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+      .map-filter-actions button {
+        width: 100%;
+      }
+      .map-workspace {
+        min-height: 0;
+      }
+      #permit-map {
+        min-height: 62dvh;
+      }
+      .map-side {
+        min-height: 420px;
+      }
+      .map-result-list {
+        max-height: 420px;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1371,6 +1512,7 @@
           <button id="tab-general_contractors" class="active" onclick="setMode('general_contractors')">General Contractors</button>
           <button id="tab-open_subs" onclick="setMode('open_subs')">Open Subs</button>
           <button id="tab-open_permits" onclick="setMode('open_permits')">Open Permits</button>
+          <button id="tab-map" onclick="setMode('map')">Permit Map</button>
         </div>
         <label>Search
           <input id="q" placeholder="Name, permit, address, work type..." oninput="scheduleSearch()">
@@ -1442,7 +1584,17 @@
       draggedPermitNumber: "",
       userRouteLegs: [],
       userRouteSummary: "",
-      routeChunksVisible: false
+      routeChunksVisible: false,
+      map: {
+        index: null,
+        map: null,
+        sourceReady: false,
+        cache: new Map(),
+        filteredRows: [],
+        activePermitNumber: "",
+        settings: null,
+        loadingToken: 0
+      }
     };
 
     const $ = id => document.getElementById(id);
@@ -1458,7 +1610,10 @@
     const userListKey = "chi_permit_user_list";
     const userNotesKey = "chi_permit_user_notes";
     const themeKey = "chi_permit_theme";
+    const mapSettingsKey = "chi_permit_map_settings";
     const userListLimit = 220;
+    const appModes = ["general_contractors", "open_subs", "open_permits", "map"];
+    const openPermitStatuses = new Set(["ACTIVE", "SUSPENDED", "PHASED PERMITTING"]);
 
     addEventListener("scroll", () => {
       const doc = document.documentElement;
@@ -1613,7 +1768,7 @@
       state.selected = null;
       state.resultSort = { key: null, direction: null };
       state.selectedPermitNumbers.clear();
-      ["general_contractors", "open_subs", "open_permits"].forEach(name => $("tab-" + name).classList.remove("active"));
+      appModes.forEach(name => $("tab-" + name).classList.remove("active"));
       $("tab-" + mode).classList.add("active");
       $("sort").value = mode === "open_permits" ? "latest_issue_date" : "open_jobs";
       hideDetail();
@@ -1627,6 +1782,10 @@
       state.resultSort = { key: null, direction: null };
       state.selectedPermitNumbers.clear();
       hideDetail();
+      if (state.mode === "map") {
+        resetMapSettings();
+        return;
+      }
       search();
     }
 
@@ -1731,6 +1890,10 @@
 
     async function search() {
       if (!state.manifest) return;
+      if (state.mode === "map") {
+        await renderMapMode();
+        return;
+      }
       const token = ++state.searchToken;
       setBusy(state.resultSort.key ? "Sorting" : "Loading");
       await nextFrame();
@@ -1759,6 +1922,402 @@
         "contact_name", "sample_contact_type", "city", "state", "zipcode"
         ], terms) || specialtyText(row).includes(terms.join(" "));
       });
+    }
+
+    function currentDateInput() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function defaultMapSettings() {
+      const today = currentDateInput();
+      return {
+        dateFrom: `${today.slice(0, 7)}-01`,
+        dateTo: today,
+        gcMin: "",
+        gcMax: "",
+        neighborhood: ""
+      };
+    }
+
+    function loadMapSettings() {
+      if (state.map.settings) return state.map.settings;
+      let saved = {};
+      try {
+        saved = JSON.parse(localStorage.getItem(mapSettingsKey) || "{}");
+      } catch {
+        saved = {};
+      }
+      state.map.settings = { ...defaultMapSettings(), ...saved };
+      return state.map.settings;
+    }
+
+    function saveMapSettingsFromControls() {
+      const settings = loadMapSettings();
+      settings.dateFrom = $("map-date-from")?.value || settings.dateFrom;
+      settings.dateTo = $("map-date-to")?.value || settings.dateTo;
+      settings.gcMin = $("map-gc-min")?.value || "";
+      settings.gcMax = $("map-gc-max")?.value || "";
+      settings.neighborhood = $("map-neighborhood")?.value || "";
+      try {
+        localStorage.setItem(mapSettingsKey, JSON.stringify(settings));
+      } catch {}
+      return settings;
+    }
+
+    function resetMapSettings() {
+      state.map.settings = defaultMapSettings();
+      try {
+        localStorage.setItem(mapSettingsKey, JSON.stringify(state.map.settings));
+      } catch {}
+      renderMapMode();
+    }
+
+    function monthKey(dateText) {
+      return clean(dateText).slice(0, 7);
+    }
+
+    function monthsBetween(startDate, endDate) {
+      const start = new Date(`${monthKey(startDate)}-01T00:00:00`);
+      const end = new Date(`${monthKey(endDate)}-01T00:00:00`);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
+      const months = [];
+      const cursor = new Date(start);
+      while (cursor <= end) {
+        months.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+      return months;
+    }
+
+    async function loadPermitMapIndex() {
+      if (state.map.index) return state.map.index;
+      const mapEntry = state.manifest.files.permit_map || { path: "data/permit_map_index.json" };
+      state.map.index = await fetch(mapEntry.path).then(r => {
+        if (!r.ok) throw new Error(`Failed to load ${mapEntry.path}`);
+        return r.json();
+      });
+      return state.map.index;
+    }
+
+    async function loadMapMonths(months) {
+      const index = await loadPermitMapIndex();
+      const byMonth = new Map(index.files.map(file => [file.month, file]));
+      const loaded = await Promise.all(months.map(async month => {
+        if (state.map.cache.has(month)) return state.map.cache.get(month);
+        const file = byMonth.get(month);
+        if (!file) {
+          state.map.cache.set(month, []);
+          return [];
+        }
+        const rows = await fetch(file.path).then(r => {
+          if (!r.ok) throw new Error(`Failed to load ${file.path}`);
+          return r.json();
+        });
+        state.map.cache.set(month, rows);
+        return rows;
+      }));
+      return loaded.flat();
+    }
+
+    function mapRowToPermit(row) {
+      return {
+        permit_number: row.n,
+        permit_status: row.s,
+        permit_type: row.t,
+        review_type: row.r,
+        issue_date: row.d,
+        address: row.a,
+        ward: row.w,
+        community_area: row.cn || row.ca,
+        street_name: row.st,
+        work_type: row.wt,
+        reported_cost: row.c,
+        latitude: row.lat,
+        longitude: row.lon,
+        general_contractors: row.gc,
+        open_subs: row.os,
+        work_description: row.x,
+        gc_open_jobs: row.go
+      };
+    }
+
+    function mapPermitDetails(row) {
+      const permit = mapRowToPermit(row);
+      const payload = enc(JSON.stringify(permit));
+      const saved = isInUserList(permit.permit_number);
+      return `
+        <div class="panel-head">
+          <h3>${esc(permit.permit_number)}</h3>
+          <div class="panel-actions">
+            <button class="primary" onclick="addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "Saved in list" : "Add to list"}</button>
+          </div>
+        </div>
+        <div class="tag-row">
+          <span class="tag">${esc(permit.permit_status)}</span>
+          <span class="tag">${esc(permit.permit_type)}</span>
+          <span class="tag">${fmt(permit.gc_open_jobs || 0)} GC open jobs</span>
+          ${permit.ward ? `<span class="tag clickable" onclick="searchWard('${enc(permit.ward)}')">Ward ${esc(permit.ward)}</span>` : ""}
+        </div>
+        ${permitFacts(permit, [
+          ["Issued", permit.issue_date],
+          ["Address", permit.address],
+          ["Neighborhood", row.cn],
+          ["Work type", permit.work_type],
+          ["Review type", permit.review_type],
+          ["Reported cost", money(permit.reported_cost)]
+        ])}
+        ${permit.work_description ? `<p class="permit-description small">${esc(permit.work_description)}</p>` : ""}
+        <div class="detail-section"><h4>General contractors</h4>${nameTags(permit.general_contractors, "general_contractors")}</div>
+        <div class="detail-section"><h4>Open subs</h4>${nameTags(permit.open_subs, "open_subs")}</div>`;
+    }
+
+    function renderMapShell(settings, index) {
+      const neighborhoods = (index.community_areas || [])
+        .map(item => `<option value="${esc(item.name)}">${esc(item.id)}</option>`)
+        .join("");
+      $("results-title").textContent = "Permit Map";
+      $("result-count").textContent = "Current month open permits by default";
+      $("pager").innerHTML = "";
+      $("results").innerHTML = `
+        <div class="map-shell">
+          <div class="map-filter-grid">
+            <label>From
+              <input id="map-date-from" type="date" value="${esc(settings.dateFrom)}">
+            </label>
+            <label>To
+              <input id="map-date-to" type="date" value="${esc(settings.dateTo)}">
+            </label>
+            <label>GC jobs min
+              <input id="map-gc-min" type="number" min="0" inputmode="numeric" value="${esc(settings.gcMin)}" placeholder="0">
+            </label>
+            <label>GC jobs max
+              <input id="map-gc-max" type="number" min="0" inputmode="numeric" value="${esc(settings.gcMax)}" placeholder="Any">
+            </label>
+            <label>Neighborhood
+              <input id="map-neighborhood" list="map-neighborhoods" value="${esc(settings.neighborhood)}" placeholder="Search area name or id">
+              <datalist id="map-neighborhoods">${neighborhoods}</datalist>
+            </label>
+            <div class="map-filter-actions">
+              <button class="primary" onclick="applyMapFilters()">Apply</button>
+              <button onclick="resetMapSettings()">Reset</button>
+            </div>
+          </div>
+          <div class="map-workspace">
+            <div id="permit-map" role="region" aria-label="Chicago permit map"></div>
+            <aside class="map-side" aria-label="Map results">
+              <div id="map-summary" class="map-summary small">Loading map...</div>
+              <div id="map-result-list" class="map-result-list"></div>
+            </aside>
+          </div>
+        </div>`;
+    }
+
+    async function renderMapMode() {
+      const token = ++state.map.loadingToken;
+      setBusy("Loading map");
+      try {
+        const settings = loadMapSettings();
+        const index = await loadPermitMapIndex();
+        renderMapShell(settings, index);
+        await nextFrame();
+        initializeMap();
+        await applyMapFilters(false, token);
+      } catch (error) {
+        $("results-title").textContent = "Permit Map";
+        $("result-count").textContent = "";
+        $("pager").innerHTML = "";
+        $("results").innerHTML = `<div class="empty">${esc(error.message || "Map could not load.")}</div>`;
+      } finally {
+        clearBusy();
+      }
+    }
+
+    function initializeMap() {
+      if (!window.maplibregl) {
+        $("map-summary").textContent = "MapLibre GL JS did not load. Check your connection and reload the page.";
+        return;
+      }
+      if (window.pmtiles && !state.map.pmtilesProtocolAdded) {
+        const protocol = new window.pmtiles.Protocol();
+        maplibregl.addProtocol("pmtiles", protocol.tile);
+        state.map.pmtilesProtocolAdded = true;
+      }
+      if (state.map.map) {
+        state.map.map.remove();
+        state.map.map = null;
+        state.map.sourceReady = false;
+      }
+      state.map.map = new maplibregl.Map({
+        container: "permit-map",
+        center: [-87.6298, 41.8781],
+        zoom: 10,
+        style: {
+          version: 8,
+          sources: {
+            osm: {
+              type: "raster",
+              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+              tileSize: 256,
+              attribution: "&copy; OpenStreetMap contributors"
+            }
+          },
+          layers: [{ id: "osm", type: "raster", source: "osm" }]
+        }
+      });
+      state.map.map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+      state.map.map.on("load", () => {
+        state.map.map.addSource("permits", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+          cluster: true,
+          clusterMaxZoom: 14,
+          clusterRadius: 48
+        });
+        state.map.map.addLayer({
+          id: "permit-clusters",
+          type: "circle",
+          source: "permits",
+          filter: ["has", "point_count"],
+          paint: {
+            "circle-color": ["step", ["get", "point_count"], "#3f8fbd", 25, "#1f4fa3", 100, "#167a4a"],
+            "circle-radius": ["step", ["get", "point_count"], 18, 25, 24, 100, 32],
+            "circle-opacity": 0.88,
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": 2
+          }
+        });
+        state.map.map.addLayer({
+          id: "cluster-count",
+          type: "symbol",
+          source: "permits",
+          filter: ["has", "point_count"],
+          layout: {
+            "text-field": ["get", "point_count_abbreviated"],
+            "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+            "text-size": 12
+          },
+          paint: { "text-color": "#ffffff" }
+        });
+        state.map.map.addLayer({
+          id: "permit-points",
+          type: "circle",
+          source: "permits",
+          filter: ["!", ["has", "point_count"]],
+          paint: {
+            "circle-color": ["step", ["to-number", ["get", "go"]], "#22a6b3", 5, "#1f4fa3", 20, "#167a4a", 60, "#a15c06"],
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 4, 14, 7, 17, 10],
+            "circle-opacity": 0.86,
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": 1.5
+          }
+        });
+        state.map.map.on("click", "permit-clusters", event => {
+          const feature = state.map.map.queryRenderedFeatures(event.point, { layers: ["permit-clusters"] })[0];
+          const clusterId = feature.properties.cluster_id;
+          state.map.map.getSource("permits").getClusterExpansionZoom(clusterId, (error, zoom) => {
+            if (error) return;
+            state.map.map.easeTo({ center: feature.geometry.coordinates, zoom });
+          });
+        });
+        state.map.map.on("click", "permit-points", event => {
+          const row = event.features[0].properties;
+          selectMapPermit(row, true);
+        });
+        ["permit-clusters", "permit-points"].forEach(layer => {
+          state.map.map.on("mouseenter", layer, () => { state.map.map.getCanvas().style.cursor = "pointer"; });
+          state.map.map.on("mouseleave", layer, () => { state.map.map.getCanvas().style.cursor = ""; });
+        });
+        state.map.sourceReady = true;
+        updateMapSource();
+      });
+    }
+
+    async function applyMapFilters(readControls = true, token = ++state.map.loadingToken) {
+      const settings = readControls ? saveMapSettingsFromControls() : loadMapSettings();
+      if (!settings.dateFrom || !settings.dateTo || settings.dateFrom > settings.dateTo) {
+        $("map-summary").textContent = "Choose a valid date range.";
+        return;
+      }
+      setBusy("Loading map");
+      await nextFrame();
+      const months = monthsBetween(settings.dateFrom, settings.dateTo);
+      const rows = await loadMapMonths(months);
+      if (token !== state.map.loadingToken) return;
+      const minJobs = settings.gcMin === "" ? null : Number(settings.gcMin);
+      const maxJobs = settings.gcMax === "" ? null : Number(settings.gcMax);
+      const neighborhood = norm(settings.neighborhood);
+      state.map.filteredRows = rows.filter(row => {
+        if (!openPermitStatuses.has(clean(row.s).toUpperCase())) return false;
+        if (row.d < settings.dateFrom || row.d > settings.dateTo) return false;
+        const jobs = Number(row.go || 0);
+        if (minJobs != null && jobs < minJobs) return false;
+        if (maxJobs != null && jobs > maxJobs) return false;
+        if (neighborhood && !norm(`${row.cn} ${row.ca} ${row.st}`).includes(neighborhood)) return false;
+        return Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lon));
+      }).sort((a, b) => Number(b.go || 0) - Number(a.go || 0) || clean(b.d).localeCompare(clean(a.d)));
+      state.pageIndex = 0;
+      updateMapSource();
+      renderMapSideList();
+      clearBusy();
+    }
+
+    function mapFeatureCollection() {
+      return {
+        type: "FeatureCollection",
+        features: state.map.filteredRows.map(row => ({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [Number(row.lon), Number(row.lat)] },
+          properties: row
+        }))
+      };
+    }
+
+    function updateMapSource() {
+      if (!state.map.map || !state.map.sourceReady) return;
+      const source = state.map.map.getSource("permits");
+      if (!source) return;
+      const data = mapFeatureCollection();
+      source.setData(data);
+      if (state.map.filteredRows.length) {
+        const bounds = new maplibregl.LngLatBounds();
+        state.map.filteredRows.slice(0, 5000).forEach(row => bounds.extend([Number(row.lon), Number(row.lat)]));
+        state.map.map.fitBounds(bounds, { padding: 48, maxZoom: 13, duration: 0 });
+      }
+    }
+
+    function renderMapSideList() {
+      const rows = state.map.filteredRows.slice(0, 100);
+      const settings = loadMapSettings();
+      $("result-count").textContent = `${fmt(state.map.filteredRows.length)} mapped permits`;
+      $("map-summary").innerHTML = `
+        <strong>${fmt(state.map.filteredRows.length)} open permits</strong><br>
+        ${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` &middot; ${esc(settings.neighborhood)}` : ""}<br>
+        <span>Side list shows the top ${fmt(rows.length)} permits by general-contractor open-job count.</span>`;
+      $("map-result-list").innerHTML = rows.length ? rows.map(row => `
+        <button class="map-result ${state.map.activePermitNumber === row.n ? "is-active" : ""}" onclick="selectMapPermitByNumber('${enc(row.n)}')">
+          <strong>${esc(row.n)} &middot; ${esc(row.a)}</strong>
+          <span>${esc(row.d)} &middot; ${esc(row.cn || "Unknown neighborhood")} &middot; ${fmt(row.go || 0)} GC open jobs</span>
+          <span>${esc(row.wt || row.t || "")}</span>
+        </button>`).join("") : `<div class="empty">No permits match these map filters.</div>`;
+    }
+
+    function selectMapPermitByNumber(encodedNumber) {
+      const number = decodeURIComponent(encodedNumber);
+      const row = state.map.filteredRows.find(item => clean(item.n) === number);
+      if (row) selectMapPermit(row, false);
+    }
+
+    function selectMapPermit(row, pan = false) {
+      state.map.activePermitNumber = clean(row.n);
+      renderMapSideList();
+      $("map-summary").innerHTML = mapPermitDetails(row);
+      if (state.map.map && pan) {
+        state.map.map.easeTo({ center: [Number(row.lon), Number(row.lat)], zoom: Math.max(state.map.map.getZoom(), 14) });
+      }
     }
 
     function readCookie(name) {
@@ -2456,7 +3015,9 @@
     }
 
     function renderCurrentMode() {
-      if (state.mode === "open_permits") {
+      if (state.mode === "map") {
+        renderMapMode();
+      } else if (state.mode === "open_permits") {
         renderPermits();
       } else {
         renderContacts();
@@ -2485,7 +3046,9 @@
       if (next === state.pageIndex) return;
       state.pageIndex = next;
       hideDetail();
-      if (state.mode === "open_permits") {
+      if (state.mode === "map") {
+        renderMapSideList();
+      } else if (state.mode === "open_permits") {
         renderPermits();
       } else {
         renderContacts();
@@ -2935,7 +3498,7 @@
       state.mode = mode;
       state.selected = null;
       state.resultSort = { key: null, direction: null };
-      ["general_contractors", "open_subs", "open_permits"].forEach(tabName => $("tab-" + tabName).classList.remove("active"));
+      appModes.forEach(tabName => $("tab-" + tabName).classList.remove("active"));
       $("tab-" + mode).classList.add("active");
       $("sort").value = "open_jobs";
       $("q").value = name;
@@ -2959,7 +3522,7 @@
       state.mode = "open_permits";
       state.selected = null;
       state.resultSort = { key: null, direction: null };
-      ["general_contractors", "open_subs", "open_permits"].forEach(tabName => $("tab-" + tabName).classList.remove("active"));
+      appModes.forEach(tabName => $("tab-" + tabName).classList.remove("active"));
       $("tab-open_permits").classList.add("active");
       $("sort").value = "latest_issue_date";
       $("q").value = "";
