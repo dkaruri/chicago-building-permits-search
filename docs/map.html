@@ -1853,6 +1853,164 @@
       }
     }
 
+    :root {
+      --rail-width: 176px;
+    }
+
+    body {
+      font-size: 14.5px;
+    }
+
+    header {
+      padding: 12px max(16px, calc(50vw - 680px)) 10px;
+    }
+
+    h1 {
+      margin: 4px 0;
+      font-size: clamp(1.18rem, 1.65vw, 1.85rem);
+      font-weight: 680;
+    }
+
+    header p {
+      max-width: 700px;
+      font-size: 0.82rem;
+    }
+
+    .kicker {
+      font-size: 0.64rem;
+      font-weight: 650;
+    }
+
+    .theme-toggle,
+    button,
+    input,
+    select,
+    textarea,
+    .app-nav a {
+      min-height: 36px;
+      font-size: 0.82rem;
+    }
+
+    .metric {
+      min-height: 54px;
+    }
+
+    .metric strong {
+      font-size: clamp(0.92rem, 1.2vw, 1.16rem);
+    }
+
+    .panel {
+      padding: 10px;
+    }
+
+    label {
+      font-size: 0.62rem;
+    }
+
+    table {
+      font-size: 0.81rem;
+    }
+
+    th {
+      font-size: 0.6rem;
+    }
+
+    .small,
+    .tag,
+    .route-leg {
+      font-size: 0.7rem;
+    }
+
+    @media (min-width: 900px) {
+      body {
+        padding-left: var(--rail-width);
+      }
+
+      .app-nav {
+        position: fixed;
+        top: 12px;
+        bottom: 12px;
+        left: 12px;
+        z-index: 35;
+        display: flex;
+        width: calc(var(--rail-width) - 24px);
+        margin: 0;
+        padding: 10px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--panel) 96%, transparent);
+        box-shadow: 0 10px 30px var(--shadow);
+        backdrop-filter: blur(14px);
+      }
+
+      .nav-brand {
+        display: block;
+        padding: 6px 7px 10px;
+        color: var(--ink);
+        font-size: 0.78rem;
+        font-weight: 760;
+        line-height: 1.15;
+      }
+
+      .app-nav a {
+        justify-content: flex-start;
+        padding: 7px 9px;
+        border-radius: 8px;
+        font-weight: 620;
+      }
+
+      header,
+      main {
+        width: min(100% - 28px, 1420px);
+        margin-inline: auto;
+      }
+
+      header {
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+
+      main {
+        padding-top: 8px;
+      }
+    }
+
+    @media (max-width: 899px) {
+      .app-nav {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 2px;
+      }
+
+      .nav-brand {
+        display: none;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        font-size: 15px;
+      }
+
+      h1 {
+        font-size: clamp(1.16rem, 6vw, 1.7rem);
+      }
+
+      .theme-toggle,
+      button,
+      input,
+      select,
+      textarea,
+      .app-nav a {
+        min-height: 44px;
+        font-size: 0.9rem;
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *,
       *::before,
@@ -1869,11 +2027,11 @@
     }
 
     body.map-page header {
-      padding-block: 14px 12px;
+      padding-block: 10px 8px;
     }
 
     body.map-page h1 {
-      font-size: clamp(1.45rem, 2.2vw, 2.35rem);
+      font-size: clamp(1.16rem, 1.7vw, 1.8rem);
       line-height: 1.1;
     }
 
@@ -1911,7 +2069,7 @@
     }
 
     body.map-page .map-app {
-      min-height: calc(100dvh - 184px);
+      min-height: calc(100dvh - 138px);
     }
 
     @media (max-width: 640px) {
@@ -1921,7 +2079,7 @@
       }
 
       body.map-page .map-app {
-        min-height: calc(100dvh - 206px);
+        min-height: calc(100dvh - 188px);
         margin-inline: 0;
       }
     }
@@ -1938,6 +2096,7 @@
     <h1>Chicago Permit Map</h1>
     <p>Map-first view of current open permits with date, neighborhood, and general-contractor workload filters. The search directory remains available for deeper contractor, sub, and permit profiles.</p>
     <nav class="app-nav" aria-label="Primary pages">
+      <span class="nav-brand">Chicago Permits</span>
       <a href="index.html">Search Directory</a>
       <a class="active" href="map.html" aria-current="page">Permit Map</a>
     </nav>
@@ -2082,7 +2241,7 @@
         activePermitNumber: "",
         drawer: "",
         showResults: true,
-        layers: { permits: true, clusters: true, heat: true },
+        layers: { permits: true, clusters: false, heat: false },
         settings: null,
         loadingToken: 0
       }
@@ -2715,6 +2874,10 @@
       });
       state.map.map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
       state.map.map.on("load", () => {
+        state.map.map.addSource("permit-pins", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] }
+        });
         state.map.map.addSource("permits", {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
@@ -2725,7 +2888,7 @@
         state.map.map.addLayer({
           id: "permit-heat",
           type: "heatmap",
-          source: "permits",
+          source: "permit-pins",
           maxzoom: 13,
           paint: {
             "heatmap-weight": ["interpolate", ["linear"], ["to-number", ["get", "go"]], 0, 0.35, 20, 0.8, 80, 1],
@@ -2763,8 +2926,7 @@
         state.map.map.addLayer({
           id: "permit-points",
           type: "circle",
-          source: "permits",
-          filter: ["!", ["has", "point_count"]],
+          source: "permit-pins",
           paint: {
             "circle-color": ["step", ["to-number", ["get", "go"]], "#22a6b3", 5, "#1f4fa3", 20, "#167a4a", 60, "#a15c06"],
             "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 4, 14, 7, 17, 10],
@@ -2843,9 +3005,11 @@
     function updateMapSource() {
       if (!state.map.map || !state.map.sourceReady) return;
       const source = state.map.map.getSource("permits");
-      if (!source) return;
+      const pinSource = state.map.map.getSource("permit-pins");
+      if (!source || !pinSource) return;
       const data = mapFeatureCollection();
       source.setData(data);
+      pinSource.setData(data);
       if (state.map.filteredRows.length) {
         const bounds = new maplibregl.LngLatBounds();
         state.map.filteredRows.slice(0, 5000).forEach(row => bounds.extend([Number(row.lon), Number(row.lat)]));
