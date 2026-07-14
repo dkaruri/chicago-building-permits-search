@@ -2965,12 +2965,15 @@
           id: "permit-points",
           type: "circle",
           source: "permit-pins",
+          layout: {
+            "circle-sort-key": ["to-number", ["get", "active"]]
+          },
           paint: {
-            "circle-color": ["case", ["==", ["to-number", ["get", "m"]], 1], "#f59e0b", ["step", ["to-number", ["get", "go"]], "#22a6b3", 5, "#1f4fa3", 20, "#167a4a", 60, "#a15c06"]],
-            "circle-radius": ["case", ["==", ["to-number", ["get", "m"]], 1], 9, 5],
-            "circle-opacity": ["case", ["==", ["to-number", ["get", "m"]], 1], 0.98, 0.72],
-            "circle-stroke-color": "#ffffff",
-            "circle-stroke-width": ["case", ["==", ["to-number", ["get", "m"]], 1], 3, 1.25]
+            "circle-color": ["case", ["==", ["to-number", ["get", "active"]], 1], "#111827", ["==", ["to-number", ["get", "m"]], 1], "#f59e0b", ["step", ["to-number", ["get", "go"]], "#22a6b3", 5, "#1f4fa3", 20, "#167a4a", 60, "#a15c06"]],
+            "circle-radius": ["case", ["==", ["to-number", ["get", "active"]], 1], 12, ["==", ["to-number", ["get", "m"]], 1], 9, 5],
+            "circle-opacity": ["case", ["==", ["to-number", ["get", "active"]], 1], 1, ["==", ["to-number", ["get", "m"]], 1], 0.98, 0.72],
+            "circle-stroke-color": ["case", ["==", ["to-number", ["get", "active"]], 1], "#f59e0b", "#ffffff"],
+            "circle-stroke-width": ["case", ["==", ["to-number", ["get", "active"]], 1], 4, ["==", ["to-number", ["get", "m"]], 1], 3, 1.25]
           }
         });
         state.map.map.addLayer({
@@ -3051,7 +3054,7 @@
         features: state.map.filteredRows.map(row => ({
           type: "Feature",
           geometry: { type: "Point", coordinates: [Number(row.lon), Number(row.lat)] },
-          properties: row
+          properties: { ...row, active: clean(row.n) === state.map.activePermitNumber ? 1 : 0 }
         }))
       };
     }
@@ -3080,14 +3083,9 @@
     }
 
     function mapSearchLocationFeatureCollection() {
-      const loc = state.map.searchLocation;
       return {
         type: "FeatureCollection",
-        features: loc ? [{
-          type: "Feature",
-          geometry: { type: "Point", coordinates: [loc.lon, loc.lat] },
-          properties: { label: loc.label }
-        }] : []
+        features: []
       };
     }
 
@@ -3154,16 +3152,23 @@
     function selectMapPermitByNumber(encodedNumber) {
       const number = decodeURIComponent(encodedNumber);
       const row = state.map.filteredRows.find(item => clean(item.n) === number);
-      if (row) selectMapPermit(row, false);
+      if (row) selectMapPermit(row, true);
     }
 
     function selectMapPermit(row, pan = false) {
       state.map.activePermitNumber = clean(row.n);
+      updateMapPinSelection();
       renderMapSideList();
       renderMapDetail(row);
       if (state.map.map && pan) {
         state.map.map.easeTo({ center: [Number(row.lon), Number(row.lat)], zoom: Math.max(state.map.map.getZoom(), 14) });
       }
+    }
+
+    function updateMapPinSelection() {
+      if (!state.map.map || !state.map.sourceReady) return;
+      const pinSource = state.map.map.getSource("permit-pins");
+      if (pinSource) pinSource.setData(mapFeatureCollection());
     }
 
     function renderMapDetail(row) {
@@ -3181,11 +3186,11 @@
           <button class="icon-button" onclick="clearMapSelection()" aria-label="Close permit detail">&times;</button>
         </div>
         ${mapPermitDetails(row)}`;
-      setTimeout(() => sheet.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
     }
 
     function clearMapSelection() {
       state.map.activePermitNumber = "";
+      updateMapPinSelection();
       renderMapDetail(null);
       renderMapSideList();
     }
