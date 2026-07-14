@@ -2316,6 +2316,7 @@
         hoverPopup: null,
         hoverCloseTimer: null,
         hoverPinnedPermitNumber: "",
+        preserveResultScrollOnce: false,
         loadingToken: 0
       }
     };
@@ -3269,9 +3270,11 @@
     }
 
     function updateVisibleMapRows() {
+      const preserveScroll = state.map.preserveResultScrollOnce;
+      state.map.preserveResultScrollOnce = false;
       if (!state.map.map || !state.map.sourceReady) {
         state.map.visibleRows = state.map.filteredRows.slice(0, 100);
-        renderMapSideList();
+        renderMapSideList(preserveScroll);
         return;
       }
       const bounds = state.map.map.getBounds();
@@ -3279,10 +3282,12 @@
         .filter(row => rowInMapBounds(row, bounds))
         .sort((a, b) => Number(b.m || 0) - Number(a.m || 0) || Number(b.go || 0) - Number(a.go || 0) || clean(b.d).localeCompare(clean(a.d)))
         .slice(0, 150);
-      renderMapSideList();
+      renderMapSideList(preserveScroll);
     }
 
-    function renderMapSideList() {
+    function renderMapSideList(preserveScroll = false) {
+      const list = $("map-result-list");
+      const scrollTop = preserveScroll && list ? list.scrollTop : null;
       const settings = loadMapSettings();
       const hasSearch = Boolean(clean(settings.q));
       const searchRows = hasSearch ? state.map.filteredRows.filter(row => Number(row.m || 0) === 1).slice(0, 150) : [];
@@ -3302,10 +3307,20 @@
         const searchMarkup = searchRows.map(mapResultButton).join("");
         const divider = `<div class="map-result-divider">End of searched permits. Other visible permits below.</div>`;
         const otherMarkup = otherRows.length ? otherRows.map(mapResultButton).join("") : `<div class="empty">No additional visible permits in the current map view.</div>`;
-        $("map-result-list").innerHTML = searchHeader + searchMarkup + divider + otherMarkup;
+        setMapResultListHtml(searchHeader + searchMarkup + divider + otherMarkup, scrollTop);
         return;
       }
-      $("map-result-list").innerHTML = rows.length ? rows.map(mapResultButton).join("") : `<div class="empty">No permits match these map filters.</div>`;
+      setMapResultListHtml(rows.length ? rows.map(mapResultButton).join("") : `<div class="empty">No permits match these map filters.</div>`, scrollTop);
+    }
+
+    function setMapResultListHtml(html, scrollTop = 0) {
+      const list = $("map-result-list");
+      if (!list) return;
+      list.innerHTML = html;
+      if (scrollTop != null) {
+        list.scrollTop = scrollTop;
+        requestAnimationFrame(() => { list.scrollTop = scrollTop; });
+      }
     }
 
     function mapResultButton(row) {
@@ -3326,10 +3341,11 @@
     function selectMapPermit(row, pan = false) {
       state.map.activePermitNumber = clean(row.n);
       updateMapPinSelection();
-      renderMapSideList();
+      renderMapSideList(true);
       renderMapDetail(row);
       pinSelectedMapPermitHover(row);
       if (state.map.map && pan) {
+        state.map.preserveResultScrollOnce = true;
         state.map.map.easeTo({ center: [Number(row.lon), Number(row.lat)], zoom: Math.max(state.map.map.getZoom(), 14) });
       }
     }
@@ -3364,7 +3380,7 @@
       if (state.map.hoverPopup) state.map.hoverPopup.remove();
       updateMapPinSelection();
       renderMapDetail(null);
-      renderMapSideList();
+      renderMapSideList(true);
     }
 
     function toggleMapDrawer(name) {
