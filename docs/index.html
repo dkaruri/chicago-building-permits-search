@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chicago Building Permits Search</title>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=moon_stars,sunny" rel="stylesheet">
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
@@ -2011,6 +2012,54 @@
       }
     }
 
+    .theme-toggle {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 70;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px !important;
+      height: 40px;
+      min-height: 40px !important;
+      padding: 0 !important;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      box-shadow: 0 10px 24px var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .material-symbols-outlined {
+      font-family: "Material Symbols Outlined";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 22px;
+      line-height: 1;
+      letter-spacing: 0;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-feature-settings: "liga";
+      -webkit-font-smoothing: antialiased;
+      font-variation-settings:
+        "FILL" 0,
+        "wght" 400,
+        "GRAD" 0,
+        "opsz" 24;
+    }
+
+    @media (max-width: 640px) {
+      .theme-toggle {
+        top: 10px;
+        right: 10px;
+        width: 44px !important;
+        height: 44px;
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *,
       *::before,
@@ -2033,7 +2082,7 @@
   <header>
     <div class="header-top">
       <div class="kicker">Chicago Data Portal static search</div>
-      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" onclick="toggleTheme()">Dark mode</button>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" onclick="toggleTheme()"><span class="material-symbols-outlined" aria-hidden="true">moon_stars</span></button>
     </div>
     <h1>Open Permits + Contractor Profiles</h1>
     <p>Static GitHub Pages tool generated from Chicago Building Permits data. Profiles include public contact fields, open job counts, average processing days, and work specializations.</p>
@@ -2234,7 +2283,7 @@
       const button = $("theme-toggle");
       if (!button) return;
       const isDark = currentTheme() === "dark";
-      button.textContent = isDark ? "Light mode" : "Dark mode";
+      button.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">${isDark ? "sunny" : "moon_stars"}</span>`;
       button.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
       button.setAttribute("aria-pressed", String(isDark));
     }
