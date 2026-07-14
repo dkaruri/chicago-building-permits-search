@@ -817,67 +817,176 @@
 
     .map-shell {
       display: grid;
-      gap: 12px;
-    }
-
-    .map-filter-grid {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(120px, 1fr)) minmax(150px, auto);
       gap: 10px;
-      align-items: end;
     }
 
-    .map-filter-actions {
-      display: flex;
-      gap: 8px;
-      align-items: flex-end;
-    }
-
-    .map-filter-actions button {
-      min-width: 86px;
-      padding-inline: 10px;
-    }
-
-    .map-workspace {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
-      gap: 12px;
-      min-height: 660px;
-    }
-
-    #permit-map {
-      min-height: 660px;
+    .map-app {
+      position: relative;
+      min-height: 76dvh;
       border: 1px solid var(--line);
       border-radius: 8px;
       overflow: hidden;
       background: var(--panel-2);
     }
 
-    .map-side {
-      display: grid;
-      grid-template-rows: auto minmax(0, 1fr);
-      gap: 10px;
-      min-height: 0;
+    #permit-map {
+      position: absolute;
+      inset: 0;
+      background: var(--panel-2);
     }
 
-    .map-summary {
+    .map-toolbar,
+    .map-drawer,
+    .map-result-rail,
+    .map-detail-sheet,
+    .map-status-strip {
+      position: absolute;
+      z-index: 3;
+      color: var(--ink);
+      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      border: 1px solid var(--line);
+      box-shadow: 0 16px 34px var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .map-toolbar {
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto auto auto;
+      gap: 8px;
+      align-items: center;
       padding: 10px;
+      border-radius: 8px;
+    }
+
+    .map-search {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .map-search input {
+      min-height: 44px;
+    }
+
+    .map-toolbar button,
+    .map-search button,
+    .map-drawer button,
+    .map-detail-actions button {
+      width: auto;
+      min-width: 44px;
+      padding-inline: 11px;
+      white-space: nowrap;
+    }
+
+    .map-count-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--primary);
+      background: var(--primary-soft);
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .map-drawer {
+      top: 76px;
+      left: 12px;
+      width: min(380px, calc(100% - 24px));
+      max-height: calc(100% - 112px);
+      padding: 12px;
+      border-radius: 8px;
+      overflow: auto;
+    }
+
+    .map-drawer.hidden {
+      display: none;
+    }
+
+    .map-drawer-head,
+    .map-result-head,
+    .map-detail-head {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .map-drawer-head h3,
+    .map-result-head h3,
+    .map-detail-head h3 {
+      margin: 0;
+      color: var(--primary);
+      font-size: 1rem;
+    }
+
+    .map-filter-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .map-filter-grid label:nth-child(5) {
+      grid-column: 1 / -1;
+    }
+
+    .map-filter-actions,
+    .map-layer-list,
+    .map-detail-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .map-layer-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+    }
+
+    .map-layer-list .check-row {
+      padding: 8px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--surface-subtle);
     }
 
+    .map-result-rail {
+      top: 76px;
+      right: 12px;
+      width: min(380px, calc(100% - 24px));
+      max-height: calc(100% - 112px);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .map-result-head {
+      margin: 0;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-subtle);
+    }
+
     .map-result-list {
       overflow: auto;
-      border: 1px solid var(--line);
-      border-radius: 8px;
       background: var(--panel);
     }
 
     .map-result {
       width: 100%;
       min-height: 0;
-      padding: 10px;
+      padding: 11px 12px;
       border: 0;
       border-bottom: 1px solid var(--cell-line);
       border-radius: 0;
@@ -901,10 +1010,36 @@
 
     .map-result span {
       display: block;
-      margin-top: 2px;
+      margin-top: 3px;
       color: var(--muted);
       font-size: 0.82rem;
-      line-height: 1.3;
+      line-height: 1.35;
+    }
+
+    .map-status-strip {
+      left: 12px;
+      bottom: 12px;
+      max-width: min(520px, calc(100% - 24px));
+      padding: 9px 11px;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      font-weight: 700;
+    }
+
+    .map-detail-sheet {
+      left: 50%;
+      bottom: 12px;
+      width: min(620px, calc(100% - 24px));
+      max-height: min(52dvh, 520px);
+      padding: 14px;
+      border-radius: 8px;
+      overflow: auto;
+      transform: translateX(-50%);
+    }
+
+    .map-detail-sheet.hidden {
+      display: none;
     }
 
     .maplibregl-popup-content {
@@ -1407,28 +1542,63 @@
         padding-left: 0;
         list-style: none;
       }
-      .map-filter-grid,
-      .map-workspace {
+      .map-app {
+        min-height: 78dvh;
+        margin-inline: -12px;
+        border-inline: 0;
+        border-radius: 0;
+      }
+      .map-toolbar {
+        grid-template-columns: 1fr;
+        top: 8px;
+        left: 8px;
+        right: 8px;
+        gap: 7px;
+      }
+      .map-search {
         grid-template-columns: 1fr;
       }
-      .map-filter-actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-      }
-      .map-filter-actions button {
+      .map-toolbar button,
+      .map-search button,
+      .map-drawer button,
+      .map-detail-actions button {
         width: 100%;
       }
-      .map-workspace {
-        min-height: 0;
+      .map-count-pill {
+        width: 100%;
+        border-radius: 8px;
       }
-      #permit-map {
-        min-height: 62dvh;
+      .map-drawer {
+        top: 214px;
+        left: 8px;
+        right: 8px;
+        width: auto;
+        max-height: calc(100% - 236px);
       }
-      .map-side {
-        min-height: 420px;
+      .map-filter-grid {
+        grid-template-columns: 1fr;
       }
-      .map-result-list {
-        max-height: 420px;
+      .map-result-rail {
+        top: auto;
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        width: auto;
+        max-height: 38dvh;
+      }
+      .map-result-rail.is-collapsed .map-result-list {
+        display: none;
+      }
+      .map-status-strip {
+        display: none;
+      }
+      .map-detail-sheet {
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        width: auto;
+        max-height: 58dvh;
+        transform: none;
       }
     }
 
@@ -1591,7 +1761,11 @@
         sourceReady: false,
         cache: new Map(),
         filteredRows: [],
+        visibleRows: [],
         activePermitNumber: "",
+        drawer: "",
+        showResults: true,
+        layers: { permits: true, clusters: true, heat: true },
         settings: null,
         loadingToken: 0
       }
@@ -1939,7 +2113,8 @@
         dateTo: today,
         gcMin: "",
         gcMax: "",
-        neighborhood: ""
+        neighborhood: "",
+        q: ""
       };
     }
 
@@ -1962,6 +2137,7 @@
       settings.gcMin = $("map-gc-min")?.value || "";
       settings.gcMax = $("map-gc-max")?.value || "";
       settings.neighborhood = $("map-neighborhood")?.value || "";
+      settings.q = $("map-q")?.value || "";
       try {
         localStorage.setItem(mapSettingsKey, JSON.stringify(settings));
       } catch {}
@@ -2075,43 +2251,81 @@
         <div class="detail-section"><h4>Open subs</h4>${nameTags(permit.open_subs, "open_subs")}</div>`;
     }
 
+    function mapLayerChecked(layer) {
+      return state.map.layers[layer] ? "checked" : "";
+    }
+
     function renderMapShell(settings, index) {
       const neighborhoods = (index.community_areas || [])
         .map(item => `<option value="${esc(item.name)}">${esc(item.id)}</option>`)
         .join("");
       $("results-title").textContent = "Permit Map";
-      $("result-count").textContent = "Current month open permits by default";
+      $("result-count").textContent = "Current-month open permits";
       $("pager").innerHTML = "";
       $("results").innerHTML = `
         <div class="map-shell">
-          <div class="map-filter-grid">
-            <label>From
-              <input id="map-date-from" type="date" value="${esc(settings.dateFrom)}">
-            </label>
-            <label>To
-              <input id="map-date-to" type="date" value="${esc(settings.dateTo)}">
-            </label>
-            <label>GC jobs min
-              <input id="map-gc-min" type="number" min="0" inputmode="numeric" value="${esc(settings.gcMin)}" placeholder="0">
-            </label>
-            <label>GC jobs max
-              <input id="map-gc-max" type="number" min="0" inputmode="numeric" value="${esc(settings.gcMax)}" placeholder="Any">
-            </label>
-            <label>Neighborhood
-              <input id="map-neighborhood" list="map-neighborhoods" value="${esc(settings.neighborhood)}" placeholder="Search area name or id">
-              <datalist id="map-neighborhoods">${neighborhoods}</datalist>
-            </label>
-            <div class="map-filter-actions">
-              <button class="primary" onclick="applyMapFilters()">Apply</button>
-              <button onclick="resetMapSettings()">Reset</button>
-            </div>
-          </div>
-          <div class="map-workspace">
+          <div class="map-app">
             <div id="permit-map" role="region" aria-label="Chicago permit map"></div>
-            <aside class="map-side" aria-label="Map results">
-              <div id="map-summary" class="map-summary small">Loading map...</div>
+            <div class="map-toolbar" aria-label="Map controls">
+              <div class="map-search">
+                <input id="map-q" value="${esc(settings.q || "")}" placeholder="Search permits, address, contractor, work type..." onkeydown="if(event.key === 'Enter') applyMapFilters()">
+                <button class="primary" onclick="applyMapFilters()">Search</button>
+              </div>
+              <button id="map-filter-toggle" onclick="toggleMapDrawer('filters')" aria-expanded="false">Filters</button>
+              <button id="map-layer-toggle" onclick="toggleMapDrawer('layers')" aria-expanded="false">Layers</button>
+              <span id="map-count-pill" class="map-count-pill">Loading</span>
+            </div>
+            <section id="map-filter-drawer" class="map-drawer hidden" aria-label="Map filters">
+              <div class="map-drawer-head">
+                <h3>Filters</h3>
+                <button class="icon-button" onclick="toggleMapDrawer('')" aria-label="Close filters">&times;</button>
+              </div>
+              <div class="map-filter-grid">
+                <label>From
+                  <input id="map-date-from" type="date" value="${esc(settings.dateFrom)}">
+                </label>
+                <label>To
+                  <input id="map-date-to" type="date" value="${esc(settings.dateTo)}">
+                </label>
+                <label>GC jobs min
+                  <input id="map-gc-min" type="number" min="0" inputmode="numeric" value="${esc(settings.gcMin)}" placeholder="0">
+                </label>
+                <label>GC jobs max
+                  <input id="map-gc-max" type="number" min="0" inputmode="numeric" value="${esc(settings.gcMax)}" placeholder="Any">
+                </label>
+                <label>Neighborhood / street
+                  <input id="map-neighborhood" list="map-neighborhoods" value="${esc(settings.neighborhood)}" placeholder="Search area, id, or street">
+                  <datalist id="map-neighborhoods">${neighborhoods}</datalist>
+                </label>
+              </div>
+              <div class="map-filter-actions">
+                <button class="primary" onclick="applyMapFilters()">Apply filters</button>
+                <button onclick="resetMapSettings()">Reset current month</button>
+              </div>
+            </section>
+            <section id="map-layer-drawer" class="map-drawer hidden" aria-label="Map layers">
+              <div class="map-drawer-head">
+                <h3>Layers</h3>
+                <button class="icon-button" onclick="toggleMapDrawer('')" aria-label="Close layers">&times;</button>
+              </div>
+              <div class="map-layer-list">
+                <label class="check-row"><input type="checkbox" ${mapLayerChecked("permits")} onchange="setMapLayer('permits', this.checked)"><span>Individual permit points</span></label>
+                <label class="check-row"><input type="checkbox" ${mapLayerChecked("clusters")} onchange="setMapLayer('clusters', this.checked)"><span>Clusters and counts</span></label>
+                <label class="check-row"><input type="checkbox" ${mapLayerChecked("heat")} onchange="setMapLayer('heat', this.checked)"><span>Density heat layer</span></label>
+              </div>
+            </section>
+            <aside id="map-result-rail" class="map-result-rail" aria-label="Visible map results">
+              <div class="map-result-head">
+                <div>
+                  <h3>Visible Permits</h3>
+                  <div id="map-visible-summary" class="small">Move the map to refine the list.</div>
+                </div>
+                <button class="icon-button" onclick="toggleMapResults()" aria-label="Hide or show visible permit list">&minus;</button>
+              </div>
               <div id="map-result-list" class="map-result-list"></div>
             </aside>
+            <div id="map-status-strip" class="map-status-strip">Loading map data...</div>
+            <section id="map-detail-sheet" class="map-detail-sheet hidden" aria-label="Permit map detail"></section>
           </div>
         </div>`;
     }
@@ -2138,7 +2352,7 @@
 
     function initializeMap() {
       if (!window.maplibregl) {
-        $("map-summary").textContent = "MapLibre GL JS did not load. Check your connection and reload the page.";
+        $("map-status-strip").textContent = "MapLibre GL JS did not load. Check your connection and reload the page.";
         return;
       }
       if (window.pmtiles && !state.map.pmtilesProtocolAdded) {
@@ -2176,6 +2390,19 @@
           cluster: true,
           clusterMaxZoom: 14,
           clusterRadius: 48
+        });
+        state.map.map.addLayer({
+          id: "permit-heat",
+          type: "heatmap",
+          source: "permits",
+          maxzoom: 13,
+          paint: {
+            "heatmap-weight": ["interpolate", ["linear"], ["to-number", ["get", "go"]], 0, 0.35, 20, 0.8, 80, 1],
+            "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 13, 1.6],
+            "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(22,122,74,0)", 0.25, "#8bd6bf", 0.55, "#3f8fbd", 0.78, "#1f4fa3", 1, "#a15c06"],
+            "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 8, 12, 13, 28],
+            "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 11, 0.72, 14, 0]
+          }
         });
         state.map.map.addLayer({
           id: "permit-clusters",
@@ -2231,7 +2458,9 @@
           state.map.map.on("mouseenter", layer, () => { state.map.map.getCanvas().style.cursor = "pointer"; });
           state.map.map.on("mouseleave", layer, () => { state.map.map.getCanvas().style.cursor = ""; });
         });
+        state.map.map.on("moveend", updateVisibleMapRows);
         state.map.sourceReady = true;
+        updateMapLayerVisibility();
         updateMapSource();
       });
     }
@@ -2239,7 +2468,7 @@
     async function applyMapFilters(readControls = true, token = ++state.map.loadingToken) {
       const settings = readControls ? saveMapSettingsFromControls() : loadMapSettings();
       if (!settings.dateFrom || !settings.dateTo || settings.dateFrom > settings.dateTo) {
-        $("map-summary").textContent = "Choose a valid date range.";
+        $("map-status-strip").textContent = "Choose a valid date range.";
         return;
       }
       setBusy("Loading map");
@@ -2250,6 +2479,7 @@
       const minJobs = settings.gcMin === "" ? null : Number(settings.gcMin);
       const maxJobs = settings.gcMax === "" ? null : Number(settings.gcMax);
       const neighborhood = norm(settings.neighborhood);
+      const text = norm(settings.q);
       state.map.filteredRows = rows.filter(row => {
         if (!openPermitStatuses.has(clean(row.s).toUpperCase())) return false;
         if (row.d < settings.dateFrom || row.d > settings.dateTo) return false;
@@ -2257,11 +2487,14 @@
         if (minJobs != null && jobs < minJobs) return false;
         if (maxJobs != null && jobs > maxJobs) return false;
         if (neighborhood && !norm(`${row.cn} ${row.ca} ${row.st}`).includes(neighborhood)) return false;
+        if (text && !norm(`${row.n} ${row.a} ${row.gc} ${row.os} ${row.wt} ${row.t} ${row.x} ${row.cn} ${row.st}`).includes(text)) return false;
         return Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lon));
       }).sort((a, b) => Number(b.go || 0) - Number(a.go || 0) || clean(b.d).localeCompare(clean(a.d)));
       state.pageIndex = 0;
+      state.map.activePermitNumber = "";
       updateMapSource();
-      renderMapSideList();
+      renderMapDetail(null);
+      updateVisibleMapRows();
       clearBusy();
     }
 
@@ -2287,16 +2520,35 @@
         state.map.filteredRows.slice(0, 5000).forEach(row => bounds.extend([Number(row.lon), Number(row.lat)]));
         state.map.map.fitBounds(bounds, { padding: 48, maxZoom: 13, duration: 0 });
       }
+      updateMapLayerVisibility();
+    }
+
+    function rowInMapBounds(row, bounds) {
+      return bounds.contains([Number(row.lon), Number(row.lat)]);
+    }
+
+    function updateVisibleMapRows() {
+      if (!state.map.map || !state.map.sourceReady) {
+        state.map.visibleRows = state.map.filteredRows.slice(0, 100);
+        renderMapSideList();
+        return;
+      }
+      const bounds = state.map.map.getBounds();
+      state.map.visibleRows = state.map.filteredRows
+        .filter(row => rowInMapBounds(row, bounds))
+        .sort((a, b) => Number(b.go || 0) - Number(a.go || 0) || clean(b.d).localeCompare(clean(a.d)))
+        .slice(0, 150);
+      renderMapSideList();
     }
 
     function renderMapSideList() {
-      const rows = state.map.filteredRows.slice(0, 100);
+      const rows = state.map.visibleRows.length ? state.map.visibleRows : state.map.filteredRows.slice(0, 100);
       const settings = loadMapSettings();
+      const visibleText = state.map.visibleRows.length ? `${fmt(state.map.visibleRows.length)} visible` : "No visible results";
       $("result-count").textContent = `${fmt(state.map.filteredRows.length)} mapped permits`;
-      $("map-summary").innerHTML = `
-        <strong>${fmt(state.map.filteredRows.length)} open permits</strong><br>
-        ${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` &middot; ${esc(settings.neighborhood)}` : ""}<br>
-        <span>Side list shows the top ${fmt(rows.length)} permits by general-contractor open-job count.</span>`;
+      $("map-count-pill").textContent = `${fmt(state.map.filteredRows.length)} permits`;
+      $("map-visible-summary").textContent = `${visibleText} of ${fmt(state.map.filteredRows.length)} filtered permits`;
+      $("map-status-strip").textContent = `${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` | ${esc(settings.neighborhood)}` : ""}${settings.q ? ` | ${esc(settings.q)}` : ""}`;
       $("map-result-list").innerHTML = rows.length ? rows.map(row => `
         <button class="map-result ${state.map.activePermitNumber === row.n ? "is-active" : ""}" onclick="selectMapPermitByNumber('${enc(row.n)}')">
           <strong>${esc(row.n)} &middot; ${esc(row.a)}</strong>
@@ -2314,10 +2566,68 @@
     function selectMapPermit(row, pan = false) {
       state.map.activePermitNumber = clean(row.n);
       renderMapSideList();
-      $("map-summary").innerHTML = mapPermitDetails(row);
+      renderMapDetail(row);
       if (state.map.map && pan) {
         state.map.map.easeTo({ center: [Number(row.lon), Number(row.lat)], zoom: Math.max(state.map.map.getZoom(), 14) });
       }
+    }
+
+    function renderMapDetail(row) {
+      const sheet = $("map-detail-sheet");
+      if (!sheet) return;
+      if (!row) {
+        sheet.classList.add("hidden");
+        sheet.innerHTML = "";
+        return;
+      }
+      sheet.classList.remove("hidden");
+      sheet.innerHTML = `
+        <div class="map-detail-head">
+          <h3>${esc(row.n)}</h3>
+          <button class="icon-button" onclick="clearMapSelection()" aria-label="Close permit detail">&times;</button>
+        </div>
+        ${mapPermitDetails(row)}`;
+    }
+
+    function clearMapSelection() {
+      state.map.activePermitNumber = "";
+      renderMapDetail(null);
+      renderMapSideList();
+    }
+
+    function toggleMapDrawer(name) {
+      state.map.drawer = state.map.drawer === name ? "" : name;
+      ["filter", "layer"].forEach(kind => {
+        const drawer = $(`map-${kind}-drawer`);
+        const toggle = $(`map-${kind}-toggle`);
+        const active = state.map.drawer === `${kind}s`;
+        if (drawer) drawer.classList.toggle("hidden", !active);
+        if (toggle) toggle.setAttribute("aria-expanded", String(active));
+      });
+    }
+
+    function toggleMapResults() {
+      state.map.showResults = !state.map.showResults;
+      const rail = $("map-result-rail");
+      if (rail) rail.classList.toggle("is-collapsed", !state.map.showResults);
+    }
+
+    function setMapLayer(layer, visible) {
+      state.map.layers[layer] = visible;
+      updateMapLayerVisibility();
+    }
+
+    function setLayerVisibility(layerId, visible) {
+      if (state.map.map && state.map.map.getLayer(layerId)) {
+        state.map.map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
+      }
+    }
+
+    function updateMapLayerVisibility() {
+      setLayerVisibility("permit-heat", state.map.layers.heat);
+      setLayerVisibility("permit-points", state.map.layers.permits);
+      setLayerVisibility("permit-clusters", state.map.layers.clusters);
+      setLayerVisibility("cluster-count", state.map.layers.clusters);
     }
 
     function readCookie(name) {
