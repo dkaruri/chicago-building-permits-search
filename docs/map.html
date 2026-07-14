@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Chicago Building Permits Search</title>
+  <title>Chicago Permit Map</title>
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
@@ -1647,9 +1647,67 @@
         animation-iteration-count: 1 !important;
       }
     }
+
+    body.map-page header {
+      padding-block: 18px 16px;
+    }
+
+    body.map-page h1 {
+      font-size: clamp(1.8rem, 3vw, 3.1rem);
+      line-height: 1.04;
+    }
+
+    body.map-page main {
+      width: min(1680px, calc(100% - 24px));
+      padding: 12px 0 24px;
+    }
+
+    body.map-page .status,
+    body.map-page #user-list-panel,
+    body.map-page .controls {
+      display: none;
+    }
+
+    body.map-page .layout,
+    body.map-page .content.no-detail,
+    body.map-page .content.detail-mode {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    body.map-page #results-panel {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    body.map-page #results-panel > .panel-head,
+    body.map-page #pager {
+      display: none;
+    }
+
+    body.map-page .map-shell {
+      gap: 0;
+    }
+
+    body.map-page .map-app {
+      min-height: calc(100dvh - 212px);
+    }
+
+    @media (max-width: 640px) {
+      body.map-page main {
+        width: 100%;
+        padding-top: 0;
+      }
+
+      body.map-page .map-app {
+        min-height: calc(100dvh - 226px);
+        margin-inline: 0;
+      }
+    }
   </style>
 </head>
-<body>
+<body class="map-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <div id="progress"></div>
   <header>
@@ -1657,11 +1715,11 @@
       <div class="kicker">Chicago Data Portal static search</div>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" onclick="toggleTheme()">Dark mode</button>
     </div>
-    <h1>Open Permits + Contractor Profiles</h1>
-    <p>Static GitHub Pages tool generated from Chicago Building Permits data. Profiles include public contact fields, open job counts, average processing days, and work specializations.</p>
+    <h1>Chicago Permit Map</h1>
+    <p>Map-first view of current open permits with date, neighborhood, and general-contractor workload filters. The search directory remains available for deeper contractor, sub, and permit profiles.</p>
     <nav class="app-nav" aria-label="Primary pages">
-      <a class="active" href="index.html" aria-current="page">Search Directory</a>
-      <a href="map.html">Permit Map</a>
+      <a href="index.html">Search Directory</a>
+      <a class="active" href="map.html" aria-current="page">Permit Map</a>
     </nav>
   </header>
 
@@ -1721,6 +1779,7 @@
           <button id="tab-general_contractors" class="active" onclick="setMode('general_contractors')">General Contractors</button>
           <button id="tab-open_subs" onclick="setMode('open_subs')">Open Subs</button>
           <button id="tab-open_permits" onclick="setMode('open_permits')">Open Permits</button>
+          <button id="tab-map" onclick="setMode('map')">Permit Map</button>
         </div>
         <label>Search
           <input id="q" placeholder="Name, permit, address, work type..." oninput="scheduleSearch()">
@@ -1767,7 +1826,7 @@
 
   <script>
     const state = {
-      mode: "general_contractors",
+      mode: "map",
       manifest: null,
       data: {},
       timer: null,
@@ -1824,7 +1883,7 @@
     const themeKey = "chi_permit_theme";
     const mapSettingsKey = "chi_permit_map_settings";
     const userListLimit = 220;
-    const appModes = ["general_contractors", "open_subs", "open_permits"];
+    const appModes = ["general_contractors", "open_subs", "open_permits", "map"];
     const openPermitStatuses = new Set(["ACTIVE", "SUSPENDED", "PHASED PERMITTING"]);
 
     addEventListener("scroll", () => {
@@ -1857,19 +1916,6 @@
 
     function toggleTheme() {
       setTheme(currentTheme() === "dark" ? "light" : "dark");
-    }
-
-    function applyInitialUrlParams() {
-      const params = new URLSearchParams(location.search);
-      const mode = params.get("mode");
-      if (mode && appModes.includes(mode)) {
-        state.mode = mode;
-        appModes.forEach(name => $("tab-" + name)?.classList.remove("active"));
-        $("tab-" + mode)?.classList.add("active");
-        if ($("sort")) $("sort").value = mode === "open_permits" ? "latest_issue_date" : "open_jobs";
-      }
-      if ($("q") && params.has("q")) $("q").value = params.get("q") || "";
-      if ($("ward") && params.has("ward")) $("ward").value = params.get("ward") || "";
     }
 
     function dateTimeLabel(value) {
@@ -1972,7 +2018,6 @@
       state.manifest = await fetch("data/manifest.json").then(r => r.json());
       loadUserListCookie();
       loadUserNotes();
-      applyInitialUrlParams();
       renderStatus();
       await renderUserList();
       await search();
@@ -1994,9 +2039,9 @@
       state.selected = null;
       state.resultSort = { key: null, direction: null };
       state.selectedPermitNumbers.clear();
-      appModes.forEach(name => $("tab-" + name)?.classList.remove("active"));
-      $("tab-" + mode)?.classList.add("active");
-      if ($("sort")) $("sort").value = mode === "open_permits" ? "latest_issue_date" : "open_jobs";
+      appModes.forEach(name => $("tab-" + name).classList.remove("active"));
+      $("tab-" + mode).classList.add("active");
+      $("sort").value = mode === "open_permits" ? "latest_issue_date" : "open_jobs";
       hideDetail();
       search();
     }
@@ -2288,7 +2333,7 @@
           <span class="tag">${esc(permit.permit_status)}</span>
           <span class="tag">${esc(permit.permit_type)}</span>
           <span class="tag">${fmt(permit.gc_open_jobs || 0)} GC open jobs</span>
-          ${permit.ward ? `<span class="tag clickable" onclick="searchWard('${enc(permit.ward)}')">Ward ${esc(permit.ward)}</span>` : ""}
+          ${permit.ward ? `<a class="tag clickable" href="index.html?mode=open_permits&ward=${enc(permit.ward)}">Ward ${esc(permit.ward)}</a>` : ""}
         </div>
         ${permitFacts(permit, [
           ["Issued", permit.issue_date],
@@ -3860,11 +3905,11 @@
       state.mode = mode;
       state.selected = null;
       state.resultSort = { key: null, direction: null };
-      appModes.forEach(tabName => $("tab-" + tabName)?.classList.remove("active"));
-      $("tab-" + mode)?.classList.add("active");
-      if ($("sort")) $("sort").value = "open_jobs";
-      if ($("q")) $("q").value = name;
-      if ($("ward")) $("ward").value = "";
+      appModes.forEach(tabName => $("tab-" + tabName).classList.remove("active"));
+      $("tab-" + mode).classList.add("active");
+      $("sort").value = "open_jobs";
+      $("q").value = name;
+      $("ward").value = "";
       await search();
       const filteredIndex = (state.filteredRows || []).findIndex(row => norm(row.contact_name) === norm(name));
       if (filteredIndex >= 0) {
@@ -3884,11 +3929,11 @@
       state.mode = "open_permits";
       state.selected = null;
       state.resultSort = { key: null, direction: null };
-      appModes.forEach(tabName => $("tab-" + tabName)?.classList.remove("active"));
-      $("tab-open_permits")?.classList.add("active");
-      if ($("sort")) $("sort").value = "latest_issue_date";
-      if ($("q")) $("q").value = "";
-      if ($("ward")) $("ward").value = ward;
+      appModes.forEach(tabName => $("tab-" + tabName).classList.remove("active"));
+      $("tab-open_permits").classList.add("active");
+      $("sort").value = "latest_issue_date";
+      $("q").value = "";
+      $("ward").value = ward;
       hideDetail();
       await search();
     }
@@ -3896,7 +3941,7 @@
     function nameTags(value, mode) {
       const names = clean(value).split("|").map(x => x.trim()).filter(Boolean);
       if (!names.length) return `<span class="small">No public contact listed in this category.</span>`;
-      return `<div class="tag-row">${names.map(name => `<span class="tag clickable" onclick="openContactProfile('${enc(name)}', '${mode}')">${esc(name)}</span>`).join("")}</div>`;
+      return `<div class="tag-row">${names.map(name => `<a class="tag clickable" href="index.html?mode=${enc(mode)}&q=${enc(name)}">${esc(name)}</a>`).join("")}</div>`;
     }
 
     init().catch(error => {
