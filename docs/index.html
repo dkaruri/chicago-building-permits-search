@@ -1005,6 +1005,12 @@
       grid-template-rows: auto minmax(0, 1fr);
       border-radius: 8px;
       overflow: hidden;
+      transition: max-height 220ms ease, grid-template-rows 220ms ease, box-shadow 220ms ease;
+    }
+
+    .map-result-rail.is-collapsed {
+      max-height: 88px;
+      grid-template-rows: auto minmax(0, 0fr);
     }
 
     .map-result-head {
@@ -1015,8 +1021,17 @@
     }
 
     .map-result-list {
+      min-height: 0;
       overflow: auto;
       background: var(--panel);
+      opacity: 1;
+      transition: opacity 180ms ease, visibility 180ms ease;
+    }
+
+    .map-result-rail.is-collapsed .map-result-list {
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
     }
 
     .map-result {
@@ -1685,9 +1700,6 @@
         bottom: 8px;
         width: auto;
         max-height: 38dvh;
-      }
-      .map-result-rail.is-collapsed .map-result-list {
-        display: none;
       }
       .map-status-strip {
         display: none;
@@ -2959,7 +2971,7 @@
                   <h3>Visible Permits</h3>
                   <div id="map-visible-summary" class="small">Move the map to refine the list.</div>
                 </div>
-                <button class="icon-button" onclick="toggleMapResults()" aria-label="Hide or show visible permit list">&minus;</button>
+                <button id="map-results-toggle" class="icon-button" onclick="toggleMapResults()" aria-label="Minimize visible permit list" aria-expanded="true">&minus;</button>
               </div>
               <div id="map-result-list" class="map-result-list"></div>
             </aside>
@@ -3397,7 +3409,13 @@
     function toggleMapResults() {
       state.map.showResults = !state.map.showResults;
       const rail = $("map-result-rail");
+      const toggle = $("map-results-toggle");
       if (rail) rail.classList.toggle("is-collapsed", !state.map.showResults);
+      if (toggle) {
+        toggle.textContent = state.map.showResults ? "\u2212" : "+";
+        toggle.setAttribute("aria-expanded", String(state.map.showResults));
+        toggle.setAttribute("aria-label", state.map.showResults ? "Minimize visible permit list" : "Expand visible permit list");
+      }
     }
 
     function setMapLayer(layer, visible) {
