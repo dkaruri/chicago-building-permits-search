@@ -871,7 +871,6 @@
       background: var(--panel-2);
     }
 
-    .map-toolbar,
     .map-drawer,
     .map-result-rail,
     .map-detail-sheet,
@@ -886,16 +885,16 @@
     }
 
     .map-toolbar {
-      top: 12px;
-      left: 12px;
-      right: auto;
-      width: min(760px, calc(100% - 112px));
       display: grid;
-      grid-template-columns: minmax(180px, 1fr) auto auto auto;
+      width: 100%;
+      grid-template-columns: minmax(240px, 1fr) auto auto auto;
       gap: 8px;
       align-items: center;
       padding: 10px;
+      border: 1px solid var(--line);
       border-radius: 8px;
+      background: color-mix(in srgb, var(--panel) 96%, transparent);
+      box-shadow: 0 10px 24px var(--shadow);
     }
 
     .map-search {
@@ -934,10 +933,10 @@
     }
 
     .map-drawer {
-      top: 76px;
+      top: 12px;
       left: 12px;
       width: min(380px, calc(100% - 24px));
-      max-height: calc(100% - 112px);
+      max-height: calc(100% - 24px);
       padding: 12px;
       border-radius: 8px;
       overflow: auto;
@@ -1650,10 +1649,11 @@
       }
       .map-toolbar {
         grid-template-columns: 1fr;
-        top: 8px;
-        left: 8px;
-        right: 8px;
+        width: auto;
+        margin-inline: -12px;
         gap: 7px;
+        border-inline: 0;
+        border-radius: 0;
       }
       .map-search {
         grid-template-columns: 1fr;
@@ -1669,11 +1669,11 @@
         border-radius: 8px;
       }
       .map-drawer {
-        top: 214px;
+        top: 8px;
         left: 8px;
         right: 8px;
         width: auto;
-        max-height: calc(100% - 236px);
+        max-height: calc(100% - 16px);
       }
       .map-filter-grid {
         grid-template-columns: 1fr;
@@ -2902,17 +2902,17 @@
       $("pager").innerHTML = "";
       $("results").innerHTML = `
         <div class="map-shell">
+          <div class="map-toolbar" aria-label="Map controls">
+            <div class="map-search">
+              <input id="map-q" value="${esc(settings.q || "")}" placeholder="Highlight permits, address, street, contractor..." onkeydown="if(event.key === 'Enter') applyMapFilters()">
+              <button class="primary" onclick="applyMapFilters()">Search</button>
+            </div>
+            <button id="map-filter-toggle" onclick="toggleMapDrawer('filters')" aria-expanded="false">Filters</button>
+            <button id="map-layer-toggle" onclick="toggleMapDrawer('layers')" aria-expanded="false">Layers</button>
+            <span id="map-count-pill" class="map-count-pill">Loading</span>
+          </div>
           <div class="map-app">
             <div id="permit-map" role="region" aria-label="Chicago permit map"></div>
-            <div class="map-toolbar" aria-label="Map controls">
-              <div class="map-search">
-                <input id="map-q" value="${esc(settings.q || "")}" placeholder="Highlight permits, address, street, contractor..." onkeydown="if(event.key === 'Enter') applyMapFilters()">
-                <button class="primary" onclick="applyMapFilters()">Search</button>
-              </div>
-              <button id="map-filter-toggle" onclick="toggleMapDrawer('filters')" aria-expanded="false">Filters</button>
-              <button id="map-layer-toggle" onclick="toggleMapDrawer('layers')" aria-expanded="false">Layers</button>
-              <span id="map-count-pill" class="map-count-pill">Loading</span>
-            </div>
             <section id="map-filter-drawer" class="map-drawer hidden" aria-label="Map filters">
               <div class="map-drawer-head">
                 <h3>Filters</h3>
