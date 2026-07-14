@@ -886,7 +886,7 @@
     .map-toolbar {
       display: grid;
       width: 100%;
-      grid-template-columns: minmax(240px, 1fr) auto auto auto;
+      grid-template-columns: minmax(240px, 1fr) auto auto;
       gap: 8px;
       align-items: center;
       padding: 10px;
@@ -961,7 +961,7 @@
 
     .map-drawer {
       width: 100%;
-      height: 220px;
+      height: 260px;
       padding: 12px;
       color: var(--ink);
       background: color-mix(in srgb, var(--panel) 96%, transparent);
@@ -1010,6 +1010,18 @@
       flex-wrap: wrap;
       gap: 8px;
       margin-top: 10px;
+    }
+
+    .map-drawer-section {
+      padding-top: 12px;
+      margin-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .map-drawer-section h4 {
+      margin: 0 0 8px;
+      color: var(--primary);
+      font-size: 0.86rem;
     }
 
     .map-layer-list {
@@ -2974,7 +2986,6 @@
               <button class="primary" onclick="applyMapFilters()">Search</button>
             </div>
             <button id="map-filter-toggle" onclick="toggleMapDrawer('filters')" aria-expanded="false">Filters</button>
-            <button id="map-layer-toggle" onclick="toggleMapDrawer('layers')" aria-expanded="false">Layers</button>
             <span id="map-count-pill" class="map-count-pill">Loading</span>
           </div>
           <section id="map-filter-drawer" class="map-drawer hidden" aria-label="Map filters">
@@ -3004,16 +3015,13 @@
               <button class="primary" onclick="applyMapFilters()">Apply filters</button>
               <button onclick="resetMapSettings()">Reset current month</button>
             </div>
-          </section>
-          <section id="map-layer-drawer" class="map-drawer hidden" aria-label="Map layers">
-            <div class="map-drawer-head">
-              <h3>Layers</h3>
-              <button class="icon-button" onclick="toggleMapDrawer('')" aria-label="Close layers">&times;</button>
-            </div>
-            <div class="map-layer-list">
-              <label class="check-row"><input type="checkbox" ${mapLayerChecked("permits")} onchange="setMapLayer('permits', this.checked)"><span>Individual permit points</span></label>
-              <label class="check-row"><input type="checkbox" ${mapLayerChecked("clusters")} onchange="setMapLayer('clusters', this.checked)"><span>Clusters and counts</span></label>
-              <label class="check-row"><input type="checkbox" ${mapLayerChecked("heat")} onchange="setMapLayer('heat', this.checked)"><span>Density heat layer</span></label>
+            <div class="map-drawer-section">
+              <h4>Layers</h4>
+              <div class="map-layer-list">
+                <label class="check-row"><input type="checkbox" ${mapLayerChecked("permits")} onchange="setMapLayer('permits', this.checked)"><span>Individual permit points</span></label>
+                <label class="check-row"><input type="checkbox" ${mapLayerChecked("clusters")} onchange="setMapLayer('clusters', this.checked)"><span>Clusters and counts</span></label>
+                <label class="check-row"><input type="checkbox" ${mapLayerChecked("heat")} onchange="setMapLayer('heat', this.checked)"><span>Density heat layer</span></label>
+              </div>
             </div>
           </section>
           <div class="map-app">
@@ -3450,13 +3458,11 @@
 
     function toggleMapDrawer(name) {
       state.map.drawer = state.map.drawer === name ? "" : name;
-      ["filter", "layer"].forEach(kind => {
-        const drawer = $(`map-${kind}-drawer`);
-        const toggle = $(`map-${kind}-toggle`);
-        const active = state.map.drawer === `${kind}s`;
-        if (drawer) drawer.classList.toggle("hidden", !active);
-        if (toggle) toggle.setAttribute("aria-expanded", String(active));
-      });
+      const active = state.map.drawer === "filters";
+      const drawer = $("map-filter-drawer");
+      const toggle = $("map-filter-toggle");
+      if (drawer) drawer.classList.toggle("hidden", !active);
+      if (toggle) toggle.setAttribute("aria-expanded", String(active));
     }
 
     function toggleMapResults() {
