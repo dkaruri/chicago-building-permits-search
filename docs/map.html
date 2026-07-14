@@ -903,8 +903,36 @@
       align-items: center;
     }
 
+    .map-search-input {
+      position: relative;
+      min-width: 0;
+    }
+
     .map-search input {
+      width: 100%;
       min-height: 44px;
+      padding-right: 42px;
+    }
+
+    .map-search-clear {
+      position: absolute;
+      top: 50%;
+      right: 6px;
+      width: 32px;
+      min-width: 32px;
+      min-height: 32px;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      box-shadow: none;
+      color: var(--muted);
+      transform: translateY(-50%);
+    }
+
+    .map-search-clear:hover {
+      color: var(--ink);
+      background: var(--surface-subtle);
     }
 
     .map-toolbar button,
@@ -933,6 +961,7 @@
 
     .map-drawer {
       width: 100%;
+      height: 220px;
       padding: 12px;
       color: var(--ink);
       background: color-mix(in srgb, var(--panel) 96%, transparent);
@@ -1162,6 +1191,17 @@
       margin-top: 4px;
       padding: 5px 9px;
       font-size: 0.75rem;
+    }
+
+    .map-hover-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .map-hover-actions .map-hover-action {
+      margin-top: 0;
     }
 
     .maplibregl-ctrl-attrib,
@@ -1685,6 +1725,7 @@
       }
       .map-drawer {
         width: auto;
+        height: auto;
         margin-inline: -12px;
         border-inline: 0;
         border-radius: 0;
@@ -2908,6 +2949,7 @@
       const permit = mapRowToPermit(row);
       const payload = enc(JSON.stringify(permit));
       const saved = isInUserList(permit.permit_number);
+      const permitNumber = enc(permit.permit_number);
       const primaryContact = clean(row.gc || row.os).split(";").map(item => item.trim()).filter(Boolean)[0] || "";
       return `
         <div class="map-hover-card">
@@ -2920,7 +2962,10 @@
           </div>
           ${row.wt ? `<span>Work: ${esc(row.wt)}</span>` : ""}
           <span>${fmt(row.go || 0)} GC open jobs${primaryContact ? ` &middot; ${esc(primaryContact)}` : ""}</span>
-          <button class="primary map-hover-action" onclick="event.stopPropagation(); addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "Saved in list" : "Add to list"}</button>
+          <div class="map-hover-actions">
+            <button class="primary map-hover-action" onclick="event.stopPropagation(); addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "Saved" : "Add to list"}</button>
+            <button class="map-hover-action danger" onclick="event.stopPropagation(); removePermitFromUserList('${permitNumber}')" ${saved ? "" : "disabled"}>Remove</button>
+          </div>
         </div>`;
     }
 
@@ -2969,6 +3014,12 @@
       return state.map.layers[layer] ? "checked" : "";
     }
 
+    function clearMapSearch() {
+      const input = $("map-q");
+      if (input) input.value = "";
+      applyMapFilters();
+    }
+
     function renderMapShell(settings, index) {
       const neighborhoods = (index.community_areas || [])
         .map(item => `<option value="${esc(item.name)}">${esc(item.id)}</option>`)
@@ -2980,7 +3031,10 @@
         <div class="map-shell">
           <div class="map-toolbar" aria-label="Map controls">
             <div class="map-search">
-              <input id="map-q" value="${esc(settings.q || "")}" placeholder="Highlight permits, address, street, contractor..." onkeydown="if(event.key === 'Enter') applyMapFilters()">
+              <div class="map-search-input">
+                <input id="map-q" value="${esc(settings.q || "")}" placeholder="Highlight permits, address, street, contractor..." onkeydown="if(event.key === 'Enter') applyMapFilters()">
+                <button class="map-search-clear" type="button" onclick="clearMapSearch()" aria-label="Clear map search">&times;</button>
+              </div>
               <button class="primary" onclick="applyMapFilters()">Search</button>
             </div>
             <button id="map-filter-toggle" onclick="toggleMapDrawer('filters')" aria-expanded="false">Filters</button>
@@ -3421,7 +3475,7 @@
       pinSelectedMapPermitHover(row);
       if (state.map.map && pan) {
         state.map.preserveResultScrollOnce = true;
-        state.map.map.easeTo({ center: [Number(row.lon), Number(row.lat)], zoom: Math.max(state.map.map.getZoom(), 14) });
+        state.map.map.easeTo({ center: [Number(row.lon), Number(row.lat)], zoom: Math.max(state.map.map.getZoom(), 14), offset: [0, 120] });
       }
     }
 
@@ -4162,10 +4216,12 @@
       saveUserNotes();
       clearUserRoute("List changed. Recalculate driving distances when ready.");
       await renderUserList();
-      renderCurrentMode();
-      if (state.activeDetail?.type === "permit") {
+      const skipModeRefresh = state.mode === "map";
+      if (!skipModeRefresh) renderCurrentMode();
+      if (!skipModeRefresh && state.activeDetail?.type === "permit") {
         showPermitDetail(state.activeDetail.row, false);
       }
+      if (skipModeRefresh) refreshMapSavedPermitState(number);
     }
 
     async function clearUserList() {
