@@ -3934,7 +3934,8 @@
       renderCurrentMode();
     }
 
-    async function addPermitsToUserList(rows) {
+    async function addPermitsToUserList(rows, options = {}) {
+      const skipModeRefresh = Boolean(options.skipModeRefresh);
       const numbers = rows.map(row => clean(row.permit_number)).filter(Boolean);
       const next = [...state.userPermitNumbers];
       numbers.forEach(number => {
@@ -3945,8 +3946,8 @@
       state.selectedPermitNumbers.clear();
       clearUserRoute("List changed. Recalculate driving distances when ready.");
       await renderUserList();
-      renderCurrentMode();
-      if (state.activeDetail?.type === "permit") {
+      if (!skipModeRefresh) renderCurrentMode();
+      if (!skipModeRefresh && state.activeDetail?.type === "permit") {
         showPermitDetail(state.activeDetail.row, false);
       }
     }
@@ -4062,7 +4063,32 @@
     }
 
     async function addPermitFromEncoded(encoded) {
-      await addPermitsToUserList([JSON.parse(decodeURIComponent(encoded))]);
+      const permit = JSON.parse(decodeURIComponent(encoded));
+      const skipModeRefresh = state.mode === "map";
+      await addPermitsToUserList([permit], { skipModeRefresh });
+      if (skipModeRefresh) refreshMapSavedPermitState(permit.permit_number);
+    }
+
+    function refreshMapSavedPermitState(permitNumber) {
+      if (state.activeDetail?.type === "permit") return;
+      const active = clean(state.map.activePermitNumber);
+      const number = clean(permitNumber);
+      if (active && active === number) {
+        const row = state.map.filteredRows.find(item => clean(item.n) === active);
+        if (row) {
+          renderMapDetail(row);
+          pinSelectedMapPermitHover(row);
+        }
+      } else if (state.map.hoverPinnedPermitNumber) {
+        const row = state.map.filteredRows.find(item => clean(item.n) === state.map.hoverPinnedPermitNumber);
+        if (row) pinSelectedMapPermitHover(row);
+      } else if (state.map.hoverPopup) {
+        const row = state.map.filteredRows.find(item => clean(item.n) === number);
+        if (row) showMapPermitHover({
+          geometry: { coordinates: [Number(row.lon), Number(row.lat)] },
+          properties: row
+        });
+      }
     }
 
     async function removePermitFromUserList(encodedNumber) {
