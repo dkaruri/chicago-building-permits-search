@@ -2315,6 +2315,7 @@
         searchLocation: null,
         hoverPopup: null,
         hoverCloseTimer: null,
+        hoverPinnedPermitNumber: "",
         loadingToken: 0
       }
     };
@@ -2849,6 +2850,8 @@
 
     function showMapPermitHover(feature) {
       if (!state.map.map || !state.map.hoverPopup) return;
+      const number = clean(feature.properties && feature.properties.n);
+      if (state.map.hoverPinnedPermitNumber && state.map.hoverPinnedPermitNumber !== number) return;
       clearMapHoverClose();
       state.map.hoverPopup
         .setLngLat(feature.geometry.coordinates)
@@ -2862,6 +2865,15 @@
       }
     }
 
+    function pinSelectedMapPermitHover(row) {
+      if (!state.map.map || !state.map.hoverPopup) return;
+      state.map.hoverPinnedPermitNumber = clean(row.n);
+      showMapPermitHover({
+        geometry: { coordinates: [Number(row.lon), Number(row.lat)] },
+        properties: row
+      });
+    }
+
     function clearMapHoverClose() {
       if (!state.map.hoverCloseTimer) return;
       clearTimeout(state.map.hoverCloseTimer);
@@ -2869,6 +2881,7 @@
     }
 
     function scheduleMapHoverClose() {
+      if (state.map.hoverPinnedPermitNumber) return;
       clearMapHoverClose();
       state.map.hoverCloseTimer = setTimeout(() => {
         if (state.map.hoverPopup) state.map.hoverPopup.remove();
@@ -2987,6 +3000,7 @@
       }
       if (state.map.map) {
         clearMapHoverClose();
+        state.map.hoverPinnedPermitNumber = "";
         if (state.map.hoverPopup) {
           state.map.hoverPopup.remove();
           state.map.hoverPopup = null;
@@ -3176,6 +3190,9 @@
       state.map.searchLocation = text && !matches.length ? await geocodeMapSearch(settings.q) : null;
       state.pageIndex = 0;
       state.map.activePermitNumber = "";
+      state.map.hoverPinnedPermitNumber = "";
+      clearMapHoverClose();
+      if (state.map.hoverPopup) state.map.hoverPopup.remove();
       updateMapSource();
       renderMapDetail(null);
       updateVisibleMapRows();
@@ -3311,6 +3328,7 @@
       updateMapPinSelection();
       renderMapSideList();
       renderMapDetail(row);
+      pinSelectedMapPermitHover(row);
       if (state.map.map && pan) {
         state.map.map.easeTo({ center: [Number(row.lon), Number(row.lat)], zoom: Math.max(state.map.map.getZoom(), 14) });
       }
@@ -3341,6 +3359,9 @@
 
     function clearMapSelection() {
       state.map.activePermitNumber = "";
+      state.map.hoverPinnedPermitNumber = "";
+      clearMapHoverClose();
+      if (state.map.hoverPopup) state.map.hoverPopup.remove();
       updateMapPinSelection();
       renderMapDetail(null);
       renderMapSideList();
