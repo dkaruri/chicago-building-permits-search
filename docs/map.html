@@ -1080,6 +1080,14 @@
       transform: translateX(-50%);
     }
 
+    .map-shell > .map-detail-sheet {
+      position: static;
+      width: 100%;
+      max-height: none;
+      margin-top: 10px;
+      transform: none;
+    }
+
     .map-detail-sheet.hidden {
       display: none;
     }
@@ -1641,6 +1649,15 @@
         width: auto;
         max-height: 58dvh;
         transform: none;
+      }
+      .map-shell > .map-detail-sheet {
+        position: static;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        width: 100%;
+        max-height: none;
+        margin-top: 10px;
       }
     }
 
@@ -2891,8 +2908,8 @@
               <div id="map-result-list" class="map-result-list"></div>
             </aside>
             <div id="map-status-strip" class="map-status-strip">Loading map data...</div>
-            <section id="map-detail-sheet" class="map-detail-sheet hidden" aria-label="Permit map detail"></section>
           </div>
+          <section id="map-detail-sheet" class="map-detail-sheet hidden" aria-label="Permit map detail"></section>
         </div>`;
     }
 
@@ -3090,7 +3107,10 @@
       pinSource.setData(data);
       if (state.map.filteredRows.length) {
         const bounds = new maplibregl.LngLatBounds();
-        state.map.filteredRows.slice(0, 5000).forEach(row => bounds.extend([Number(row.lon), Number(row.lat)]));
+        const settings = loadMapSettings();
+        const matchedRows = settings.q ? state.map.filteredRows.filter(row => Number(row.m || 0) === 1) : [];
+        const rowsToFrame = matchedRows.length ? matchedRows : state.map.filteredRows;
+        rowsToFrame.slice(0, 5000).forEach(row => bounds.extend([Number(row.lon), Number(row.lat)]));
         state.map.map.fitBounds(bounds, { padding: 48, maxZoom: 13, duration: 0 });
       }
       updateMapLayerVisibility();
