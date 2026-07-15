@@ -73,4 +73,4 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: Refresh Chicago permits static data
-          file_pattern: docs/data/**/*.json
+          file_pattern: docs/data/*.json docs/data/**/*.json
