@@ -120,7 +120,25 @@ def _clip_text(value: Any, limit: int = 180) -> str:
     return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
 
 
-def _write_map_shards(con: duckdb.DuckDBPyConnection, out: Path) -> dict:
+def _license_phones_for_names(names: list[str], license_index: dict[str, list[dict]]) -> str:
+    phones: list[str] = []
+    seen: set[str] = set()
+    for name in names:
+        for match in license_index.get(normalize_license_name(name), []):
+            phone = str(match.get("phone") or "").strip()
+            if not phone or phone.upper() in {"NA", "N/A", "NONE"}:
+                continue
+            normalized = phone.upper()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            phones.append(phone)
+            if len(phones) >= 2:
+                return " | ".join(phones)
+    return " | ".join(phones)
+
+
+def _write_map_shards(con: duckdb.DuckDBPyConnection, out: Path, license_index: dict[str, list[dict]]) -> dict:
     map_dir = out / "map"
     map_dir.mkdir(parents=True, exist_ok=True)
     for old in map_dir.glob("permits_*.json"):
@@ -187,6 +205,7 @@ def _write_map_shards(con: duckdb.DuckDBPyConnection, out: Path) -> dict:
             "lat": round(float(row.get("latitude")), 6),
             "lon": round(float(row.get("longitude")), 6),
             "gc": _clip_text(row.get("general_contractors"), 220),
+            "gp": _license_phones_for_names(gc_names, license_index),
             "go": max_gc_open_jobs,
             "os": _clip_text(row.get("open_subs"), 220),
             "x": _clip_text(row.get("work_description"), 220),
@@ -445,7 +464,7 @@ def export_static(out_dir: Path | str = "docs/data") -> dict:
                 "rows": len(payload),
                 "bytes": size,
             }
-        manifest["files"]["permit_map"] = _write_map_shards(con, out)
+        manifest["files"]["permit_map"] = _write_map_shards(con, out, license_index)
         manifest_size = _write_json(out / "manifest.json", manifest)
         manifest["files"]["manifest"] = {"path": "data/manifest.json", "rows": 1, "bytes": manifest_size}
         _write_json(out / "manifest.json", manifest)
