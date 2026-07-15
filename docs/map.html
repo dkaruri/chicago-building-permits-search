@@ -3798,7 +3798,7 @@
       if (selectedAddressMatch) {
         state.map.detailExpanded = true;
         renderMapDetail(selectedAddressMatch);
-        pinSelectedMapPermitHover(selectedAddressMatch);
+        focusMapOnPermit(selectedAddressMatch, 16);
       } else {
         renderMapDetail(null);
       }
@@ -4078,6 +4078,17 @@
         state.map.preserveResultScrollOnce = true;
         state.map.map.easeTo({ center: [Number(row.lon), Number(row.lat)], zoom: Math.max(state.map.map.getZoom(), 14), offset: [0, 120] });
       }
+    }
+
+    function focusMapOnPermit(row, zoom = 15) {
+      if (!state.map.map || !row) return;
+      const lon = Number(row.lon);
+      const lat = Number(row.lat);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      requestAnimationFrame(() => {
+        if (!state.map.map) return;
+        state.map.map.easeTo({ center: [lon, lat], zoom: Math.max(state.map.map.getZoom(), zoom), duration: 0 });
+      });
     }
 
     function updateMapPinSelection() {
