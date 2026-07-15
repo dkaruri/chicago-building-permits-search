@@ -3259,6 +3259,12 @@
       });
     }
 
+    function dismissPinnedMapHover() {
+      state.map.hoverPinnedPermitNumber = "";
+      clearMapHoverClose();
+      if (state.map.hoverPopup) state.map.hoverPopup.remove();
+    }
+
     function clearMapHoverClose() {
       if (!state.map.hoverCloseTimer) return;
       clearTimeout(state.map.hoverCloseTimer);
@@ -3525,6 +3531,11 @@
         state.map.map.on("click", "permit-points", event => {
           const row = event.features[0].properties;
           selectMapPermit(row, true);
+        });
+        state.map.map.on("click", event => {
+          if (!state.map.hoverPinnedPermitNumber) return;
+          const features = state.map.map.queryRenderedFeatures(event.point, { layers: ["permit-points", "permit-clusters"] });
+          if (!features.length) dismissPinnedMapHover();
         });
         state.map.hoverPopup = new maplibregl.Popup({
           closeButton: false,
