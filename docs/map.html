@@ -3779,6 +3779,16 @@
       const addressMatches = addressSearch ? state.map.filteredRows.filter(row => mapAddressMatches(row, settings.q)) : [];
       const selectedAddressMatch = addressSearch ? selectAddressSearchPermit(addressMatches, state.map.searchLocation, state.map.filteredRows) : null;
       if (state.map.searchLocation) state.map.searchLocation.noPermit = !selectedAddressMatch;
+      if (selectedAddressMatch) {
+        state.map.searchLocation = {
+          lat: Number(selectedAddressMatch.lat),
+          lon: Number(selectedAddressMatch.lon),
+          label: selectedAddressMatch.a,
+          query: settings.q,
+          noPermit: false,
+          permitNumber: clean(selectedAddressMatch.n)
+        };
+      }
       state.pageIndex = 0;
       state.map.activePermitNumber = selectedAddressMatch ? clean(selectedAddressMatch.n) : "";
       state.map.hoverPinnedPermitNumber = "";
