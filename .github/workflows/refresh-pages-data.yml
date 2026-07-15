@@ -3,8 +3,10 @@ name: Refresh GitHub Pages data
 on:
   workflow_dispatch:
   schedule:
-    # Daily at 3:22 AM America/Chicago during daylight saving time.
-    - cron: "22 8 * * *"
+    # Daily at 12:00 AM America/Chicago.
+    # GitHub cron is UTC-only, so schedule both DST and standard-time midnights.
+    - cron: "0 5 * * *"
+    - cron: "0 6 * * *"
 
 permissions:
   contents: write
@@ -18,32 +20,56 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      - name: Check Chicago midnight schedule
+        id: chicago_midnight
+        shell: bash
+        run: |
+          should_run=true
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            should_run=false
+            chicago_offset="$(TZ=America/Chicago date +%z)"
+            if [[ "${{ github.event.schedule }}" == "0 5 * * *" && "$chicago_offset" == "-0500" ]]; then
+              should_run=true
+            elif [[ "${{ github.event.schedule }}" == "0 6 * * *" && "$chicago_offset" == "-0600" ]]; then
+              should_run=true
+            fi
+          fi
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+
       - name: Check out repository
+        if: steps.chicago_midnight.outputs.should_run == 'true'
         uses: actions/checkout@v4
 
       - name: Install uv
+        if: steps.chicago_midnight.outputs.should_run == 'true'
         uses: astral-sh/setup-uv@v5
 
       - name: Set up Python
+        if: steps.chicago_midnight.outputs.should_run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install dependencies
+        if: steps.chicago_midnight.outputs.should_run == 'true'
         run: uv sync
 
       - name: Download latest Chicago permits data
+        if: steps.chicago_midnight.outputs.should_run == 'true'
         env:
           CHI_SOCRATA_APP_TOKEN: ${{ secrets.CHI_SOCRATA_APP_TOKEN }}
         run: uv run chi-permits init
 
       - name: Export static Pages indexes and license registries
+        if: steps.chicago_midnight.outputs.should_run == 'true'
         run: uv run chi-permits export-static
 
       - name: Run data accuracy check
+        if: steps.chicago_midnight.outputs.should_run == 'true'
         run: uv run python scripts/accuracy_check.py
 
       - name: Commit refreshed data
+        if: steps.chicago_midnight.outputs.should_run == 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: Refresh Chicago permits static data
