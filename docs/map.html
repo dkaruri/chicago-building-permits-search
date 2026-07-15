@@ -443,8 +443,9 @@
       justify-content: flex-start;
     }
 
-    .permit-action-head {
-      justify-content: flex-end;
+    .permit-action-head,
+    .permit-action-head .panel-actions {
+      justify-content: flex-start;
     }
 
     .user-list-head {
@@ -977,13 +978,13 @@
 
     .map-drawer {
       width: 100%;
-      max-height: 214px;
+      max-height: 720px;
       padding: 10px 12px;
       color: var(--ink);
       background: color-mix(in srgb, var(--panel) 96%, transparent);
       border: 1px solid var(--line);
       border-radius: 8px;
-      overflow: hidden;
+      overflow: visible;
       box-shadow: 0 10px 24px var(--shadow);
       opacity: 1;
       transform: translateY(0);
@@ -1831,23 +1832,42 @@
         overflow: visible;
       }
       .map-filter-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        display: flex;
+        flex-wrap: wrap;
         width: 100%;
       }
       .map-filter-grid label {
-        width: 100%;
+        flex: 0 0 calc(50% - 4px);
+        max-width: calc(50% - 4px);
         min-width: 0;
+        box-sizing: border-box;
       }
       .map-filter-grid input,
       .map-filter-grid select {
         width: 100%;
         min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
       }
       .map-filter-grid input[type="date"] {
+        appearance: none;
+        -webkit-appearance: none;
         min-width: 0;
+        padding-inline: 8px;
+        font-size: 0.86rem;
+        line-height: 1.2;
+      }
+      .map-filter-grid input[type="date"]::-webkit-date-and-time-value {
+        min-width: 0;
+        text-align: left;
+      }
+      .map-filter-grid input[type="date"]::-webkit-calendar-picker-indicator {
+        margin-left: 0;
+        padding: 0;
       }
       .map-neighborhood-field {
-        grid-column: 1 / -1;
+        flex-basis: 100%;
+        max-width: 100%;
       }
       .map-filter-actions {
         display: grid;
