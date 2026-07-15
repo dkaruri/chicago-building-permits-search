@@ -1015,6 +1015,19 @@
       font-size: 1rem;
     }
 
+    .map-drawer-head h3 {
+      min-width: 0;
+    }
+
+    .map-drawer-head .icon-button {
+      flex: 0 0 36px;
+      width: 36px;
+      min-width: 36px;
+      min-height: 36px;
+      padding: 0;
+      margin-left: auto;
+    }
+
     .map-filter-grid {
       display: grid;
       grid-template-columns: repeat(5, minmax(120px, 1fr));
@@ -1768,6 +1781,12 @@
       .map-detail-actions button {
         width: 100%;
       }
+      .map-drawer-head .icon-button {
+        width: 36px;
+        min-width: 36px;
+        max-width: 36px;
+        padding: 0;
+      }
       .map-search button {
         width: auto;
       }
@@ -1782,23 +1801,29 @@
         border-radius: 8px;
       }
       .map-drawer {
-        width: auto;
-        max-height: 40dvh;
+        width: 100%;
+        max-width: 100%;
+        max-height: none;
         margin-inline: 0;
         border-inline: 0;
         border-radius: 0;
-        overflow: auto;
-        scrollbar-width: thin;
-      }
-      .map-drawer::-webkit-scrollbar {
-        width: 8px;
-      }
-      .map-drawer::-webkit-scrollbar-thumb {
-        background: var(--line);
-        border-radius: 999px;
+        overflow: visible;
       }
       .map-filter-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+      }
+      .map-filter-grid label {
+        width: 100%;
+        min-width: 0;
+      }
+      .map-filter-grid input,
+      .map-filter-grid select {
+        width: 100%;
+        min-width: 0;
+      }
+      .map-filter-grid input[type="date"] {
+        min-width: 0;
       }
       .map-neighborhood-field {
         grid-column: 1 / -1;
