@@ -3761,6 +3761,7 @@
       const maxJobs = settings.gcMax === "" ? null : Number(settings.gcMax);
       const neighborhood = norm(settings.neighborhood);
       const text = norm(settings.q);
+      const addressSearch = looksLikeAddressSearch(settings.q);
       state.map.filteredRows = rows.filter(row => {
         if (!openPermitStatuses.has(clean(row.s).toUpperCase())) return false;
         if (row.d < settings.dateFrom || row.d > settings.dateTo) return false;
@@ -3771,10 +3772,9 @@
         return Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lon));
       }).map(row => ({
         ...row,
-        m: text && norm(`${row.n} ${row.a} ${row.gc} ${row.os} ${row.wt} ${row.t} ${row.x} ${row.cn} ${row.st}`).includes(text) ? 1 : 0
+        m: text && (norm(`${row.n} ${row.a} ${row.gc} ${row.os} ${row.wt} ${row.t} ${row.x} ${row.cn} ${row.st}`).includes(text) || (addressSearch && mapAddressMatches(row, settings.q))) ? 1 : 0
       })).sort((a, b) => Number(b.m || 0) - Number(a.m || 0) || Number(b.go || 0) - Number(a.go || 0) || clean(b.d).localeCompare(clean(a.d)));
       const matches = state.map.filteredRows.filter(row => Number(row.m || 0) === 1);
-      const addressSearch = looksLikeAddressSearch(settings.q);
       state.map.searchLocation = text && (addressSearch || !matches.length) ? await geocodeMapSearch(settings.q) : null;
       const addressMatches = addressSearch ? state.map.filteredRows.filter(row => mapAddressMatches(row, settings.q)) : [];
       const selectedAddressMatch = addressSearch ? selectAddressSearchPermit(addressMatches, state.map.searchLocation, state.map.filteredRows) : null;
@@ -3876,11 +3876,49 @@
     }
 
     function mapAddressMatches(row, query) {
-      const address = norm(row.a);
-      const text = norm(query);
-      if (!address || !text) return false;
-      const streetOnly = text.replace(/\b(chicago|il|illinois|usa|united states)\b/g, "").trim();
-      return address.includes(streetOnly) || streetOnly.includes(address);
+      const address = parseSearchAddress(row.a);
+      const search = parseSearchAddress(query);
+      if (!address.number || !search.number || address.number !== search.number) return false;
+      if (address.direction && search.direction && address.direction !== search.direction) return false;
+      if (!address.streetKey || !search.streetKey) return false;
+      if (address.streetKey.includes(search.streetKey) || search.streetKey.includes(address.streetKey)) return true;
+      return editDistance(address.streetKey, search.streetKey) <= Math.max(1, Math.floor(Math.min(address.streetKey.length, search.streetKey.length) * 0.25));
+    }
+
+    function parseSearchAddress(value) {
+      const words = normalizeAddressWords(value);
+      const numberIndex = words.findIndex(word => /^\d+[a-z]?$/.test(word));
+      if (numberIndex === -1) return { number: "", direction: "", streetKey: "" };
+      const number = words[numberIndex].replace(/[a-z]$/, "");
+      const rest = words.slice(numberIndex + 1).filter(word => !["chicago", "il", "illinois", "usa", "united", "states"].includes(word));
+      const direction = rest.length && ["n", "s", "e", "w", "north", "south", "east", "west"].includes(rest[0]) ? rest.shift().charAt(0) : "";
+      const streetWords = rest.filter(word => !["ave", "avenue", "st", "street", "rd", "road", "blvd", "boulevard", "dr", "drive", "ln", "lane", "ct", "court", "pl", "place", "way", "pkwy", "parkway", "ter", "terrace", "cir", "circle"].includes(word));
+      return { number, direction, streetKey: streetWords.join("") };
+    }
+
+    function normalizeAddressWords(value) {
+      return clean(value)
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter(Boolean);
+    }
+
+    function editDistance(left, right) {
+      if (left === right) return 0;
+      if (!left.length) return right.length;
+      if (!right.length) return left.length;
+      const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+      const current = Array(right.length + 1).fill(0);
+      for (let i = 1; i <= left.length; i += 1) {
+        current[0] = i;
+        for (let j = 1; j <= right.length; j += 1) {
+          const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+          current[j] = Math.min(current[j - 1] + 1, previous[j] + 1, previous[j - 1] + cost);
+        }
+        for (let j = 0; j <= right.length; j += 1) previous[j] = current[j];
+      }
+      return previous[right.length];
     }
 
     function selectAddressSearchPermit(addressMatches, location, fallbackRows) {
