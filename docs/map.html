@@ -1235,6 +1235,29 @@
       transform: translateY(12px) scale(0.98);
     }
 
+    .map-detail-body {
+      max-height: 1000px;
+      opacity: 1;
+      overflow: hidden;
+      transition: max-height 240ms ease, opacity 170ms ease, margin 220ms ease;
+    }
+
+    .map-detail-sheet.is-collapsed {
+      max-height: 74px;
+      overflow: hidden;
+    }
+
+    .map-shell > .map-detail-sheet.is-collapsed {
+      max-height: 74px;
+    }
+
+    .map-detail-sheet.is-collapsed .map-detail-body {
+      max-height: 0;
+      margin-top: -4px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
     .maplibregl-popup-content {
       max-width: min(300px, 84vw);
       padding: 10px 12px;
@@ -2362,7 +2385,7 @@
     }
 
     body.map-page header {
-      padding: 10px 0 8px;
+      padding: 10px max(16px, calc(50vw - 680px)) 8px;
     }
 
     body.map-page h1 {
@@ -2436,6 +2459,10 @@
         width: 100%;
         padding-top: 0;
         padding-inline: 10px;
+      }
+
+      body.map-page header {
+        padding: 12px max(16px, calc(50vw - 680px)) 10px;
       }
 
       body.map-page .map-app {
@@ -2652,6 +2679,7 @@
         filteredRows: [],
         visibleRows: [],
         activePermitNumber: "",
+        detailExpanded: true,
         drawer: "",
         showResults: true,
         layers: { permits: true, clusters: false, heat: false },
@@ -3263,7 +3291,6 @@
           <section id="map-filter-drawer" class="map-drawer hidden" aria-label="Map filters">
             <div class="map-drawer-head">
               <h3>Filters and Layers</h3>
-              <button class="icon-button" onclick="toggleMapDrawer('')" aria-label="Close filters">${mapWindowIcon(true)}</button>
             </div>
             <div class="map-filter-grid">
               <label class="map-date-field">From
@@ -3687,6 +3714,7 @@
 
     function selectMapPermit(row, pan = false) {
       state.map.activePermitNumber = clean(row.n);
+      state.map.detailExpanded = true;
       updateMapPinSelection();
       renderMapSideList(true);
       renderMapDetail(row);
@@ -3708,16 +3736,18 @@
       if (!sheet) return;
       if (!row) {
         sheet.classList.add("hidden");
+        sheet.classList.remove("is-collapsed");
         sheet.innerHTML = "";
         return;
       }
       const wasHidden = sheet.classList.contains("hidden");
+      sheet.classList.toggle("is-collapsed", !state.map.detailExpanded);
       sheet.innerHTML = `
         <div class="map-detail-head">
           <h3>${esc(row.n)}</h3>
-          <button class="icon-button" onclick="clearMapSelection()" aria-label="Close permit detail">${mapWindowIcon(true)}</button>
+          <button class="icon-button" onclick="toggleMapDetail()" aria-label="${state.map.detailExpanded ? "Collapse permit detail" : "Expand permit detail"}" aria-expanded="${state.map.detailExpanded}">${mapWindowIcon(state.map.detailExpanded)}</button>
         </div>
-        ${mapPermitDetails(row)}`;
+        <div class="map-detail-body">${mapPermitDetails(row)}</div>`;
       if (wasHidden) {
         requestAnimationFrame(() => sheet.classList.remove("hidden"));
       } else {
@@ -3725,8 +3755,22 @@
       }
     }
 
+    function toggleMapDetail() {
+      const sheet = $("map-detail-sheet");
+      if (!sheet || !state.map.activePermitNumber) return;
+      state.map.detailExpanded = !state.map.detailExpanded;
+      sheet.classList.toggle("is-collapsed", !state.map.detailExpanded);
+      const button = sheet.querySelector(".map-detail-head .icon-button");
+      if (button) {
+        button.innerHTML = mapWindowIcon(state.map.detailExpanded);
+        button.setAttribute("aria-expanded", String(state.map.detailExpanded));
+        button.setAttribute("aria-label", state.map.detailExpanded ? "Collapse permit detail" : "Expand permit detail");
+      }
+    }
+
     function clearMapSelection() {
       state.map.activePermitNumber = "";
+      state.map.detailExpanded = true;
       state.map.hoverPinnedPermitNumber = "";
       clearMapHoverClose();
       if (state.map.hoverPopup) state.map.hoverPopup.remove();
