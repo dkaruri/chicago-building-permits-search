@@ -1100,6 +1100,7 @@
       grid-template-rows: auto minmax(0, 1fr);
       border-radius: 8px;
       overflow: hidden;
+      transform-origin: top;
       transition: max-height 220ms ease, grid-template-rows 220ms ease, box-shadow 220ms ease;
     }
 
@@ -1119,8 +1120,11 @@
       min-height: 0;
       overflow: auto;
       background: var(--panel);
+      max-height: 720px;
       opacity: 1;
-      transition: opacity 180ms ease, visibility 180ms ease;
+      transform: translateY(0);
+      transform-origin: top;
+      transition: max-height 240ms ease, opacity 180ms ease, visibility 180ms ease, transform 220ms ease;
       scrollbar-width: none;
     }
 
@@ -1130,9 +1134,12 @@
     }
 
     .map-result-rail.is-collapsed .map-result-list {
+      max-height: 0 !important;
       visibility: hidden;
       opacity: 0;
+      overflow: hidden;
       pointer-events: none;
+      transform: translateY(-8px);
     }
 
     .map-result {
