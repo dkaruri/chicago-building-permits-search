@@ -2312,6 +2312,8 @@
         z-index: 35;
         display: flex;
         width: calc(var(--rail-width) - 24px);
+        max-height: calc(100dvh - 24px);
+        overflow-y: auto;
         margin: 0;
         padding: 10px;
         flex-direction: column;
@@ -2360,8 +2362,8 @@
 
     @media (max-width: 899px) {
       .app-nav {
-        flex-wrap: nowrap;
-        overflow-x: auto;
+        flex-wrap: wrap;
+        overflow-x: visible;
         padding-bottom: 2px;
       }
 
