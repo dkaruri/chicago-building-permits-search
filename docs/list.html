@@ -545,6 +545,22 @@
       background: var(--surface-subtle);
     }
 
+    .list-action-status {
+      min-height: 0;
+      margin: 0;
+      color: var(--steel);
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .list-action-status:not(:empty) {
+      margin: 8px 0 0;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-subtle);
+    }
+
     .route-source {
       margin: -3px 0 10px;
       color: var(--muted);
@@ -2320,6 +2336,191 @@
     body.list-page .user-list-panel {
       min-height: 48dvh;
     }
+
+    @media (max-width: 640px) {
+      body.list-page,
+      body.list-page main {
+        overflow-x: hidden;
+      }
+
+      body.list-page main {
+        width: 100%;
+        max-width: 100%;
+        padding: 8px 10px 28px;
+      }
+
+      body.list-page header {
+        padding: 14px 14px 12px;
+      }
+
+      body.list-page header p {
+        font-size: 0.86rem;
+        line-height: 1.42;
+      }
+
+      body.list-page .status {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      body.list-page .metric {
+        min-height: 62px;
+        padding: 10px;
+      }
+
+      body.list-page #user-list-panel {
+        width: 100%;
+        padding: 12px;
+        border-radius: 10px;
+      }
+
+      body.list-page .user-list-head {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      body.list-page .user-list-title-row {
+        gap: 4px;
+      }
+
+      body.list-page .user-list-title-row h2 {
+        margin: 0;
+        font-size: 1.05rem;
+      }
+
+      body.list-page .user-list-toolbar {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      body.list-page .action-group {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        padding: 9px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface-subtle);
+      }
+
+      body.list-page .action-label {
+        margin-bottom: 0;
+        font-size: 0.66rem;
+      }
+
+      body.list-page .action-group button {
+        min-height: 44px;
+        border-radius: 8px;
+        font-size: 0.84rem;
+        touch-action: manipulation;
+      }
+
+      body.list-page .route-summary,
+      body.list-page .list-action-status,
+      body.list-page .route-source {
+        font-size: 0.82rem;
+      }
+
+      body.list-page .list-note {
+        margin-top: 10px;
+      }
+
+      body.list-page .list-note textarea {
+        min-height: 86px;
+        font-size: 1rem;
+      }
+
+      body.list-page .route-chunks {
+        padding: 10px;
+        border-radius: 10px;
+      }
+
+      body.list-page .route-chunks-grid {
+        grid-template-columns: 1fr;
+      }
+
+      body.list-page .route-chunk-card {
+        padding: 10px;
+      }
+
+      body.list-page .route-chunk-card a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 44px;
+        margin: 6px 0;
+        padding: 8px 10px;
+        border: 1px solid var(--primary);
+        border-radius: 8px;
+        background: var(--primary-soft);
+      }
+
+      body.list-page .saved-permits-table tr {
+        padding: 12px;
+        border-radius: 10px;
+      }
+
+      body.list-page .saved-permits-table td {
+        display: grid;
+        grid-template-columns: minmax(76px, 32%) minmax(0, 1fr);
+        gap: 8px;
+        align-items: start;
+        padding: 7px 0;
+        line-height: 1.35;
+      }
+
+      body.list-page .saved-permits-table td::before {
+        margin: 0;
+        line-height: 1.35;
+      }
+
+      body.list-page .saved-permits-table td[data-label="Permit"],
+      body.list-page .saved-permits-table td[data-label="Notes"] {
+        display: block;
+      }
+
+      body.list-page .saved-permits-table td[data-label="Permit"]::before,
+      body.list-page .saved-permits-table td[data-label="Notes"]::before {
+        margin-bottom: 4px;
+      }
+
+      body.list-page .saved-permits-table td.select-cell,
+      body.list-page .saved-permits-table td.move-cell {
+        display: flex;
+        justify-content: flex-start;
+      }
+
+      body.list-page .permit-note {
+        min-height: 86px;
+        font-size: 1rem;
+      }
+
+      body.list-page .move-controls {
+        display: inline-grid;
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      body.list-page .move-controls .icon-button,
+      body.list-page .select-cell .icon-button {
+        width: 44px;
+        min-width: 44px;
+        min-height: 44px;
+      }
+    }
+
+    @media (max-width: 420px) {
+      body.list-page .action-group {
+        grid-template-columns: 1fr;
+      }
+
+      body.list-page .saved-permits-table td {
+        grid-template-columns: minmax(72px, 34%) minmax(0, 1fr);
+      }
+    }
   </style>
 </head>
 <body class="list-page">
@@ -2357,19 +2558,20 @@
           </div>
           <div class="action-group route-actions" aria-label="Route controls">
             <span class="action-label">Route</span>
-            <button onclick="calculateUserListRoute()">Distances</button>
-            <button onclick="optimizeUserListRoute()">Sort by drive time</button>
-            <button onclick="openGoogleMapsRoute()">Open in Google Maps</button>
-            <button onclick="showGoogleRouteChunks()">Google route chunks</button>
+            <button data-list-action onclick="calculateUserListRoute()">Distances</button>
+            <button data-list-action onclick="optimizeUserListRoute()">Sort by drive time</button>
+            <button data-list-action onclick="openGoogleMapsRoute()">Open in Google Maps</button>
+            <button data-list-action onclick="showGoogleRouteChunks()">Google route chunks</button>
           </div>
           <div class="action-group" aria-label="Export controls">
             <span class="action-label">Export</span>
-            <button onclick="downloadUserListKml()">KML map</button>
-            <button onclick="downloadUserListCsv()">CSV</button>
+            <button data-list-action onclick="downloadUserListKml()">KML map</button>
+            <button data-list-action onclick="downloadUserListCsv()">CSV</button>
           </div>
         </div>
       </div>
       <div id="user-route-summary" class="route-summary small" aria-live="polite">Add at least two permits with mapped coordinates to estimate driving distances.</div>
+      <div id="list-action-status" class="list-action-status" aria-live="polite"></div>
       <div id="user-route-chunks" class="route-chunks" aria-live="polite"></div>
       <details class="route-source">
         <summary>Routing sources and limits</summary>
@@ -2474,6 +2676,7 @@
       draggedPermitNumber: "",
       userRouteLegs: [],
       userRouteSummary: "",
+      listActionBusy: false,
       routeChunksVisible: false,
       map: {
         index: null,
@@ -3723,6 +3926,33 @@
       $("user-route-summary").textContent = state.userRouteSummary || fallback;
     }
 
+    function announceListAction(message = "") {
+      const node = $("list-action-status");
+      if (!node) return;
+      node.textContent = message;
+    }
+
+    function setListActionBusy(isBusy, message = "") {
+      state.listActionBusy = isBusy;
+      document.querySelectorAll("[data-list-action]").forEach(button => {
+        button.disabled = isBusy;
+        button.setAttribute("aria-busy", String(isBusy));
+      });
+      if (message) announceListAction(message);
+    }
+
+    async function withListAction(message, action) {
+      if (state.listActionBusy) return;
+      setListActionBusy(true, message);
+      try {
+        await action();
+      } catch (error) {
+        clearUserRoute(error.message || "That list action could not finish right now.");
+      } finally {
+        setListActionBusy(false);
+      }
+    }
+
     function hideGoogleRouteChunks() {
       state.routeChunksVisible = false;
       const container = $("user-route-chunks");
@@ -3843,83 +4073,90 @@
     }
 
     async function openGoogleMapsRoute() {
-      await ensurePermitMap();
-      const rows = mapExportRows();
-      if (rows.length < 2) {
-        clearUserRoute("At least two saved permits need mapped coordinates to open a driving route.");
-        return;
-      }
-      const routeRows = rows.slice(0, 5);
-      const url = googleMapsDirectionsUrl(routeRows);
-      const skipped = rows.length - routeRows.length;
-      state.userRouteSummary = skipped
-        ? `Opened Google Maps for the first ${fmt(routeRows.length)} mapped stops. Download KML or CSV for all ${fmt(rows.length)} mapped permits.`
-        : `Opened Google Maps for ${fmt(routeRows.length)} mapped stops.`;
-      renderRouteSummary();
-      window.open(url, "_blank", "noopener");
+      await withListAction("Preparing Google Maps route...", async () => {
+        await ensurePermitMap();
+        const rows = mapExportRows();
+        if (rows.length < 2) {
+          clearUserRoute("At least two saved permits need mapped coordinates to open a driving route.");
+          return;
+        }
+        const routeRows = rows.slice(0, 5);
+        const url = googleMapsDirectionsUrl(routeRows);
+        const skipped = rows.length - routeRows.length;
+        state.userRouteSummary = skipped
+          ? `Opened Google Maps for the first ${fmt(routeRows.length)} mapped stops. Download KML or CSV for all ${fmt(rows.length)} mapped permits.`
+          : `Opened Google Maps for ${fmt(routeRows.length)} mapped stops.`;
+        renderRouteSummary();
+        announceListAction("Google Maps route opened in a new tab.");
+        window.open(url, "_blank", "noopener");
+      });
     }
 
     async function showGoogleRouteChunks() {
-      await ensurePermitMap();
-      const rows = mapExportRows();
-      if (rows.length < 2) {
-        hideGoogleRouteChunks();
-        clearUserRoute("At least two saved permits need mapped coordinates to create Google route chunks.");
-        return;
-      }
-      const chunkSize = 5;
-      const chunks = googleRouteChunks(rows, chunkSize);
-      const generatedAt = new Date().toLocaleString();
-      const chunkCards = chunks.map((chunk, index) => {
-        const start = index * (chunkSize - 1);
-        const end = start + chunk.length - 1;
-        const url = googleMapsDirectionsUrl(chunk, "permit_list_route_chunks");
-        return `
-          <section class="route-chunk-card">
-            <h4>Chunk ${fmt(index + 1)}: stops ${fmt(start + 1)}-${fmt(end + 1)}</h4>
-            <a href="${esc(url)}" target="_blank" rel="noopener">Open chunk ${fmt(index + 1)} in Google Maps</a>
-            <ol>${routeChunkStops(chunk, start)}</ol>
-          </section>`;
-      }).join("");
-      state.routeChunksVisible = true;
-      $("user-route-chunks").innerHTML = `
-        <div class="route-chunks-head">
-          <div>
-            <h3>Google Maps Route Chunks</h3>
-            <div class="small">Generated ${esc(generatedAt)}. Open each chunk in order; the last stop repeats as the first stop of the next chunk so the route stays sequential.</div>
+      await withListAction("Creating Google Maps route chunks...", async () => {
+        await ensurePermitMap();
+        const rows = mapExportRows();
+        if (rows.length < 2) {
+          hideGoogleRouteChunks();
+          clearUserRoute("At least two saved permits need mapped coordinates to create Google route chunks.");
+          return;
+        }
+        const chunkSize = 5;
+        const chunks = googleRouteChunks(rows, chunkSize);
+        const generatedAt = new Date().toLocaleString();
+        const chunkCards = chunks.map((chunk, index) => {
+          const start = index * (chunkSize - 1);
+          const end = start + chunk.length - 1;
+          const url = googleMapsDirectionsUrl(chunk, "permit_list_route_chunks");
+          return `
+            <section class="route-chunk-card">
+              <h4>Chunk ${fmt(index + 1)}: stops ${fmt(start + 1)}-${fmt(end + 1)}</h4>
+              <a href="${esc(url)}" target="_blank" rel="noopener">Open chunk ${fmt(index + 1)} in Google Maps</a>
+              <ol>${routeChunkStops(chunk, start)}</ol>
+            </section>`;
+        }).join("");
+        state.routeChunksVisible = true;
+        $("user-route-chunks").innerHTML = `
+          <div class="route-chunks-head">
+            <div>
+              <h3>Google Maps Route Chunks</h3>
+              <div class="small">Generated ${esc(generatedAt)}. Open each chunk in order; the last stop repeats as the first stop of the next chunk so the route stays sequential.</div>
+            </div>
+            <button class="icon-button" type="button" aria-label="Close route chunks" onclick="hideGoogleRouteChunks()">&times;</button>
           </div>
-          <button class="icon-button" type="button" aria-label="Close route chunks" onclick="hideGoogleRouteChunks()">&times;</button>
-        </div>
-        <div class="small">${fmt(rows.length)} mapped permits split into ${fmt(chunks.length)} Google Maps route links.</div>
-        <div class="route-chunks-grid">${chunkCards}</div>`;
-      $("user-route-chunks").classList.add("is-visible");
-      state.userRouteSummary = `Showing ${fmt(chunks.length)} Google Maps route chunks covering ${fmt(rows.length)} mapped permits in list order.`;
-      renderRouteSummary();
+          <div class="small">${fmt(rows.length)} mapped permits split into ${fmt(chunks.length)} Google Maps route links.</div>
+          <div class="route-chunks-grid">${chunkCards}</div>`;
+        $("user-route-chunks").classList.add("is-visible");
+        state.userRouteSummary = `Showing ${fmt(chunks.length)} Google Maps route chunks covering ${fmt(rows.length)} mapped permits in list order.`;
+        renderRouteSummary();
+        announceListAction("Route chunks are ready below.");
+      });
     }
 
     async function downloadUserListKml() {
-      await ensurePermitMap();
-      const rows = mapExportRows();
-      if (!rows.length) {
-        clearUserRoute("At least one saved permit needs mapped coordinates to download a map file.");
-        return;
-      }
-      const listNote = state.userListNote ? `<p><strong>List note:</strong> ${esc(state.userListNote)}</p>` : "";
-      const placemarks = rows.map((row, index) => `
-        <Placemark>
-          <name>${xmlText(`${index + 1}. Permit ${row.permit_number} - ${row.address}`)}</name>
-          <description><![CDATA[${cdata(`${listNote}${permitExportDescription(row)}`)}]]></description>
-          <Point><coordinates>${Number(row.longitude)},${Number(row.latitude)},0</coordinates></Point>
-        </Placemark>`).join("");
-      const line = rows.length > 1 ? `
-        <Placemark>
-          <name>Permit list route order</name>
-          <LineString>
-            <tessellate>1</tessellate>
-            <coordinates>${rows.map(row => `${Number(row.longitude)},${Number(row.latitude)},0`).join(" ")}</coordinates>
-          </LineString>
-        </Placemark>` : "";
-      const kml = `<?xml version="1.0" encoding="UTF-8"?>
+      await withListAction("Preparing KML export...", async () => {
+        await ensurePermitMap();
+        const rows = mapExportRows();
+        if (!rows.length) {
+          clearUserRoute("At least one saved permit needs mapped coordinates to download a map file.");
+          return;
+        }
+        const listNote = state.userListNote ? `<p><strong>List note:</strong> ${esc(state.userListNote)}</p>` : "";
+        const placemarks = rows.map((row, index) => `
+          <Placemark>
+            <name>${xmlText(`${index + 1}. Permit ${row.permit_number} - ${row.address}`)}</name>
+            <description><![CDATA[${cdata(`${listNote}${permitExportDescription(row)}`)}]]></description>
+            <Point><coordinates>${Number(row.longitude)},${Number(row.latitude)},0</coordinates></Point>
+          </Placemark>`).join("");
+        const line = rows.length > 1 ? `
+          <Placemark>
+            <name>Permit list route order</name>
+            <LineString>
+              <tessellate>1</tessellate>
+              <coordinates>${rows.map(row => `${Number(row.longitude)},${Number(row.latitude)},0`).join(" ")}</coordinates>
+            </LineString>
+          </Placemark>` : "";
+        const kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
     <name>Chicago Permit List</name>
@@ -3928,43 +4165,48 @@
     ${line}
   </Document>
 </kml>`;
-      downloadBlob(userListFilename("kml"), kml, "application/vnd.google-earth.kml+xml;charset=utf-8");
-      clearUserRoute(`Downloaded KML with ${fmt(rows.length)} mapped permits and their permit details.`);
+        downloadBlob(userListFilename("kml"), kml, "application/vnd.google-earth.kml+xml;charset=utf-8");
+        clearUserRoute(`Downloaded KML with ${fmt(rows.length)} mapped permits and their permit details.`);
+        announceListAction("KML export downloaded.");
+      });
     }
 
     async function downloadUserListCsv() {
-      await ensurePermitMap();
-      const rows = userListRows();
-      if (!rows.length) {
-        clearUserRoute("Add permits to My Permit List before downloading CSV.");
-        return;
-      }
-      const headers = [
-        "order", "permit_number", "status", "issued", "address", "ward", "permit_type",
-        "work_type", "reported_cost", "processing_time", "latitude", "longitude",
-        "general_contractors", "open_subs", "permit_note", "list_note", "work_description"
-      ];
-      const body = rows.map((row, index) => [
-        index + 1,
-        row.permit_number,
-        row.permit_status,
-        row.issue_date,
-        row.address,
-        row.ward,
-        row.permit_type,
-        row.work_type,
-        row.reported_cost,
-        row.processing_time,
-        row.latitude,
-        row.longitude,
-        row.general_contractors,
-        row.open_subs,
-        state.userPermitNotes[clean(row.permit_number)] || "",
-        state.userListNote,
-        row.work_description,
-      ].map(csvCell).join(","));
-      downloadBlob(userListFilename("csv"), [headers.join(","), ...body].join("\r\n"), "text/csv;charset=utf-8");
-      clearUserRoute(`Downloaded CSV with ${fmt(rows.length)} saved permits and their permit details.`);
+      await withListAction("Preparing CSV export...", async () => {
+        await ensurePermitMap();
+        const rows = userListRows();
+        if (!rows.length) {
+          clearUserRoute("Add permits to My Permit List before downloading CSV.");
+          return;
+        }
+        const headers = [
+          "order", "permit_number", "status", "issued", "address", "ward", "permit_type",
+          "work_type", "reported_cost", "processing_time", "latitude", "longitude",
+          "general_contractors", "open_subs", "permit_note", "list_note", "work_description"
+        ];
+        const body = rows.map((row, index) => [
+          index + 1,
+          row.permit_number,
+          row.permit_status,
+          row.issue_date,
+          row.address,
+          row.ward,
+          row.permit_type,
+          row.work_type,
+          row.reported_cost,
+          row.processing_time,
+          row.latitude,
+          row.longitude,
+          row.general_contractors,
+          row.open_subs,
+          state.userPermitNotes[clean(row.permit_number)] || "",
+          state.userListNote,
+          row.work_description,
+        ].map(csvCell).join(","));
+        downloadBlob(userListFilename("csv"), [headers.join(","), ...body].join("\r\n"), "text/csv;charset=utf-8");
+        clearUserRoute(`Downloaded CSV with ${fmt(rows.length)} saved permits and their permit details.`);
+        announceListAction("CSV export downloaded.");
+      });
     }
 
     function milesLabel(meters) {
@@ -4016,25 +4258,28 @@
     }
 
     async function calculateUserListRoute() {
-      await ensurePermitMap();
-      const rows = userListRows();
-      const routable = routeRows(rows);
-      if (routable.length < 2) {
-        clearUserRoute("At least two saved permits need mapped coordinates to estimate driving distances.");
-        return;
-      }
-      try {
-        state.userRouteSummary = "Calculating driving distances...";
-        renderRouteSummary();
-        state.userRouteLegs = await fetchRouteLegs(routable);
-        const totalDistance = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.distance || 0), 0);
-        const totalDuration = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.duration || 0), 0);
-        const skipped = rows.length - routable.length;
-        state.userRouteSummary = `Current route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} saved permits missing coordinates)` : ""}.`;
-        await renderUserList();
-      } catch (error) {
-        clearUserRoute(error.message || "Driving distances could not be calculated right now.");
-      }
+      await withListAction("Calculating driving distances...", async () => {
+        await ensurePermitMap();
+        const rows = userListRows();
+        const routable = routeRows(rows);
+        if (routable.length < 2) {
+          clearUserRoute("At least two saved permits need mapped coordinates to estimate driving distances.");
+          return;
+        }
+        try {
+          state.userRouteSummary = "Calculating driving distances...";
+          renderRouteSummary();
+          state.userRouteLegs = await fetchRouteLegs(routable);
+          const totalDistance = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.distance || 0), 0);
+          const totalDuration = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.duration || 0), 0);
+          const skipped = rows.length - routable.length;
+          state.userRouteSummary = `Current route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} saved permits missing coordinates)` : ""}.`;
+          announceListAction("Driving distances calculated.");
+          await renderUserList();
+        } catch (error) {
+          clearUserRoute(error.message || "Driving distances could not be calculated right now.");
+        }
+      });
     }
 
     async function fetchDurationMatrix(rows) {
@@ -4067,29 +4312,37 @@
     }
 
     async function optimizeUserListRoute() {
-      await ensurePermitMap();
-      const rows = userListRows();
-      const routable = routeRows(rows);
-      if (routable.length < 2) {
-        clearUserRoute("At least two saved permits need mapped coordinates to sort by driving time.");
-        return;
-      }
-      if (routable.length > 50) {
-        clearUserRoute("Sort by drive time is limited to 50 mapped permits at a time.");
-        return;
-      }
-      try {
-        state.userRouteSummary = "Sorting by estimated driving time...";
-        renderRouteSummary();
-        const matrix = await fetchDurationMatrix(routable);
-        const ordered = greedyRouteOrder(routable, matrix);
-        const missing = rows.filter(row => !hasCoordinates(row)).map(row => clean(row.permit_number));
-        state.userPermitNumbers = [...ordered.map(row => clean(row.permit_number)), ...missing];
-        saveUserListCookie();
-        await calculateUserListRoute();
-      } catch (error) {
-        clearUserRoute(error.message || "The list could not be sorted by driving time right now.");
-      }
+      await withListAction("Sorting by estimated driving time...", async () => {
+        await ensurePermitMap();
+        const rows = userListRows();
+        const routable = routeRows(rows);
+        if (routable.length < 2) {
+          clearUserRoute("At least two saved permits need mapped coordinates to sort by driving time.");
+          return;
+        }
+        if (routable.length > 50) {
+          clearUserRoute("Sort by drive time is limited to 50 mapped permits at a time.");
+          return;
+        }
+        try {
+          state.userRouteSummary = "Sorting by estimated driving time...";
+          renderRouteSummary();
+          const matrix = await fetchDurationMatrix(routable);
+          const ordered = greedyRouteOrder(routable, matrix);
+          const missing = rows.filter(row => !hasCoordinates(row)).map(row => clean(row.permit_number));
+          state.userPermitNumbers = [...ordered.map(row => clean(row.permit_number)), ...missing];
+          saveUserListCookie();
+          state.userRouteLegs = await fetchRouteLegs(ordered);
+          const totalDistance = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.distance || 0), 0);
+          const totalDuration = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.duration || 0), 0);
+          const skipped = rows.length - routable.length;
+          state.userRouteSummary = `Sorted route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} saved permits missing coordinates)` : ""}.`;
+          announceListAction("List sorted by estimated driving time.");
+          await renderUserList();
+        } catch (error) {
+          clearUserRoute(error.message || "The list could not be sorted by driving time right now.");
+        }
+      });
     }
 
     async function ensurePermitMap() {
@@ -4112,6 +4365,7 @@
       state.userPermitNumbers = filtered.slice(0, userListLimit);
       saveUserListCookie();
       clearUserRoute("List changed. Recalculate driving distances when ready.");
+      announceListAction(`Added permit ${number} to the list.`);
       await renderUserList();
       renderCurrentMode();
     }
@@ -4127,6 +4381,7 @@
       saveUserListCookie();
       state.selectedPermitNumbers.clear();
       clearUserRoute("List changed. Recalculate driving distances when ready.");
+      announceListAction(`${fmt(numbers.length)} permit${numbers.length === 1 ? "" : "s"} added to the list.`);
       await renderUserList();
       if (!skipModeRefresh) renderCurrentMode();
       if (!skipModeRefresh && state.activeDetail?.type === "permit") {
@@ -4143,6 +4398,7 @@
       state.userPermitNumbers = next;
       saveUserListCookie();
       clearUserRoute("List order changed. Recalculate driving distances when ready.");
+      announceListAction("Permit order updated.");
       await renderUserList();
     }
 
@@ -4158,6 +4414,7 @@
       state.userPermitNumbers = next;
       saveUserListCookie();
       clearUserRoute("List order changed. Recalculate driving distances when ready.");
+      announceListAction("Permit moved.");
       await renderUserList();
     }
 
@@ -4275,11 +4532,13 @@
 
     async function removePermitFromUserList(encodedNumber) {
       const number = decodeURIComponent(encodedNumber);
+      if (!window.confirm(`Remove permit ${number} from My Permit List?`)) return;
       state.userPermitNumbers = state.userPermitNumbers.filter(item => item !== number);
       delete state.userPermitNotes[number];
       saveUserListCookie();
       saveUserNotes();
       clearUserRoute("List changed. Recalculate driving distances when ready.");
+      announceListAction(`Removed permit ${number} from the list.`);
       await renderUserList();
       const skipModeRefresh = state.mode === "map";
       if (!skipModeRefresh) renderCurrentMode();
@@ -4290,12 +4549,18 @@
     }
 
     async function clearUserList() {
+      if (!state.userPermitNumbers.length) {
+        announceListAction("The permit list is already empty.");
+        return;
+      }
+      if (!window.confirm("Clear every permit and note from My Permit List?")) return;
       state.userPermitNumbers = [];
       state.userListNote = "";
       state.userPermitNotes = {};
       saveUserListCookie();
       saveUserNotes();
       clearUserRoute();
+      announceListAction("My Permit List was cleared.");
       await renderUserList();
       renderCurrentMode();
       if (state.activeDetail?.type === "permit") {
