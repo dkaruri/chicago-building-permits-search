@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import duckdb
@@ -180,6 +180,20 @@ def _csv_page(client: httpx.Client, *, offset: int, limit: int) -> str:
     return r.text
 
 
+def _recent_csv_page(client: httpx.Client, *, since: datetime, offset: int, limit: int) -> str:
+    url = f"https://{SOCRATA_DOMAIN}/resource/{DATASET_ID}.csv"
+    params = {
+        "$select": ",".join(SELECT_COLUMNS),
+        "$where": f"issue_date >= '{since:%Y-%m-%dT00:00:00}'",
+        "$limit": str(limit),
+        "$offset": str(offset),
+        "$order": "issue_date DESC, permit_ DESC",
+    }
+    r = client.get(url, params=params)
+    r.raise_for_status()
+    return r.text
+
+
 def _atomic_replace(shadow: Path, final: Path) -> None:
     final.parent.mkdir(parents=True, exist_ok=True)
     if not shadow.exists():
@@ -192,6 +206,64 @@ def _atomic_replace(shadow: Path, final: Path) -> None:
     shadow.replace(final)
     if backup.exists():
         backup.unlink()
+
+
+def _load_page(con: duckdb.DuckDBPyConnection, page_file: Path) -> int:
+    con.execute("DROP TABLE IF EXISTS page")
+    con.execute("CREATE TEMP TABLE page AS SELECT * FROM read_csv_auto(?, all_varchar=true)", [str(page_file)])
+    return con.execute("SELECT count(*) FROM page").fetchone()[0]
+
+
+def _replace_current_page(con: duckdb.DuckDBPyConnection) -> None:
+    con.execute("""
+        DELETE FROM contacts
+        WHERE permit_number IN (
+            SELECT permit_
+            FROM page
+            WHERE nullif(trim(coalesce(permit_, '')), '') IS NOT NULL
+        )
+    """)
+    con.execute("""
+        DELETE FROM permits
+        WHERE permit_number IN (
+            SELECT permit_
+            FROM page
+            WHERE nullif(trim(coalesce(permit_, '')), '') IS NOT NULL
+        )
+    """)
+    con.execute(INSERT_FROM_PAGE_SQL)
+    con.execute(INSERT_CONTACTS_FROM_PAGE_SQL)
+
+
+def _recent_backfill_days() -> int:
+    raw = os.environ.get("CHI_PERMITS_RECENT_BACKFILL_DAYS", "45")
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 45
+
+
+def _backfill_recent_issue_dates(
+    con: duckdb.DuckDBPyConnection,
+    client: httpx.Client,
+    page_dir: Path,
+) -> int:
+    since = datetime.now(timezone.utc) - timedelta(days=_recent_backfill_days())
+    total = 0
+    offset = 0
+    while True:
+        text = _recent_csv_page(client, since=since, offset=offset, limit=PAGE_SIZE)
+        page_file = page_dir / f"permits_recent_{offset}.csv"
+        page_file.write_text(text, encoding="utf-8", newline="")
+        page_count = _load_page(con, page_file)
+        if page_count == 0:
+            break
+        _replace_current_page(con)
+        total += page_count
+        offset += page_count
+        if page_count < PAGE_SIZE:
+            break
+    return total
 
 
 def run_ingest(*, limit: int | None = None) -> dict:
@@ -225,9 +297,7 @@ def run_ingest(*, limit: int | None = None) -> dict:
                 text = _csv_page(client, offset=offset, limit=page_limit)
                 page_file = page_dir / f"permits_{offset}.csv"
                 page_file.write_text(text, encoding="utf-8", newline="")
-                con.execute("DROP TABLE IF EXISTS page")
-                con.execute("CREATE TEMP TABLE page AS SELECT * FROM read_csv_auto(?, all_varchar=true)", [str(page_file)])
-                page_count = con.execute("SELECT count(*) FROM page").fetchone()[0]
+                page_count = _load_page(con, page_file)
                 if page_count == 0:
                     break
                 con.execute(INSERT_FROM_PAGE_SQL)
@@ -236,6 +306,9 @@ def run_ingest(*, limit: int | None = None) -> dict:
                 offset += page_count
                 if page_count < page_limit:
                     break
+            if limit is None:
+                _backfill_recent_issue_dates(con, client, page_dir)
+                total = con.execute("SELECT count(*) FROM permits").fetchone()[0]
             con.execute("CREATE INDEX permits_issue_date_idx ON permits(issue_date)")
             con.execute("CREATE INDEX permits_number_idx ON permits(permit_number)")
             con.execute("CREATE INDEX permits_ward_idx ON permits(ward)")
