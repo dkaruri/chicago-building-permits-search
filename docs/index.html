@@ -2454,6 +2454,7 @@
       resultSort: { key: null, direction: null },
       detailHistory: [],
       detailHistoryIndex: -1,
+      activeDetailKey: "",
       activeDetail: null,
       detailFilters: { q: "", workType: "", permitType: "", role: "" },
       detailPageIndex: 0,
@@ -2634,19 +2635,44 @@
     }
 
     function closeDetail() {
+      state.activeDetailKey = "";
       hideDetail();
     }
 
-    function detailBack() {
-      if (state.detailHistoryIndex <= 0) return;
-      state.detailHistoryIndex -= 1;
-      showDetail(state.detailHistory[state.detailHistoryIndex], false);
+    async function detailBack() {
+      await navigateDetailResult(-1);
     }
 
-    function detailForward() {
-      if (state.detailHistoryIndex >= state.detailHistory.length - 1) return;
-      state.detailHistoryIndex += 1;
-      showDetail(state.detailHistory[state.detailHistoryIndex], false);
+    async function detailForward() {
+      await navigateDetailResult(1);
+    }
+
+    function detailRowKey(row) {
+      if (!row) return "";
+      return state.mode === "open_permits" ? clean(row.permit_number) : norm(row.contact_name);
+    }
+
+    function activeDetailIndex() {
+      const key = state.activeDetailKey || detailRowKey(state.activeDetail && state.activeDetail.row);
+      if (!key) return -1;
+      return state.filteredRows.findIndex(row => detailRowKey(row) === key);
+    }
+
+    async function navigateDetailResult(direction) {
+      if (!state.filteredRows.length) return;
+      const current = activeDetailIndex();
+      if (current < 0) return;
+      const next = current + direction;
+      if (next < 0 || next >= state.filteredRows.length) return;
+      state.pageIndex = Math.floor(next / state.pageSize);
+      const visibleIndex = next - state.pageIndex * state.pageSize;
+      if (state.mode === "open_permits") {
+        renderPermits();
+        selectPermit(visibleIndex);
+      } else {
+        renderContacts();
+        await selectContact(visibleIndex);
+      }
     }
 
     async function loadJson(name, quiet = false) {
@@ -2686,6 +2712,7 @@
     function setMode(mode) {
       state.mode = mode;
       state.selected = null;
+      state.activeDetailKey = "";
       state.resultSort = { key: null, direction: null };
       state.selectedPermitNumbers.clear();
       appModes.forEach(name => $("tab-" + name)?.classList.remove("active"));
@@ -2700,6 +2727,7 @@
       $("q").value = "";
       $("ward").value = "";
       $("usable-processing").checked = false;
+      state.activeDetailKey = "";
       state.resultSort = { key: null, direction: null };
       state.selectedPermitNumbers.clear();
       hideDetail();
@@ -4418,6 +4446,7 @@
     async function selectContact(index) {
       const row = state.visibleRows[index];
       state.selected = row;
+      state.activeDetailKey = detailRowKey(row);
       showDetail(detailShell(`<p class="small">Loading matching open permits for ${esc(row.contact_name)}...</p>`), false);
       let allRelated = [];
       let related = [];
@@ -4763,6 +4792,7 @@
     }
 
     function showPermitDetail(row, pushHistory = true) {
+      state.activeDetailKey = detailRowKey(row);
       state.activeDetail = { type: "permit", row };
       const payload = enc(JSON.stringify(row));
       const saved = isInUserList(row.permit_number);
@@ -4814,6 +4844,7 @@
       const name = decodeURIComponent(encodedName);
       state.mode = mode;
       state.selected = null;
+      state.activeDetailKey = "";
       state.resultSort = { key: null, direction: null };
       appModes.forEach(tabName => $("tab-" + tabName)?.classList.remove("active"));
       $("tab-" + mode)?.classList.add("active");
@@ -4839,6 +4870,7 @@
       const ward = decodeURIComponent(encodedWard);
       state.mode = "open_permits";
       state.selected = null;
+      state.activeDetailKey = "";
       state.resultSort = { key: null, direction: null };
       appModes.forEach(tabName => $("tab-" + tabName)?.classList.remove("active"));
       $("tab-open_permits")?.classList.add("active");
