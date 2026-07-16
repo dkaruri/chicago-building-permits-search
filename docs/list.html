@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Chicago Building Permits Search</title>
-  <meta name="description" content="Search Chicago open permits, general contractors, and open subs with current permit details, contact data, workload counts, and work specializations.">
+  <title>My Permit List | Chicago Building Permits</title>
+  <meta name="description" content="Review, reorder, route, annotate, and export saved Chicago building permits.">
   <meta name="author" content="Divyam Karuri">
-  <link rel="canonical" href="https://dkaruri.github.io/chicago-building-permits-search/">
-  <meta property="og:title" content="Chicago Building Permits Search">
-  <meta property="og:description" content="Search Chicago open permits, general contractors, and open subs with current permit details, contact data, workload counts, and work specializations.">
+  <link rel="canonical" href="https://dkaruri.github.io/chicago-building-permits-search/list.html">
+  <meta property="og:title" content="My Permit List">
+  <meta property="og:description" content="Review, reorder, route, annotate, and export saved Chicago building permits.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://dkaruri.github.io/chicago-building-permits-search/">
+  <meta property="og:url" content="https://dkaruri.github.io/chicago-building-permits-search/list.html">
   <meta property="og:site_name" content="Chicago Permits by Divyam Karuri">
   <meta property="og:image" content="https://dkaruri.github.io/chicago-building-permits-search/assets/search-directory-preview.png">
   <meta property="og:image:type" content="image/png">
@@ -18,8 +18,8 @@
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Chicago Building Permits Search preview card by Divyam Karuri">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Chicago Building Permits Search">
-  <meta name="twitter:description" content="Search Chicago open permits, general contractors, and open subs with current permit details, contact data, workload counts, and work specializations.">
+  <meta name="twitter:title" content="My Permit List">
+  <meta name="twitter:description" content="Review, reorder, route, annotate, and export saved Chicago building permits.">
   <meta name="twitter:image" content="https://dkaruri.github.io/chicago-building-permits-search/assets/search-directory-preview.png">
   <meta name="twitter:image:alt" content="Chicago Building Permits Search preview card by Divyam Karuri">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=database_search,list,map_search,moon_stars,sunny" rel="stylesheet">
@@ -2307,12 +2307,20 @@
       }
     }
 
-    body.directory-page #user-list-panel {
+    body.list-page .layout {
       display: none;
+    }
+
+    body.list-page #user-list-panel {
+      margin-bottom: 0;
+    }
+
+    body.list-page .user-list-panel {
+      min-height: 48dvh;
     }
   </style>
 </head>
-<body class="directory-page">
+<body class="list-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <div id="progress"></div>
   <header>
@@ -2320,13 +2328,13 @@
       <div class="kicker">Chicago Data Portal static search</div>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" onclick="toggleTheme()"><span class="material-symbols-outlined" aria-hidden="true">moon_stars</span></button>
     </div>
-    <h1>Open Permits + Contractor Profiles</h1>
-    <p>Static GitHub Pages tool generated from Chicago Building Permits data. Profiles include public contact fields, open job counts, average processing days, and work specializations.</p>
+    <h1>My Permit List</h1>
+    <p>Review saved permits, add notes, reorder stops, estimate driving distance, create Google Maps route chunks, and export the list for field use.</p>
     <nav class="app-nav" aria-label="Primary pages">
       <span class="nav-brand">Chicago Permits</span>
-      <a class="active" href="index.html" aria-current="page"><span class="material-symbols-outlined" aria-hidden="true">database_search</span><span>Search Directory</span></a>
+      <a href="index.html"><span class="material-symbols-outlined" aria-hidden="true">database_search</span><span>Search Directory</span></a>
       <a href="map.html"><span class="material-symbols-outlined" aria-hidden="true">map_search</span><span>Permit Map</span></a>
-      <a href="list.html"><span class="material-symbols-outlined" aria-hidden="true">list</span><span>My Permit List</span></a>
+      <a class="active" href="list.html" aria-current="page"><span class="material-symbols-outlined" aria-hidden="true">list</span><span>My Permit List</span></a>
     </nav>
   </header>
 
@@ -2667,7 +2675,9 @@
       applyInitialUrlParams();
       renderStatus();
       await renderUserList();
-      await search();
+      if (!document.body.classList.contains("list-page")) {
+        await search();
+      }
     }
 
     function renderStatus() {
