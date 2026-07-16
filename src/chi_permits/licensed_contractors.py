@@ -217,10 +217,3 @@ def fetch_licensed_contractors(page_size: int = 5000) -> dict[str, Any]:
     }
 
 
-def fetch_general_contractor_licenses(page_size: int = 5000) -> dict[str, Any]:
-    licenses = fetch_licensed_contractors(page_size)
-    licenses["rows"] = [
-        row for row in licenses["rows"]
-        if "general" in row.get("source_categories", []) or row.get("license_category") == "general"
-    ]
-    return licenses

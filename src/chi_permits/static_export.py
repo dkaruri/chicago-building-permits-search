@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import duckdb
 
-from .config import DATASET_ID, OPEN_STATUSES, SOCRATA_DOMAIN
+from .config import DATASET_ID, OPEN_STATUSES, SOCRATA_DOMAIN, jsonable
 from .db import connect
 from .licensed_contractors import fetch_licensed_contractors, normalize_license_name
+from .tools.permits import rows as _rows
 
 COMMUNITY_AREAS: dict[int, str] = {
     1: "Rogers Park",
@@ -92,25 +93,9 @@ COMMUNITY_AREAS: dict[int, str] = {
 }
 
 
-def _jsonable(value: Any) -> Any:
-    if isinstance(value, (date, datetime)):
-        return value.isoformat()
-    if isinstance(value, list):
-        return [_jsonable(v) for v in value]
-    if isinstance(value, dict):
-        return {k: _jsonable(v) for k, v in value.items()}
-    return value
-
-
-def _rows(con: duckdb.DuckDBPyConnection, sql: str, params: list | None = None) -> list[dict]:
-    cur = con.execute(sql, params or [])
-    cols = [d[0] for d in cur.description]
-    return [dict(zip(cols, row)) for row in cur.fetchall()]
-
-
 def _write_json(path: Path, data: Any) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
-    text = json.dumps(_jsonable(data), ensure_ascii=False, separators=(",", ":"))
+    text = json.dumps(jsonable(data), ensure_ascii=False, separators=(",", ":"))
     path.write_text(text, encoding="utf-8")
     return path.stat().st_size
 

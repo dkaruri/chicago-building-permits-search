@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import threading
-from datetime import date, datetime
 
 import duckdb
 import httpx
@@ -11,7 +10,7 @@ from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
-from .config import DATASET_ID, SOCRATA_DOMAIN, db_path
+from .config import DATASET_ID, SOCRATA_DOMAIN, db_path, jsonable
 from .db import connect
 from .ingest import run_ingest
 from .tools.permits import contact_detail_from, contact_summary_from, open_permits_from
@@ -19,18 +18,8 @@ from .tools.permits import contact_detail_from, contact_summary_from, open_permi
 UPDATE_STATE = {"running": False, "last_result": None, "error": None}
 
 
-def _jsonable(value):
-    if isinstance(value, (date, datetime)):
-        return value.isoformat()
-    if isinstance(value, list):
-        return [_jsonable(v) for v in value]
-    if isinstance(value, dict):
-        return {k: _jsonable(v) for k, v in value.items()}
-    return value
-
-
 def _json(data, status_code: int = 200):
-    return JSONResponse(_jsonable(data), status_code=status_code)
+    return JSONResponse(jsonable(data), status_code=status_code)
 
 
 def _remote_rows_updated_at() -> int | None:

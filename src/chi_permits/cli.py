@@ -16,10 +16,7 @@ def init(limit: int | None = typer.Option(None, help="Optional max rows for smok
     typer.echo(f"Loaded {summary['row_count']} rows into {summary['database']}")
 
 
-@app.command()
-def update(limit: int | None = typer.Option(None, help="Optional max rows for smoke tests.")) -> None:
-    summary = run_ingest(limit=limit)
-    typer.echo(f"Updated {summary['row_count']} rows into {summary['database']}")
+update = app.command("update")(init)
 
 
 @app.command()

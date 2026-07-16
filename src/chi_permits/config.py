@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import os
+from datetime import date, datetime
 from pathlib import Path
 
 SOCRATA_DOMAIN = "data.cityofchicago.org"
 DATASET_ID = "ydr8-5enu"
 DATASET_NAME = "Chicago Building Permits"
 PAGE_SIZE = 50000
-RUN_SQL_ROW_CAP = 100
-RUN_SQL_TIMEOUT_SECONDS = 30
 
 SELECT_COLUMNS: tuple[str, ...] = (
     "id",
@@ -137,3 +136,13 @@ def var_dir() -> Path:
 
 def app_token() -> str | None:
     return os.environ.get("CHI_SOCRATA_APP_TOKEN") or os.environ.get("SOCRATA_APP_TOKEN")
+
+
+def jsonable(value):
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, list):
+        return [jsonable(v) for v in value]
+    if isinstance(value, dict):
+        return {k: jsonable(v) for k, v in value.items()}
+    return value

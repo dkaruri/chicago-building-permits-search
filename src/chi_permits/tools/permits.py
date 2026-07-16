@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import duckdb
 
-OPEN_STATUS_SQL = "('ACTIVE', 'SUSPENDED', 'PHASED PERMITTING')"
+from ..config import OPEN_STATUSES
+
+OPEN_STATUS_SQL = "(" + ", ".join(f"'{s}'" for s in OPEN_STATUSES) + ")"
 
 
 def rows(con: duckdb.DuckDBPyConnection, sql: str, params: list | None = None) -> list[dict]:
