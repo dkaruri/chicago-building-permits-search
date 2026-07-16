@@ -2222,8 +2222,10 @@
     }
 
     @media (max-width: 640px) {
+      html,
       body {
         font-size: 15px;
+        overflow-x: hidden;
       }
 
       h1 {
@@ -2242,6 +2244,7 @@
 
       body.directory-page main {
         width: 100%;
+        max-width: 100%;
         padding: 8px 10px 28px;
       }
 
@@ -2273,20 +2276,30 @@
         display: flex;
         flex-direction: column;
         gap: 12px;
+        width: 100%;
+        min-width: 0;
       }
 
       body.directory-page .controls {
         order: 1;
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
+        gap: 8px;
+        width: 100%;
         padding: 12px;
         border-radius: 10px;
+        box-shadow: 0 10px 26px var(--shadow);
+      }
+
+      body.directory-page .tabs {
+        display: none !important;
       }
 
       body.directory-page .content {
         order: 2;
         display: block;
+        width: 100%;
+        min-width: 0;
       }
 
       body.directory-page .directory-search-field,
@@ -2316,12 +2329,18 @@
         min-height: 46px;
         padding: 10px 11px;
         border-radius: 8px;
-        font-size: 0.95rem;
+        font-size: 1rem;
+      }
+
+      body.directory-page .directory-search-field input {
+        min-height: 50px;
+        font-size: 1.02rem;
       }
 
       body.directory-page .controls button {
         min-height: 44px;
         border-radius: 8px;
+        touch-action: manipulation;
       }
 
       body.directory-page .check-row {
@@ -2340,11 +2359,14 @@
       }
 
       body.directory-page #results-panel {
+        width: 100%;
         padding: 12px;
         border-radius: 10px;
       }
 
       body.directory-page #results-panel > .panel-head {
+        display: grid;
+        grid-template-columns: 1fr;
         gap: 6px;
         margin-bottom: 10px;
       }
@@ -2355,18 +2377,61 @@
       }
 
       body.directory-page .results-table tr {
-        padding: 12px;
+        padding: 12px 12px 10px;
         border-radius: 10px;
       }
 
       body.directory-page .results-table td {
-        padding: 8px 0;
+        display: grid;
+        grid-template-columns: minmax(78px, 34%) minmax(0, 1fr);
+        gap: 8px;
+        align-items: start;
+        padding: 7px 0;
         line-height: 1.35;
+      }
+
+      body.directory-page .results-table td::before {
+        margin: 0;
+        line-height: 1.35;
+      }
+
+      body.directory-page .results-table td[data-label="Name"],
+      body.directory-page .results-table td[data-label="Permit"] {
+        display: block;
+        padding-top: 0;
+      }
+
+      body.directory-page .results-table td[data-label="Name"]::before,
+      body.directory-page .results-table td[data-label="Permit"]::before {
+        margin-bottom: 4px;
       }
 
       body.directory-page .results-table td[data-label="Name"] strong,
       body.directory-page .results-table td[data-label="Permit"] strong {
         font-size: 1rem;
+      }
+
+      body.directory-page .pager-controls {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+    }
+
+    @media (max-width: 420px) {
+      body.directory-page .controls {
+        grid-template-columns: 1fr;
+      }
+
+      body.directory-page .directory-ward-field,
+      body.directory-page .directory-sort-field,
+      body.directory-page .directory-search-action,
+      body.directory-page .directory-clear-action {
+        grid-column: 1 / -1;
+      }
+
+      body.directory-page .results-table td {
+        grid-template-columns: minmax(72px, 32%) minmax(0, 1fr);
       }
     }
 
