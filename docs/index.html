@@ -2239,6 +2239,135 @@
         min-height: 44px;
         font-size: 0.9rem;
       }
+
+      body.directory-page main {
+        width: 100%;
+        padding: 8px 10px 28px;
+      }
+
+      body.directory-page header {
+        padding: 14px 14px 12px;
+      }
+
+      body.directory-page header p {
+        font-size: 0.86rem;
+        line-height: 1.42;
+      }
+
+      body.directory-page .status {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      body.directory-page .metric {
+        min-height: 62px;
+        padding: 10px;
+      }
+
+      body.directory-page .metric span {
+        font-size: 0.62rem;
+      }
+
+      body.directory-page .layout {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      body.directory-page .controls {
+        order: 1;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        padding: 12px;
+        border-radius: 10px;
+      }
+
+      body.directory-page .content {
+        order: 2;
+        display: block;
+      }
+
+      body.directory-page .directory-search-field,
+      body.directory-page .search-mode-field,
+      body.directory-page .directory-processing-field,
+      body.directory-page .controls > p {
+        grid-column: 1 / -1;
+      }
+
+      body.directory-page .directory-search-field { order: 1; }
+      body.directory-page .search-mode-field { order: 2; }
+      body.directory-page .directory-ward-field { order: 3; }
+      body.directory-page .directory-sort-field { order: 4; }
+      body.directory-page .directory-processing-field { order: 5; }
+      body.directory-page .directory-search-action { order: 6; }
+      body.directory-page .directory-clear-action { order: 7; }
+      body.directory-page .controls > p { order: 8; }
+
+      body.directory-page .controls label {
+        gap: 6px;
+        font-size: 0.68rem;
+        letter-spacing: 0.06em;
+      }
+
+      body.directory-page .controls input,
+      body.directory-page .controls select {
+        min-height: 46px;
+        padding: 10px 11px;
+        border-radius: 8px;
+        font-size: 0.95rem;
+      }
+
+      body.directory-page .controls button {
+        min-height: 44px;
+        border-radius: 8px;
+      }
+
+      body.directory-page .check-row {
+        min-height: 42px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface-subtle);
+        font-size: 0.86rem;
+      }
+
+      body.directory-page .controls .small {
+        margin: 0;
+        font-size: 0.76rem;
+        line-height: 1.35;
+      }
+
+      body.directory-page #results-panel {
+        padding: 12px;
+        border-radius: 10px;
+      }
+
+      body.directory-page #results-panel > .panel-head {
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+
+      body.directory-page #results-title {
+        font-size: 1rem;
+        line-height: 1.2;
+      }
+
+      body.directory-page .results-table tr {
+        padding: 12px;
+        border-radius: 10px;
+      }
+
+      body.directory-page .results-table td {
+        padding: 8px 0;
+        line-height: 1.35;
+      }
+
+      body.directory-page .results-table td[data-label="Name"] strong,
+      body.directory-page .results-table td[data-label="Permit"] strong {
+        font-size: 1rem;
+      }
     }
 
     .theme-toggle {
@@ -2389,24 +2518,24 @@
           <button id="tab-open_subs" onclick="setMode('open_subs')">Open Subs</button>
           <button id="tab-open_permits" onclick="setMode('open_permits')">Open Permits</button>
         </div>
-        <label class="mode-select">Search type
+        <label class="mode-select search-mode-field">Search type
           <select id="mode-select" onchange="setMode(this.value)">
             <option value="general_contractors">General Contractors</option>
             <option value="open_subs">Open Subs</option>
             <option value="open_permits">Open Permits</option>
           </select>
         </label>
-        <label>Search
+        <label class="directory-search-field">Search
           <input id="q" placeholder="Name, permit, address, work type..." oninput="scheduleSearch()">
         </label>
-        <label>Ward
+        <label class="directory-ward-field">Ward
           <input id="ward" placeholder="Open permits only" oninput="scheduleSearch()">
         </label>
-        <label class="check-row">
+        <label class="check-row directory-processing-field">
           <input id="usable-processing" type="checkbox" onchange="search()">
           <span>Only usable processing times</span>
         </label>
-        <label>Sort
+        <label class="directory-sort-field">Sort
           <select id="sort" onchange="clearColumnSort(); search()">
             <option value="open_jobs">Open jobs</option>
             <option value="total_jobs">Total jobs</option>
@@ -2415,8 +2544,8 @@
             <option value="reported_cost">Reported cost</option>
           </select>
         </label>
-        <button class="primary" onclick="search()">Search</button>
-        <button onclick="clearSearch()">Clear results</button>
+        <button class="primary directory-search-action" onclick="search()">Search</button>
+        <button class="directory-clear-action" onclick="clearSearch()">Clear results</button>
         <p class="small">Data refreshes by GitHub Actions. Permit contact fields come from the Chicago Data Portal. License details come from the City licensed contractor registries when a name match is available.</p>
         <p class="small"><a href="https://github.com/dkaruri/chicago-building-permits-search">Repository</a> &middot; <a href="https://data.cityofchicago.org/Buildings/Building-Permits/ydr8-5enu">Source dataset</a></p>
       </aside>
