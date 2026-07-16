@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import duckdb
 
-from .config import DATASET_ID, OPEN_STATUSES, SOCRATA_DOMAIN, jsonable
+from .config import DATASET_ID, OPEN_STATUS_SQL, SOCRATA_DOMAIN, jsonable
 from .db import connect
 from .licensed_contractors import fetch_licensed_contractors, normalize_license_name
 from .tools.permits import rows as _rows
@@ -138,7 +138,7 @@ def _write_map_shards(con: duckdb.DuckDBPyConnection, out: Path, license_index: 
           AND permit_number IN (
             SELECT permit_number
             FROM permits
-            WHERE permit_status IN {tuple(OPEN_STATUSES)}
+            WHERE permit_status IN {OPEN_STATUS_SQL}
           )
         GROUP BY contact_name
     """)
@@ -298,7 +298,7 @@ def _contact_profiles(
                 any_value(state) AS state,
                 any_value(zipcode) AS zipcode,
                 count(*) AS total_jobs,
-                count(CASE WHEN permit_status IN {tuple(OPEN_STATUSES)} THEN permit_number END) AS open_jobs,
+                count(CASE WHEN permit_status IN {OPEN_STATUS_SQL} THEN permit_number END) AS open_jobs,
                 coalesce(avg(CASE WHEN processing_time > 0 THEN processing_time WHEN processing_time = 0 THEN 1.0 END), 1.0) AS avg_processing_days,
                 count(CASE WHEN processing_time > 0 THEN permit_number END) AS usable_processing_jobs,
                 avg(CASE WHEN processing_time > 0 THEN processing_time END) AS avg_usable_processing_days,
@@ -312,7 +312,7 @@ def _contact_profiles(
         work_type_ranked AS (
             SELECT c.contact_name, p.work_type,
                    count(DISTINCT c.permit_number) AS jobs,
-                   count(DISTINCT CASE WHEN c.permit_status IN {tuple(OPEN_STATUSES)} THEN c.permit_number END) AS open_jobs,
+                   count(DISTINCT CASE WHEN c.permit_status IN {OPEN_STATUS_SQL} THEN c.permit_number END) AS open_jobs,
                    row_number() OVER (PARTITION BY c.contact_name ORDER BY count(DISTINCT c.permit_number) DESC) AS rn
             FROM contact_permits c
             JOIN permits p USING (permit_number)
@@ -322,7 +322,7 @@ def _contact_profiles(
         permit_type_ranked AS (
             SELECT contact_name, permit_type,
                    count(DISTINCT permit_number) AS jobs,
-                   count(DISTINCT CASE WHEN permit_status IN {tuple(OPEN_STATUSES)} THEN permit_number END) AS open_jobs,
+                   count(DISTINCT CASE WHEN permit_status IN {OPEN_STATUS_SQL} THEN permit_number END) AS open_jobs,
                    row_number() OVER (PARTITION BY contact_name ORDER BY count(DISTINCT permit_number) DESC) AS rn
             FROM contact_permits
             WHERE nullif(trim(coalesce(permit_type, '')), '') IS NOT NULL
@@ -386,7 +386,7 @@ def _open_permits(con: duckdb.DuckDBPyConnection) -> list[dict]:
                c.general_contractors, c.open_subs
         FROM permits p
         LEFT JOIN contact_names c USING (permit_number)
-        WHERE p.permit_status IN {tuple(OPEN_STATUSES)}
+        WHERE p.permit_status IN {OPEN_STATUS_SQL}
         ORDER BY p.issue_date DESC NULLS LAST, p.permit_number
     """)
 
@@ -405,7 +405,7 @@ def export_static(out_dir: Path | str = "docs/data") -> dict:
             SELECT
                 (SELECT min(issue_date) FROM permits) AS first_issue_date,
                 (SELECT max(issue_date) FROM permits) AS latest_issue_date,
-                (SELECT count(*) FROM permits WHERE permit_status IN {tuple(OPEN_STATUSES)}) AS open_permit_count,
+                (SELECT count(*) FROM permits WHERE permit_status IN {OPEN_STATUS_SQL}) AS open_permit_count,
                 (SELECT count(DISTINCT contact_name)
                  FROM contacts
                  WHERE contact_category = 'general_contractor'
@@ -417,7 +417,7 @@ def export_static(out_dir: Path | str = "docs/data") -> dict:
                    AND {person_filter}
                    AND nullif(trim(coalesce(contact_name, '')), '') IS NOT NULL) AS open_sub_count
         """)[0]
-        exported_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        exported_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat() + "Z"
         licenses = fetch_licensed_contractors()
         license_index: dict[str, list[dict]] = {}
         for row in licenses["rows"]:

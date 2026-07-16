@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import threading
 
 import duckdb
@@ -10,7 +9,7 @@ from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
-from .config import DATASET_ID, SOCRATA_DOMAIN, db_path, jsonable
+from .config import DATASET_ID, OPEN_STATUS_SQL, SOCRATA_DOMAIN, db_path, jsonable
 from .db import connect
 from .ingest import run_ingest
 from .tools.permits import contact_detail_from, contact_summary_from, open_permits_from
@@ -20,6 +19,14 @@ UPDATE_STATE = {"running": False, "last_result": None, "error": None}
 
 def _json(data, status_code: int = 200):
     return JSONResponse(jsonable(data), status_code=status_code)
+
+
+def _read_con():
+    """Open a read-only connection, returning (con, None) or (None, error_response)."""
+    try:
+        return connect(read_only=True), None
+    except (OSError, RuntimeError) as e:
+        return None, _json({"error": "Database unavailable, possibly refreshing", "detail": str(e)}, 503)
 
 
 def _remote_rows_updated_at() -> int | None:
@@ -39,7 +46,7 @@ def _local_meta():
         """).fetchone()
         span = con.execute("""
             SELECT min(issue_date), max(issue_date),
-                   count(*) FILTER (WHERE permit_status IN ('ACTIVE', 'SUSPENDED', 'PHASED PERMITTING'))
+                   count(*) FILTER (WHERE permit_status IN {OPEN_STATUS_SQL})
             FROM permits
         """).fetchone()
     finally:
@@ -79,7 +86,9 @@ async def api_contacts(request):
     q = request.query_params.get("q") or None
     category = request.query_params.get("category") or "general_contractor"
     n = min(int(request.query_params.get("n", "50")), 200)
-    con = connect(read_only=True)
+    con, err = _read_con()
+    if err:
+        return err
     try:
         return _json(contact_summary_from(con, category, q, n))
     finally:
@@ -92,7 +101,9 @@ async def api_contact_detail(request):
     n = min(int(request.query_params.get("n", "80")), 300)
     if not name:
         return _json({"error": "name is required"}, 400)
-    con = connect(read_only=True)
+    con, err = _read_con()
+    if err:
+        return err
     try:
         return _json(contact_detail_from(con, name, category, n))
     finally:
@@ -105,7 +116,9 @@ async def api_open_permits(request):
     ward_raw = request.query_params.get("ward")
     ward = int(ward_raw) if ward_raw else None
     n = min(int(request.query_params.get("n", "80")), 300)
-    con = connect(read_only=True)
+    con, err = _read_con()
+    if err:
+        return err
     try:
         return _json(open_permits_from(con, n=n, query=q, contact_category=category, ward=ward))
     finally:

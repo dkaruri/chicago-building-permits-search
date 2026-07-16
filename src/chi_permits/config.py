@@ -117,6 +117,7 @@ SELECT_COLUMNS: tuple[str, ...] = (
 )
 
 OPEN_STATUSES: tuple[str, ...] = ("ACTIVE", "SUSPENDED", "PHASED PERMITTING")
+OPEN_STATUS_SQL = "(" + ", ".join(f"'{s}'" for s in OPEN_STATUSES) + ")"
 
 
 def home() -> Path:
@@ -128,10 +129,6 @@ def db_path() -> Path:
     if env:
         return Path(env).expanduser()
     return home() / "var" / "permits.duckdb"
-
-
-def var_dir() -> Path:
-    return db_path().parent
 
 
 def app_token() -> str | None:
