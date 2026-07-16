@@ -130,10 +130,6 @@ def db_path() -> Path:
     return home() / "var" / "permits.duckdb"
 
 
-def var_dir() -> Path:
-    return db_path().parent
-
-
 def app_token() -> str | None:
     return os.environ.get("CHI_SOCRATA_APP_TOKEN") or os.environ.get("SOCRATA_APP_TOKEN")
 
