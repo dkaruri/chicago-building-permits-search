@@ -2603,9 +2603,9 @@
   </header>
 
   <main id="main-content">
-    <section id="status" class="status"></section>
+    <section id="status" class="status" hidden aria-hidden="true"></section>
 
-    <section id="user-list-panel" class="panel user-list-panel" ondragover="permitListDragOver(event)" ondragleave="permitListDragLeave(event)" ondrop="permitListDrop(event)">
+    <section id="user-list-panel" class="panel user-list-panel" hidden aria-hidden="true" ondragover="permitListDragOver(event)" ondragleave="permitListDragLeave(event)" ondrop="permitListDrop(event)">
       <div class="panel-head user-list-head">
         <div class="user-list-title-row">
           <h2>My Permit List</h2>
@@ -2653,7 +2653,7 @@
     </section>
 
     <section class="layout">
-      <aside class="panel controls">
+      <aside class="panel controls" hidden aria-hidden="true">
         <div class="tabs">
           <button id="tab-general_contractors" class="active" onclick="setMode('general_contractors')">General Contractors</button>
           <button id="tab-open_subs" onclick="setMode('open_subs')">Open Subs</button>
