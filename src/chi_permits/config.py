@@ -117,6 +117,7 @@ SELECT_COLUMNS: tuple[str, ...] = (
 )
 
 OPEN_STATUSES: tuple[str, ...] = ("ACTIVE", "SUSPENDED", "PHASED PERMITTING")
+OPEN_STATUS_SQL = "(" + ", ".join(f"'{s}'" for s in OPEN_STATUSES) + ")"
 
 
 def home() -> Path:

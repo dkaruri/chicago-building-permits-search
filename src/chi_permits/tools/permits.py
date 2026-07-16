@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import duckdb
 
-from ..config import OPEN_STATUSES
-
-OPEN_STATUS_SQL = "(" + ", ".join(f"'{s}'" for s in OPEN_STATUSES) + ")"
+from ..config import OPEN_STATUS_SQL
 
 
 def rows(con: duckdb.DuckDBPyConnection, sql: str, params: list | None = None) -> list[dict]:

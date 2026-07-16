@@ -7,7 +7,7 @@ from typing import Any
 import duckdb
 import httpx
 
-from chi_permits.config import DATASET_ID, OPEN_STATUSES, SOCRATA_DOMAIN, db_path
+from chi_permits.config import DATASET_ID, OPEN_STATUS_SQL, OPEN_STATUSES, SOCRATA_DOMAIN, db_path
 from chi_permits.licensed_contractors import fetch_licensed_contractors
 
 
@@ -36,7 +36,7 @@ def live_socrata_counts() -> dict[str, Any]:
             f"https://{SOCRATA_DOMAIN}/resource/{DATASET_ID}.json",
             params={
                 "$select": "count(*)",
-                "$where": "permit_status in('ACTIVE','SUSPENDED','PHASED PERMITTING')",
+                "$where": "permit_status in" + OPEN_STATUS_SQL,
             },
         )
         open_response.raise_for_status()

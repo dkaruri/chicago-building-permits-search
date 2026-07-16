@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -145,7 +145,7 @@ def _row_key(row: dict[str, Any]) -> tuple[str, str, str, str, str]:
 
 
 def fetch_licensed_contractors(page_size: int = 5000) -> dict[str, Any]:
-    fetched_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    fetched_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat() + "Z"
     headers = {
         "Referer": f"{BASE_URL}/active",
         "User-Agent": "chi-permits-search/0.1",

@@ -203,7 +203,13 @@ def _atomic_replace(shadow: Path, final: Path) -> None:
         backup.unlink()
     if final.exists():
         final.replace(backup)
-    shadow.replace(final)
+    try:
+        shadow.replace(final)
+    except OSError:
+        # ponytail: restore backup if shadow rename fails (Windows edge case)
+        if backup.exists() and not final.exists():
+            backup.replace(final)
+        raise
     if backup.exists():
         backup.unlink()
 
