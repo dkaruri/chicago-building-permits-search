@@ -483,7 +483,7 @@
 
     .user-list-toolbar {
       display: grid;
-      grid-template-columns: minmax(170px, auto) minmax(320px, 1fr) minmax(210px, auto);
+      grid-template-columns: minmax(0, 1fr) auto auto;
       gap: 10px;
       align-items: stretch;
       width: 100%;
@@ -494,18 +494,22 @@
       flex-wrap: wrap;
       gap: 6px;
       align-items: center;
-      padding: 8px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--surface-subtle);
+      min-width: 0;
     }
 
     .action-group.route-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       align-content: flex-start;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface-subtle);
     }
 
     .action-label {
       flex: 0 0 100%;
+      grid-column: 1 / -1;
       color: var(--muted);
       font-size: 0.68rem;
       font-weight: 850;
@@ -521,12 +525,82 @@
       font-size: 0.82rem;
     }
 
+    .action-menu {
+      position: relative;
+      min-width: 150px;
+    }
+
+    .action-menu summary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 44px;
+      padding: 7px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--field);
+      color: var(--primary);
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-weight: 850;
+      list-style: none;
+      text-align: center;
+      user-select: none;
+    }
+
+    .action-menu summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .action-menu summary::after {
+      content: "v";
+      margin-left: 6px;
+      font-size: 0.86rem;
+      font-weight: 850;
+      line-height: 1;
+    }
+
+    .action-menu[open] summary::after {
+      content: "^";
+    }
+
+    .action-menu-panel {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 30;
+      display: grid;
+      min-width: 220px;
+      gap: 6px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      box-shadow: 0 18px 38px var(--shadow);
+    }
+
+    .action-menu-panel button {
+      width: 100%;
+      text-align: left;
+    }
+
     .action-group .subtle-danger {
       border-color: var(--danger-line);
       color: var(--danger);
     }
 
+    .action-menu-panel .subtle-danger {
+      border-color: var(--danger-line);
+      color: var(--danger);
+    }
+
     .action-group .subtle-danger:hover {
+      border-color: var(--danger);
+      background: var(--danger-soft);
+    }
+
+    .action-menu-panel .subtle-danger:hover {
       border-color: var(--danger);
       background: var(--danger-soft);
     }
@@ -2397,12 +2471,27 @@
       }
 
       body.list-page .action-group {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
         padding: 9px;
         border: 1px solid var(--line);
         border-radius: 10px;
         background: var(--surface-subtle);
+      }
+
+      body.list-page .action-group.route-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      body.list-page .action-menu {
+        min-width: 0;
+        width: 100%;
+      }
+
+      body.list-page .action-menu-panel {
+        position: static;
+        min-width: 0;
+        margin-top: 6px;
+        box-shadow: none;
       }
 
       body.list-page .action-label {
@@ -2411,6 +2500,14 @@
       }
 
       body.list-page .action-group button {
+        min-height: 44px;
+        border-radius: 8px;
+        font-size: 0.84rem;
+        touch-action: manipulation;
+      }
+
+      body.list-page .action-menu summary,
+      body.list-page .action-menu-panel button {
         min-height: 44px;
         border-radius: 8px;
         font-size: 0.84rem;
@@ -2513,7 +2610,7 @@
     }
 
     @media (max-width: 420px) {
-      body.list-page .action-group {
+      body.list-page .action-group.route-actions {
         grid-template-columns: 1fr;
       }
 
@@ -2551,23 +2648,27 @@
           <span id="user-list-count" class="small"></span>
         </div>
         <div class="user-list-toolbar" aria-label="My Permit List actions">
-          <div class="action-group" aria-label="List controls">
-            <span class="action-label">List</span>
-            <button id="user-list-toggle" aria-expanded="true" onclick="toggleUserList()">Hide</button>
-            <button class="subtle-danger" onclick="clearUserList()">Clear</button>
-          </div>
           <div class="action-group route-actions" aria-label="Route controls">
             <span class="action-label">Route</span>
             <button data-list-action onclick="calculateUserListRoute()">Distances</button>
-            <button data-list-action onclick="optimizeUserListRoute()">Sort by drive time</button>
             <button data-list-action onclick="openGoogleMapsRoute()">Open in Google Maps</button>
-            <button data-list-action onclick="showGoogleRouteChunks()">Google route chunks</button>
           </div>
-          <div class="action-group" aria-label="Export controls">
-            <span class="action-label">Export</span>
-            <button data-list-action onclick="downloadUserListKml()">KML map</button>
-            <button data-list-action onclick="downloadUserListCsv()">CSV</button>
-          </div>
+          <details class="action-menu">
+            <summary>More route tools</summary>
+            <div class="action-menu-panel">
+              <button data-list-action onclick="optimizeUserListRoute()">Sort by drive time</button>
+              <button data-list-action onclick="showGoogleRouteChunks()">Google route chunks</button>
+            </div>
+          </details>
+          <details class="action-menu">
+            <summary>List options</summary>
+            <div class="action-menu-panel">
+              <button id="user-list-toggle" aria-expanded="true" onclick="toggleUserList()">Hide list</button>
+              <button data-list-action onclick="downloadUserListKml()">Export KML map</button>
+              <button data-list-action onclick="downloadUserListCsv()">Export CSV</button>
+              <button class="subtle-danger" onclick="clearUserList()">Clear list</button>
+            </div>
+          </details>
         </div>
       </div>
       <div id="user-route-summary" class="route-summary small" aria-live="polite">Add at least two permits with mapped coordinates to estimate driving distances.</div>
@@ -2717,6 +2818,29 @@
     const appModes = ["general_contractors", "open_subs", "open_permits"];
     const openPermitStatuses = new Set(["ACTIVE", "SUSPENDED", "PHASED PERMITTING"]);
 
+    function closeActionMenus(except = null) {
+      document.querySelectorAll(".action-menu[open]").forEach(menu => {
+        if (menu !== except) menu.removeAttribute("open");
+      });
+    }
+
+    document.addEventListener("toggle", event => {
+      if (event.target.matches(".action-menu") && event.target.open) {
+        closeActionMenus(event.target);
+      }
+    }, true);
+
+    document.addEventListener("click", event => {
+      const menu = event.target.closest(".action-menu");
+      if (!menu) {
+        closeActionMenus();
+        return;
+      }
+      if (event.target.closest(".action-menu-panel button")) {
+        window.setTimeout(() => menu.removeAttribute("open"), 0);
+      }
+    });
+
     addEventListener("scroll", () => {
       const doc = document.documentElement;
       const max = doc.scrollHeight - doc.clientHeight;
@@ -2813,7 +2937,7 @@
     function toggleUserList() {
       const panel = $("user-list-panel");
       const collapsed = panel.classList.toggle("is-collapsed");
-      $("user-list-toggle").textContent = collapsed ? "Show" : "Hide";
+      $("user-list-toggle").textContent = collapsed ? "Show list" : "Hide list";
       $("user-list-toggle").setAttribute("aria-expanded", String(!collapsed));
     }
 
