@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import duckdb
 
-from ..config import OPEN_STATUS_SQL
+from .config import OPEN_STATUS_SQL
 
 
 def rows(con: duckdb.DuckDBPyConnection, sql: str, params: list | None = None) -> list[dict]:

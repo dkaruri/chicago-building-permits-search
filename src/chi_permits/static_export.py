@@ -10,7 +10,7 @@ import duckdb
 from .config import DATASET_ID, OPEN_STATUS_SQL, SOCRATA_DOMAIN, jsonable
 from .db import connect
 from .licensed_contractors import fetch_licensed_contractors, normalize_license_name
-from .tools.permits import rows as _rows
+from .queries import rows as _rows
 
 COMMUNITY_AREAS: dict[int, str] = {
     1: "Rogers Park",

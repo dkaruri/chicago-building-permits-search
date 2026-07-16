@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import threading
 
-import duckdb
 import httpx
 import uvicorn
 from starlette.applications import Starlette
@@ -12,7 +11,7 @@ from starlette.routing import Route
 from .config import DATASET_ID, OPEN_STATUS_SQL, SOCRATA_DOMAIN, db_path, jsonable
 from .db import connect
 from .ingest import run_ingest
-from .tools.permits import contact_detail_from, contact_summary_from, open_permits_from
+from .queries import contact_detail_from, contact_summary_from, open_permits_from
 
 UPDATE_STATE = {"running": False, "last_result": None, "error": None}
 
