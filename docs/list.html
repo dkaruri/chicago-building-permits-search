@@ -4516,8 +4516,47 @@
 
     async function ensurePermitMap() {
       if (state.userPermitMap.size) return;
-      const rows = await loadJson("open_permits", true);
-      state.userPermitMap = new Map(rows.map(row => [clean(row.permit_number), row]));
+      const nums = state.userPermitNumbers.filter(n => !state.userPermitMap.has(n));
+      if (!nums.length) return;
+      const SOCRATA = "https://data.cityofchicago.org/resource/ydr8-5enu.json";
+      const contactCols = Array.from({length: 15}, (_, i) => `contact_${i+1}_type,contact_${i+1}_name`).join(",");
+      const select = `permit_,permit_status,permit_type,review_type,issue_date,processing_time,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
+      const inList = nums.map(n => `'${n}'`).join(",");
+      const params = new URLSearchParams({ $select: select, $where: `permit_ in(${inList})`, $limit: "50000" });
+      try {
+        const res = await fetch(`${SOCRATA}?${params}`);
+        if (!res.ok) return;
+        const rawRows = await res.json();
+        for (const row of rawRows) {
+          const gcs = [], subs = [];
+          for (let i = 1; i <= 15; i++) {
+            const type = (row[`contact_${i}_type`] || "").toUpperCase();
+            const name = (row[`contact_${i}_name`] || "").trim();
+            if (!name) continue;
+            if (type.includes("GENERAL CONTRACTOR")) gcs.push(name);
+            else if (type.includes("CONTRACTOR") || type.includes("ARCHITECT") || type.includes("ENGINEER") || type.includes("EXPEDIT") || type.includes("MASON")) subs.push(name);
+          }
+          const mapped = {
+            permit_number: row.permit_,
+            permit_status: row.permit_status,
+            permit_type: row.permit_type,
+            review_type: row.review_type,
+            issue_date: (row.issue_date || "").slice(0, 10),
+            processing_time: row.processing_time ? parseFloat(row.processing_time) : null,
+            address: [row.street_number, row.street_direction, row.street_name].filter(Boolean).join(" "),
+            work_type: row.work_type,
+            work_description: row.work_description || "",
+            reported_cost: row.reported_cost ? parseFloat(row.reported_cost) : null,
+            ward: row.ward ? parseInt(row.ward) : null,
+            community_area: row.community_area ? parseInt(row.community_area) : null,
+            latitude: row.latitude ? parseFloat(row.latitude) : null,
+            longitude: row.longitude ? parseFloat(row.longitude) : null,
+            general_contractors: gcs.join(" | "),
+            open_subs: subs.join(" | "),
+          };
+          state.userPermitMap.set(clean(mapped.permit_number), mapped);
+        }
+      } catch (e) { /* silent — user list will show fewer rows */ }
     }
 
     async function addPermitNumberToUserList(number, targetNumber = "", placement = "before") {
