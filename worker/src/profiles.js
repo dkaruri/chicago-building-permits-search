@@ -34,7 +34,7 @@ export async function handleProfiles(url, env) {
     );
   }
 
-  const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 200);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 5000);
   const offset = parseInt(url.searchParams.get("offset") || "0");
   const page = rows.slice(offset, offset + limit);
 

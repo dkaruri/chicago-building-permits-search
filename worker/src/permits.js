@@ -3,11 +3,12 @@ import {
   query,
   pivotContacts,
   buildAddress,
+  classifyContact,
   OPEN_STATUS_CLAUSE,
 } from "./socrata.js";
 
 /**
- * GET /api/permits?q=&ward=&status=&type=&limit=&offset=
+ * GET /api/permits?q=&ward=&status=&type=&contact_name=&limit=&offset=
  *
  * Proxies to Socrata with contact pivoting.
  * Returns { rows, row_count, offset, limit }.
@@ -17,7 +18,8 @@ export async function handlePermits(url, env) {
   const ward = url.searchParams.get("ward") || "";
   const status = url.searchParams.get("status") || "";
   const permitType = url.searchParams.get("type") || "";
-  const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 200);
+  const contactName = url.searchParams.get("contact_name") || "";
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "200"), 1000);
   const offset = parseInt(url.searchParams.get("offset") || "0");
 
   const whereClauses = [];
@@ -36,12 +38,18 @@ export async function handlePermits(url, env) {
     whereClauses.push(`permit_type='${sanitize(permitType)}'`);
   }
   if (q) {
-    // Full-text search across key fields
     whereClauses.push(
       `(upper(street_name) LIKE '%${sanitize(q.toUpperCase())}%' ` +
         `OR upper(work_description) LIKE '%${sanitize(q.toUpperCase())}%' ` +
         `OR permit_ LIKE '%${sanitize(q)}%')`
     );
+  }
+  if (contactName) {
+    const cn = sanitize(contactName.toUpperCase());
+    const contactSearch = Array.from({ length: 15 }, (_, i) =>
+      `upper(contact_${i + 1}_name) LIKE '%${cn}%'`
+    ).join(" OR ");
+    whereClauses.push(`(${contactSearch})`);
   }
 
   const selectCols = [
@@ -62,7 +70,6 @@ export async function handlePermits(url, env) {
     "community_area",
     "latitude",
     "longitude",
-    // Include all 15 contact slots for pivoting
     ...Array.from(
       { length: 15 },
       (_, i) =>
@@ -78,26 +85,37 @@ export async function handlePermits(url, env) {
     $offset: String(offset),
   });
 
-  const results = rows.map((row) => ({
-    permit_number: row.permit_,
-    permit_status: row.permit_status,
-    permit_type: row.permit_type,
-    review_type: row.review_type,
-    issue_date: (row.issue_date || "").slice(0, 10),
-    processing_time: row.processing_time
-      ? parseFloat(row.processing_time)
-      : null,
-    address: buildAddress(row),
-    work_type: row.work_type,
-    work_description: (row.work_description || "").slice(0, 220),
-    reported_cost: row.reported_cost ? parseFloat(row.reported_cost) : null,
-    total_fee: row.total_fee ? parseFloat(row.total_fee) : null,
-    ward: row.ward ? parseInt(row.ward) : null,
-    community_area: row.community_area ? parseInt(row.community_area) : null,
-    latitude: row.latitude ? parseFloat(row.latitude) : null,
-    longitude: row.longitude ? parseFloat(row.longitude) : null,
-    contacts: pivotContacts(row),
-  }));
+  const results = rows.map((row) => {
+    const contacts = pivotContacts(row);
+    const gcNames = contacts
+      .filter((c) => classifyContact(c.type) === "general_contractor")
+      .map((c) => c.name);
+    const subNames = contacts
+      .filter((c) => classifyContact(c.type) === "open_tech")
+      .map((c) => c.name);
+    return {
+      permit_number: row.permit_,
+      permit_status: row.permit_status,
+      permit_type: row.permit_type,
+      review_type: row.review_type,
+      issue_date: (row.issue_date || "").slice(0, 10),
+      processing_time: row.processing_time
+        ? parseFloat(row.processing_time)
+        : null,
+      address: buildAddress(row),
+      work_type: row.work_type,
+      work_description: row.work_description || "",
+      reported_cost: row.reported_cost ? parseFloat(row.reported_cost) : null,
+      total_fee: row.total_fee ? parseFloat(row.total_fee) : null,
+      ward: row.ward ? parseInt(row.ward) : null,
+      community_area: row.community_area ? parseInt(row.community_area) : null,
+      latitude: row.latitude ? parseFloat(row.latitude) : null,
+      longitude: row.longitude ? parseFloat(row.longitude) : null,
+      general_contractors: gcNames.join(" | "),
+      open_subs: subNames.join(" | "),
+      contacts,
+    };
+  });
 
   return json({ rows: results, row_count: results.length, offset, limit }, 200, env);
 }

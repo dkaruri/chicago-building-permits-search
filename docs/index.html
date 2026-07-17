@@ -2800,6 +2800,8 @@
   </main>
 
   <script>
+    const API_BASE = "https://chi-permits-api.divyam-c-karuri.workers.dev";
+
     const state = {
       mode: "general_contractors",
       manifest: null,
@@ -3037,19 +3039,24 @@
 
     async function loadJson(name, quiet = false) {
       if (!state.data[name]) {
-        const path = state.manifest.files[name].path;
         if (!quiet) $("results").innerHTML = `<div class="empty">Loading ${name.replaceAll("_", " ")}...</div>`;
-        state.data[name] = await fetch(path).then(r => {
-          if (!r.ok) throw new Error(`Failed to load ${path}`);
-          return r.json();
-        });
+        const apiCategory = name === "general_contractors" ? "general_contractor" : name === "open_subs" ? "open_tech" : null;
+        if (apiCategory) {
+          const res = await fetch(`${API_BASE}/api/profiles?category=${apiCategory}&limit=5000`);
+          if (!res.ok) throw new Error(`Failed to load ${name}`);
+          const data = await res.json();
+          state.data[name] = data.rows;
+        } else {
+          throw new Error(`Unknown data: ${name}`);
+        }
       }
       return state.data[name];
     }
 
     async function init() {
       updateThemeButton();
-      state.manifest = await fetch("data/manifest.json").then(r => r.json());
+      const stats = await fetch(API_BASE + "/api/stats").then(r => r.json());
+      state.manifest = { ...stats, exported_at: stats.cached_at, files: {} };
       loadUserListCookie();
       loadUserNotes();
       applyInitialUrlParams();
@@ -3210,9 +3217,18 @@
       state.selectedPermitNumbers.clear();
       state.pageSize = state.mode === "open_permits" ? 150 : 100;
       if (state.mode === "open_permits") {
-        const rows = await loadJson("open_permits");
+        const q = ($("q")?.value || "").trim();
+        const ward = ($("ward")?.value || "").trim();
+        const params = new URLSearchParams();
+        if (q) params.set("q", q);
+        if (ward) params.set("ward", ward);
+        params.set("limit", "1000");
+        const res = await fetch(`${API_BASE}/api/permits?${params}`);
+        const data = await res.json();
         if (token !== state.searchToken) return;
-        state.filteredRows = sortRows(filterPermits(rows));
+        let rows = data.rows;
+        if (usableProcessingOnly()) rows = rows.filter(r => hasUsableProcessing(r));
+        state.filteredRows = sortRows(rows);
         renderPermits();
       } else {
         const rows = await loadJson(state.mode);
@@ -3306,32 +3322,48 @@
 
     async function loadPermitMapIndex() {
       if (state.map.index) return state.map.index;
-      const mapEntry = state.manifest.files.permit_map || { path: "data/permit_map_index.json" };
-      state.map.index = await fetch(mapEntry.path).then(r => {
-        if (!r.ok) throw new Error(`Failed to load ${mapEntry.path}`);
-        return r.json();
-      });
+      state.map.index = { community_areas: [], files: [] };
       return state.map.index;
     }
 
     async function loadMapMonths(months) {
-      const index = await loadPermitMapIndex();
-      const byMonth = new Map(index.files.map(file => [file.month, file]));
-      const loaded = await Promise.all(months.map(async month => {
-        if (state.map.cache.has(month)) return state.map.cache.get(month);
-        const file = byMonth.get(month);
-        if (!file) {
-          state.map.cache.set(month, []);
-          return [];
+      if (!months.length) return [];
+      const cacheKey = months.join(",");
+      if (state.map.cache.has(cacheKey)) return state.map.cache.get(cacheKey);
+      const dateFrom = `${months[0]}-01`;
+      const lastMonth = months[months.length - 1];
+      const endParts = lastMonth.split("-");
+      const endDate = new Date(parseInt(endParts[0]), parseInt(endParts[1]), 0);
+      const dateTo = `${lastMonth}-${String(endDate.getDate()).padStart(2, "0")}`;
+      const SOCRATA = "https://data.cityofchicago.org/resource/ydr8-5enu.json";
+      const contactCols = Array.from({length: 15}, (_, i) => `contact_${i+1}_type,contact_${i+1}_name`).join(",");
+      const select = `permit_,permit_status,permit_type,review_type,issue_date,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
+      const where = `permit_status in('ACTIVE','SUSPENDED','PHASED PERMITTING') AND issue_date>='${dateFrom}T00:00:00' AND issue_date<='${dateTo}T23:59:59' AND latitude IS NOT NULL`;
+      const params = new URLSearchParams({ $select: select, $where: where, $order: "issue_date DESC", $limit: "50000" });
+      const res = await fetch(`${SOCRATA}?${params}`);
+      if (!res.ok) throw new Error("Failed to load map data from Socrata");
+      const rawRows = await res.json();
+      const rows = rawRows.map(row => {
+        const gcs = [], subs = [];
+        for (let i = 1; i <= 15; i++) {
+          const type = (row[`contact_${i}_type`] || "").toUpperCase();
+          const name = (row[`contact_${i}_name`] || "").trim();
+          if (!name) continue;
+          if (type.includes("GENERAL CONTRACTOR")) gcs.push(name);
+          else if (type.includes("CONTRACTOR") || type.includes("ARCHITECT") || type.includes("ENGINEER") || type.includes("EXPEDIT") || type.includes("MASON")) subs.push(name);
         }
-        const rows = await fetch(file.path).then(r => {
-          if (!r.ok) throw new Error(`Failed to load ${file.path}`);
-          return r.json();
-        });
-        state.map.cache.set(month, rows);
-        return rows;
-      }));
-      return loaded.flat();
+        return {
+          n: row.permit_, s: row.permit_status, t: row.permit_type, r: row.review_type,
+          d: (row.issue_date || "").slice(0, 10),
+          a: [row.street_number, row.street_direction, row.street_name].filter(Boolean).join(" "),
+          w: row.ward, cn: row.community_area, st: row.street_name, wt: row.work_type,
+          c: row.reported_cost, lat: row.latitude, lon: row.longitude,
+          gc: gcs.join(" | "), os: subs.join(" | "),
+          x: (row.work_description || "").slice(0, 220), go: 0
+        };
+      });
+      state.map.cache.set(cacheKey, rows);
+      return rows;
     }
 
     function mapRowToPermit(row) {
@@ -4809,14 +4841,14 @@
       state.activeDetailKey = detailRowKey(row);
       showDetail(detailShell(`<p class="small">Loading matching open permits for ${esc(row.contact_name)}...</p>`), false);
       let allRelated = [];
-      let related = [];
       let relatedError = "";
       try {
-        const openPermits = await loadJson("open_permits", true);
-        const field = state.mode === "general_contractors" ? "general_contractors" : "open_subs";
-        const contactKey = norm(row.contact_name);
-        allRelated = openPermits.filter(p => namesFrom(p[field]).includes(contactKey));
-        related = allRelated.slice(0, 40);
+        const params = new URLSearchParams();
+        params.set("contact_name", row.contact_name);
+        params.set("limit", "200");
+        const res = await fetch(`${API_BASE}/api/permits?${params}`);
+        const data = await res.json();
+        allRelated = data.rows;
       } catch (error) {
         relatedError = error.message || "Open permit details could not be loaded.";
       }

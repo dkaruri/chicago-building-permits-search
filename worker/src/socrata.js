@@ -64,7 +64,7 @@ export function pivotContacts(row) {
  * Classify a contact_type string into general_contractor / open_tech / other.
  * Mirrors ingest.py::_contact_category_expr.
  */
-function classifyContact(type) {
+export function classifyContact(type) {
   const t = (type || "").toUpperCase();
   if (t.includes("GENERAL CONTRACTOR")) return "general_contractor";
   if (
