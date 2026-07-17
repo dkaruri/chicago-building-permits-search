@@ -2747,6 +2747,7 @@
         map: null,
         sourceReady: false,
         cache: new Map(),
+        gcIndex: null,
         filteredRows: [],
         visibleRows: [],
         activePermitNumber: "",
@@ -3220,6 +3221,37 @@
       return state.map.index;
     }
 
+    // GC open-job counts + phones, keyed by normalized contact name. The old
+    // static map shards baked these into every permit (go/gp); after the Socrata
+    // migration we rebuild them here from the general_contractor profiles so pin
+    // color, the heatmap, the GC-job filter, and the detail card work again.
+    async function loadGcJobIndex() {
+      if (state.map.gcIndex) return state.map.gcIndex;
+      const index = new Map();
+      try {
+        const rows = await loadJson("general_contractors", true);
+        for (const row of rows) {
+          const key = norm(row.contact_name);
+          if (!key) continue;
+          const phones = [];
+          const seen = new Set();
+          for (const match of row.license_matches || []) {
+            const phone = clean(match.phone).trim();
+            const up = phone.toUpperCase();
+            if (!phone || up === "NA" || up === "N/A" || up === "NONE" || seen.has(up)) continue;
+            seen.add(up);
+            phones.push(phone);
+            if (phones.length >= 2) break;
+          }
+          index.set(key, { open: Number(row.open_jobs || 0), phones });
+        }
+      } catch {
+        // Non-fatal: pins still render, just without workload coloring/phones.
+      }
+      state.map.gcIndex = index;
+      return index;
+    }
+
     async function loadMapMonths(months) {
       if (!months.length) return [];
       const cacheKey = months.join(",");
@@ -3237,6 +3269,7 @@
       const res = await fetch(`${SOCRATA}?${params}`);
       if (!res.ok) throw new Error("Failed to load map data from Socrata");
       const rawRows = await res.json();
+      const gcIndex = await loadGcJobIndex();
       const rows = rawRows.map(row => {
         const gcs = [], subs = [];
         for (let i = 1; i <= 15; i++) {
@@ -3246,6 +3279,19 @@
           if (type.includes("GENERAL CONTRACTOR")) gcs.push(name);
           else if (type.includes("CONTRACTOR") || type.includes("ARCHITECT") || type.includes("ENGINEER") || type.includes("EXPEDIT") || type.includes("MASON")) subs.push(name);
         }
+        let maxOpen = 0;
+        const phones = [], seenPhone = new Set();
+        for (const name of gcs) {
+          const info = gcIndex.get(norm(name));
+          if (!info) continue;
+          if (info.open > maxOpen) maxOpen = info.open;
+          for (const phone of info.phones) {
+            const up = phone.toUpperCase();
+            if (phones.length >= 2 || seenPhone.has(up)) continue;
+            seenPhone.add(up);
+            phones.push(phone);
+          }
+        }
         return {
           n: row.permit_, s: row.permit_status, t: row.permit_type, r: row.review_type,
           d: (row.issue_date || "").slice(0, 10),
@@ -3253,7 +3299,7 @@
           w: row.ward, cn: row.community_area, st: row.street_name, wt: row.work_type,
           c: row.reported_cost, lat: row.latitude, lon: row.longitude,
           gc: gcs.join(" | "), os: subs.join(" | "),
-          x: (row.work_description || "").slice(0, 220), go: 0
+          x: (row.work_description || "").slice(0, 220), go: maxOpen, gp: phones.join(" | ")
         };
       });
       state.map.cache.set(cacheKey, rows);
