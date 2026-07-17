@@ -2,7 +2,9 @@
   "name": "chi-permits-api",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
+    "seed": "node seed-kv.js",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "tail": "wrangler tail"
