@@ -484,47 +484,32 @@
     .user-list-toolbar {
       position: relative;
       z-index: 20;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto;
+      display: flex;
+      flex-wrap: wrap;
       gap: 10px;
-      align-items: stretch;
+      align-items: center;
+      justify-content: space-between;
       width: 100%;
     }
 
-    .action-group {
+    .toolbar-primary,
+    .toolbar-manage {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: 8px;
       align-items: center;
       min-width: 0;
     }
 
-    .action-group.route-actions {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      align-content: flex-start;
-      padding: 8px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: var(--surface-subtle);
+    .toolbar-manage {
+      margin-left: auto;
     }
 
-    .action-label {
-      flex: 0 0 100%;
-      grid-column: 1 / -1;
-      color: var(--muted);
-      font-size: 0.68rem;
-      font-weight: 850;
-      letter-spacing: 0.12em;
-      line-height: 1;
-      text-transform: uppercase;
-    }
-
-    .action-group button {
+    .user-list-toolbar button {
       width: auto;
       min-height: 44px;
-      padding: 7px 10px;
-      font-size: 0.82rem;
+      padding: 8px 14px;
+      font-size: 0.86rem;
     }
 
     .action-menu {
@@ -560,15 +545,18 @@
     }
 
     .action-menu summary::after {
-      content: "v";
-      margin-left: 6px;
-      font-size: 0.86rem;
-      font-weight: 850;
-      line-height: 1;
+      content: "";
+      width: 7px;
+      height: 7px;
+      margin-left: 8px;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: translateY(-2px) rotate(45deg);
+      transition: transform 0.16s ease;
     }
 
     .action-menu[open] summary::after {
-      content: "^";
+      transform: translateY(1px) rotate(-135deg);
     }
 
     .action-menu-panel {
@@ -591,24 +579,28 @@
       text-align: left;
     }
 
-    .action-group .subtle-danger {
+    .subtle-danger {
       border-color: var(--danger-line);
       color: var(--danger);
     }
 
-    .action-menu-panel .subtle-danger {
-      border-color: var(--danger-line);
-      color: var(--danger);
-    }
-
-    .action-group .subtle-danger:hover {
+    .subtle-danger:hover {
       border-color: var(--danger);
       background: var(--danger-soft);
     }
 
-    .action-menu-panel .subtle-danger:hover {
-      border-color: var(--danger);
-      background: var(--danger-soft);
+    .action-menu-sep {
+      height: 1px;
+      margin: 4px 2px;
+      background: var(--line);
+    }
+
+    .menu-hint {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 600;
     }
 
     .panel-actions button {
@@ -1669,16 +1661,18 @@
       .user-list-toolbar {
         gap: 8px;
       }
-      .action-group {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+      .toolbar-primary,
+      .toolbar-manage {
+        flex: 1 1 100%;
       }
-      .action-label {
-        grid-column: 1 / -1;
+      .toolbar-manage {
+        margin-left: 0;
       }
-      .action-group button,
+      .toolbar-primary > *,
+      .toolbar-manage > *,
       .panel-actions button,
       #result-count button {
+        flex: 1 1 auto;
         width: 100%;
       }
       .route-chunks-head {
@@ -1994,8 +1988,7 @@
     label,
     .metric span,
     .small,
-    th,
-    .action-label {
+    th {
       letter-spacing: 0.03em;
     }
 
@@ -2472,21 +2465,7 @@
       }
 
       body.list-page .user-list-toolbar {
-        display: grid;
-        grid-template-columns: 1fr;
         gap: 8px;
-      }
-
-      body.list-page .action-group {
-        gap: 8px;
-        padding: 9px;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: var(--surface-subtle);
-      }
-
-      body.list-page .action-group.route-actions {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
       body.list-page .action-menu {
@@ -2504,18 +2483,6 @@
         overflow: auto;
         margin-top: 0;
         box-shadow: 0 18px 38px var(--shadow);
-      }
-
-      body.list-page .action-label {
-        margin-bottom: 0;
-        font-size: 0.66rem;
-      }
-
-      body.list-page .action-group button {
-        min-height: 44px;
-        border-radius: 8px;
-        font-size: 0.84rem;
-        touch-action: manipulation;
       }
 
       body.list-page .action-menu summary,
@@ -2622,12 +2589,21 @@
     }
 
     @media (max-width: 420px) {
-      body.list-page .action-group.route-actions {
-        grid-template-columns: 1fr;
-      }
-
       body.list-page .saved-permits-table td {
         grid-template-columns: minmax(72px, 34%) minmax(0, 1fr);
+      }
+    }
+
+    /* Desktop: keep the short columns on one line so the extra Zone/TIF columns
+       don't force "STATUS"/"WARD"/"ACTIVE" to wrap. Address/TIF still wrap. */
+    @media (min-width: 641px) {
+      .saved-permits-table th,
+      .saved-permits-table td[data-label="Status"],
+      .saved-permits-table td[data-label="Issued"],
+      .saved-permits-table td[data-label="Ward"],
+      .saved-permits-table td[data-label="Cost"],
+      .saved-permits-table .geo-zone {
+        white-space: nowrap;
       }
     }
   </style>
@@ -2660,28 +2636,25 @@
           <h2>My Permit List</h2>
           <span id="user-list-count" class="small"></span>
         </div>
-        <div class="user-list-toolbar" aria-label="My Permit List actions">
-          <div class="action-group route-actions" aria-label="Route controls">
-            <span class="action-label">Route</span>
-            <button data-list-action onclick="calculateUserListRoute()">Distances</button>
+        <div class="user-list-toolbar" role="group" aria-label="My Permit List actions">
+          <div class="toolbar-primary">
+            <button class="primary" data-list-action onclick="calculateUserListRoute()">Estimate distances</button>
             <button data-list-action onclick="openGoogleMapsRoute()">Open in Google Maps</button>
+            <details class="action-menu" data-list-menu>
+              <summary aria-haspopup="true">More</summary>
+              <div class="action-menu-panel" role="menu" aria-label="More list tools">
+                <button role="menuitem" data-list-action onclick="optimizeUserListRoute()">Sort by drive time</button>
+                <button role="menuitem" data-list-action onclick="showGoogleRouteChunks()">Google route chunks</button>
+                <div class="action-menu-sep" role="separator"></div>
+                <button role="menuitem" data-list-action onclick="downloadUserListKml()">Export KML<span class="menu-hint">Google Earth / My Maps</span></button>
+                <button role="menuitem" data-list-action onclick="downloadUserListCsv()">Export CSV<span class="menu-hint">Spreadsheet</span></button>
+              </div>
+            </details>
           </div>
-          <details class="action-menu">
-            <summary>More route tools</summary>
-            <div class="action-menu-panel">
-              <button data-list-action onclick="optimizeUserListRoute()">Sort by drive time</button>
-              <button data-list-action onclick="showGoogleRouteChunks()">Google route chunks</button>
-            </div>
-          </details>
-          <details class="action-menu">
-            <summary>List options</summary>
-            <div class="action-menu-panel">
-              <button id="user-list-toggle" aria-expanded="true" onclick="toggleUserList()">Hide list</button>
-              <button data-list-action onclick="downloadUserListKml()">Export KML map</button>
-              <button data-list-action onclick="downloadUserListCsv()">Export CSV</button>
-              <button class="subtle-danger" onclick="clearUserList()">Clear list</button>
-            </div>
-          </details>
+          <div class="toolbar-manage">
+            <button id="user-list-toggle" aria-expanded="true" onclick="toggleUserList()">Hide list</button>
+            <button class="subtle-danger" onclick="clearUserList()">Clear list</button>
+          </div>
         </div>
       </div>
       <div id="user-route-summary" class="route-summary small" aria-live="polite">Add at least two permits with mapped coordinates to estimate driving distances.</div>
@@ -3017,16 +2990,43 @@
 
     async function init() {
       updateThemeButton();
-      const stats = await fetch(API_BASE + "/api/stats").then(r => r.json());
-      state.manifest = { ...stats, exported_at: stats.cached_at, files: {} };
+      try {
+        const stats = await fetch(API_BASE + "/api/stats").then(r => r.json());
+        state.manifest = { ...stats, exported_at: stats.cached_at, files: {} };
+      } catch {
+        // Worker unreachable (e.g. local preview) — keep going with an empty
+        // manifest so the saved list still renders (it reads from Socrata).
+        state.manifest = { files: {} };
+      }
       loadUserListCookie();
       loadUserNotes();
       applyInitialUrlParams();
       renderStatus();
+      initListMenus();
       await renderUserList();
       if (!document.body.classList.contains("list-page")) {
         await search();
       }
+    }
+
+    // Toolbar dropdowns behave like menus: only one open, and a click outside or
+    // Escape closes them.
+    function initListMenus() {
+      const menus = () => document.querySelectorAll("details.action-menu[open]");
+      document.querySelectorAll("details.action-menu[data-list-menu]").forEach(menu => {
+        menu.addEventListener("toggle", () => {
+          if (!menu.open) return;
+          document.querySelectorAll("details.action-menu[open]").forEach(other => {
+            if (other !== menu) other.removeAttribute("open");
+          });
+        });
+      });
+      document.addEventListener("click", event => {
+        menus().forEach(menu => { if (!menu.contains(event.target)) menu.removeAttribute("open"); });
+      });
+      document.addEventListener("keydown", event => {
+        if (event.key === "Escape") menus().forEach(menu => menu.removeAttribute("open"));
+      });
     }
 
     function renderStatus() {
@@ -4162,6 +4162,8 @@
         ["Issued", row.issue_date],
         ["Address", row.address],
         ["Ward", row.ward],
+        ["Zoning", geoZoneCache.get(number) || ""],
+        ["TIF district", geoTifCache.get(number) || ""],
         ["Permit type", row.permit_type],
         ["Work type", row.work_type],
         ["Reported cost", money(row.reported_cost)],
@@ -4310,6 +4312,7 @@
           clearUserRoute("At least one saved permit needs mapped coordinates to download a map file.");
           return;
         }
+        await resolveGeoForRows(rows);
         const listNote = state.userListNote ? `<p><strong>List note:</strong> ${esc(state.userListNote)}</p>` : "";
         const placemarks = rows.map((row, index) => `
           <Placemark>
@@ -4348,8 +4351,9 @@
           clearUserRoute("Add permits to My Permit List before downloading CSV.");
           return;
         }
+        await resolveGeoForRows(rows);
         const headers = [
-          "order", "permit_number", "status", "issued", "address", "ward", "permit_type",
+          "order", "permit_number", "status", "issued", "address", "ward", "zone", "tif_district", "permit_type",
           "work_type", "reported_cost", "processing_time", "latitude", "longitude",
           "general_contractors", "open_subs", "permit_note", "list_note", "work_description"
         ];
@@ -4360,6 +4364,8 @@
           row.issue_date,
           row.address,
           row.ward,
+          geoZoneCache.get(clean(row.permit_number)) || "",
+          geoTifCache.get(clean(row.permit_number)) || "",
           row.permit_type,
           row.work_type,
           row.reported_cost,
@@ -4779,6 +4785,66 @@
       }
     }
 
+    // Zoning + TIF enrichment. Same on-demand point-in-polygon lookups the map
+    // uses, keyed by permit number and cached. Rows here carry latitude/longitude.
+    const geoZoneCache = new Map();
+    const geoTifCache = new Map();
+
+    async function ensurePermitZone(row) {
+      const number = clean(row.permit_number);
+      const lat = Number(row.latitude), lon = Number(row.longitude);
+      if (!number || !Number.isFinite(lat) || !Number.isFinite(lon)) return "";
+      if (geoZoneCache.has(number)) return geoZoneCache.get(number);
+      try {
+        const params = new URLSearchParams({ $select: "zone_class,pd_num", $where: `intersects(the_geom, 'POINT(${lon} ${lat})')`, $limit: "1" });
+        const [hit] = await fetch(`https://data.cityofchicago.org/resource/dj47-wfun.json?${params}`).then(r => r.json());
+        const zc = clean(hit && hit.zone_class).trim();
+        const label = !zc ? "" : /^PD/i.test(zc) ? `PD ${clean(hit.pd_num) || zc.replace(/^PD\s*/i, "")}` : zc;
+        geoZoneCache.set(number, label);
+        return label;
+      } catch {
+        return "";
+      }
+    }
+
+    async function ensurePermitTif(row) {
+      const number = clean(row.permit_number);
+      const lat = Number(row.latitude), lon = Number(row.longitude);
+      if (!number || !Number.isFinite(lat) || !Number.isFinite(lon)) return "";
+      if (geoTifCache.has(number)) return geoTifCache.get(number);
+      try {
+        const params = new URLSearchParams({ $select: "name,ref,expiration", $where: `intersects(the_geom, 'POINT(${lon} ${lat})')`, $limit: "1" });
+        const [hit] = await fetch(`https://data.cityofchicago.org/resource/eejr-xtfb.json?${params}`).then(r => r.json());
+        const name = clean(hit && hit.name).trim();
+        const ref = clean(hit && hit.ref).replace(/\s+/g, "").trim();
+        const exp = clean(hit && hit.expiration).slice(0, 4);
+        const label = name ? `${name}${ref ? ` (${ref})` : ""}${exp ? ` · ${exp}` : ""}` : "";
+        geoTifCache.set(number, label);
+        return label;
+      } catch {
+        return "";
+      }
+    }
+
+    // Fill the Zone/TIF cells for the rendered rows (cached values show instantly;
+    // "—" means resolved-but-none, "…" is the pre-resolution placeholder).
+    function fillListGeoCells(rows) {
+      for (const row of rows) {
+        const sel = `[data-permit="${clean(row.permit_number)}"]`;
+        ensurePermitZone(row).then(label => {
+          document.querySelectorAll(`.geo-zone${sel}`).forEach(el => el.textContent = label || "—");
+        });
+        ensurePermitTif(row).then(label => {
+          document.querySelectorAll(`.geo-tif${sel}`).forEach(el => el.textContent = label || "—");
+        });
+      }
+    }
+
+    // Resolve zone + TIF for every row before an export builds its rows.
+    async function resolveGeoForRows(rows) {
+      await Promise.all(rows.flatMap(row => [ensurePermitZone(row), ensurePermitTif(row)]));
+    }
+
     async function renderUserList() {
       await ensurePermitMap();
       $("user-list-note").value = state.userListNote;
@@ -4795,9 +4861,11 @@
         notes: true,
         reorder: true,
         move: true,
+        geo: true,
         sortable: false,
         emptyText: "No permits added yet."
       });
+      fillListGeoCells(rows);
     }
 
     function specialtyText(row) {
@@ -5197,12 +5265,13 @@
       const selectHead = options.select ? "<th class=\"select-cell\" aria-label=\"Select permits\"></th>" : "";
       const removeHead = options.remove ? "<th class=\"select-cell\" aria-label=\"Remove permits\"></th>" : "";
       const notesHead = options.notes ? "<th>Notes</th>" : "";
+      const geoHead = options.geo ? "<th>Zone</th><th>TIF district</th>" : "";
       const moveHead = options.move ? "<th class=\"move-cell\" aria-label=\"Move permits\"></th>" : "";
       const head = (label, key) => options.sortable === false ? esc(label) : sortHeader(label, key);
       const tableClass = options.select ? "results-table permits-table" : options.notes ? "saved-permits-table" : "";
       return `
         <table class="${tableClass}">
-          <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th><th>${head("Ward", "ward")}</th><th>${head("Cost", "cost")}</th>${notesHead}${moveHead}</tr></thead>
+          <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th><th>${head("Ward", "ward")}</th><th>${head("Cost", "cost")}</th>${geoHead}${notesHead}${moveHead}</tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr
               draggable="${options.select || options.reorder ? "true" : "false"}"
@@ -5219,6 +5288,7 @@
               <td data-label="Address">${esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
               <td data-label="Ward">${esc(row.ward)}</td>
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
+              ${options.geo ? `<td data-label="Zone" class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</td><td data-label="TIF district" class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</td>` : ""}
               ${options.notes ? `<td data-label="Notes"><textarea class="permit-note" draggable="false" placeholder="Add note..." onclick="event.stopPropagation()" ondragstart="event.stopPropagation()" oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[clean(row.permit_number)] || "")}</textarea></td>` : ""}
               ${options.move ? `<td class="move-cell" data-label="Move"><div class="move-controls"><button class="icon-button" title="Move up" aria-label="Move ${esc(row.permit_number)} up" ${i === 0 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', -1)">&uarr;</button><button class="icon-button" title="Move down" aria-label="Move ${esc(row.permit_number)} down" ${i >= rows.length - 1 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', 1)">&darr;</button></div></td>` : ""}
             </tr>`).join("")}</tbody>
