@@ -1,7 +1,6 @@
 import { handlePermits } from "./permits.js";
 import { handleProfiles, handleContactDetail } from "./profiles.js";
 import { handleStats } from "./stats.js";
-import { rebuildCache } from "./cron.js";
 
 const ROUTES = [
   { pattern: /^\/api\/permits/, handler: handlePermits },
@@ -59,9 +58,8 @@ export default {
     );
   },
 
-  async scheduled(event, env) {
-    await rebuildCache(env);
-  },
+  // ponytail: cron can't run on CF free tier (10ms CPU). Use seed-kv.js locally.
+  async scheduled() {},
 };
 
 export function json(data, status = 200, env = {}) {

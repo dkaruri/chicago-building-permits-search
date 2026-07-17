@@ -8,13 +8,12 @@
 
 import { execSync } from "child_process";
 import { writeFileSync, unlinkSync } from "fs";
+import { OPEN_STATUSES, OPEN_STATUS_CLAUSE, CONTACT_SLOTS, classifyContact } from "./src/socrata.js";
+import { normalizeLicenseName } from "./src/licenses.js";
 
 const SOCRATA_DOMAIN = "data.cityofchicago.org";
 const DATASET_ID = "ydr8-5enu";
 const KV_NAMESPACE_ID = "ef1c7094f8ec473aa1d1a00a63a392b3";
-const OPEN_STATUSES = ["ACTIVE", "SUSPENDED", "PHASED PERMITTING"];
-const OPEN_STATUS_CLAUSE = OPEN_STATUSES.map((s) => `'${s}'`).join(",");
-const CONTACT_SLOTS = Array.from({ length: 15 }, (_, i) => i + 1);
 const PAGE = 10000;
 
 async function socrataQuery(params) {
@@ -57,13 +56,6 @@ async function fetchOpenPermits() {
     offset += PAGE;
   }
   return permits;
-}
-
-function classifyContact(type) {
-  const t = (type || "").toUpperCase();
-  if (t.includes("GENERAL CONTRACTOR")) return "general_contractor";
-  if (t.includes("CONTRACTOR") || t.includes("ARCHITECT") || t.includes("ENGINEER") || t.includes("EXPEDIT") || t.includes("MASON")) return "open_tech";
-  return "other";
 }
 
 function buildProfiles(permits, category) {
@@ -118,14 +110,6 @@ function buildProfiles(permits, category) {
     permit_types: topN(p.permit_types, 6, "permit_type"),
     contact_types: topN(p.contact_types, 6, "contact_type"),
   })).sort((a, b) => b.open_jobs - a.open_jobs || b.total_jobs - a.total_jobs);
-}
-
-function normalizeLicenseName(value) {
-  let t = (value || "").toUpperCase().replace(/&/g, " AND ");
-  t = t.replace(/[^A-Z0-9 ]+/g, " ");
-  t = t.replace(/\b(LLC|L L C|INC|INCORPORATED|CORP|CORPORATION|COMPANY|CO|LTD|LLP|LP|L P|PLC|PC)\b/g, " ");
-  t = t.replace(/\b(DBA|THE)\b/g, " ");
-  return t.replace(/\s+/g, " ").trim();
 }
 
 async function fetchLicenses() {
@@ -188,7 +172,6 @@ async function main() {
   const licenses = await fetchLicenses();
   console.log(`   ${licenses.length} license records`);
 
-  // Enrich with license matches
   const licenseIndex = {};
   for (const row of licenses) {
     const key = normalizeLicenseName(row.name);

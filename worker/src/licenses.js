@@ -76,8 +76,16 @@ export async function fetchLicensedContractors(pageSize = 5000) {
     let start = 0;
 
     while (total === null || start < total) {
-      const params = buildParams(category, start, pageSize);
-      const res = await fetch(`${dataUrl}?${params}`, {
+      const p = new URLSearchParams();
+      p.set("draw", "1"); p.set("start", String(start)); p.set("length", String(pageSize));
+      p.set("order[0][column]", String(category.orderColumn)); p.set("order[0][dir]", "asc");
+      p.set("search[value]", ""); p.set("search[regex]", "false");
+      category.columns.forEach((col, i) => {
+        p.set(`columns[${i}][data]`, col); p.set(`columns[${i}][name]`, col.toUpperCase());
+        p.set(`columns[${i}][searchable]`, "true"); p.set(`columns[${i}][orderable]`, col === "name" ? "true" : "false");
+        p.set(`columns[${i}][search][value]`, ""); p.set(`columns[${i}][search][regex]`, "false");
+      });
+      const res = await fetch(`${dataUrl}?${p}`, {
         headers: {
           Referer: sourceUrl,
           "User-Agent": "chi-permits-worker/0.1",
@@ -136,24 +144,3 @@ export async function fetchLicensedContractors(pageSize = 5000) {
   return { fetched_at: fetchedAt, sources, rows };
 }
 
-function buildParams(category, start, length) {
-  const p = new URLSearchParams();
-  p.set("draw", "1");
-  p.set("start", String(start));
-  p.set("length", String(length));
-  p.set("order[0][column]", String(category.orderColumn));
-  p.set("order[0][dir]", "asc");
-  p.set("search[value]", "");
-  p.set("search[regex]", "false");
-
-  category.columns.forEach((col, i) => {
-    p.set(`columns[${i}][data]`, col);
-    p.set(`columns[${i}][name]`, col.toUpperCase());
-    p.set(`columns[${i}][searchable]`, "true");
-    p.set(`columns[${i}][orderable]`, col === "name" ? "true" : "false");
-    p.set(`columns[${i}][search][value]`, "");
-    p.set(`columns[${i}][search][regex]`, "false");
-  });
-
-  return p.toString();
-}
