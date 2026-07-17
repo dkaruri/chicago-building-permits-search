@@ -7,7 +7,7 @@ crons = ["0 6 * * *"]  # 6 AM UTC daily — rebuild profiles + license cache
 
 [[kv_namespaces]]
 binding = "CACHE"
-id = ""  # Fill after `wrangler kv namespace create CACHE`
+id = "ef1c7094f8ec473aa1d1a00a63a392b3"
 
 [vars]
 SOCRATA_DOMAIN = "data.cityofchicago.org"
