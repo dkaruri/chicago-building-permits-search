@@ -1154,6 +1154,63 @@
       background: var(--surface-subtle);
     }
 
+    .zoning-legend {
+      margin-top: 8px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-subtle);
+    }
+
+    .zoning-legend-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.74rem;
+    }
+
+    .zoning-legend-table th,
+    .zoning-legend-table td {
+      padding: 5px 10px;
+      text-align: left;
+      vertical-align: middle;
+      border-bottom: 1px solid var(--cell-line);
+    }
+
+    .zoning-legend-table tbody tr:last-child th,
+    .zoning-legend-table tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .zoning-legend-table thead th {
+      color: var(--muted);
+      font-size: 0.66rem;
+      font-weight: 850;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      background: var(--table-head);
+    }
+
+    .zoning-legend-table tbody th {
+      color: var(--ink);
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .zoning-legend-table td {
+      color: var(--muted);
+    }
+
+    .zoning-swatch {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-right: 8px;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      vertical-align: -2px;
+      background: var(--swatch, #c7ced6);
+    }
+
     .map-result-rail {
       top: 76px;
       right: 12px;
@@ -2581,6 +2638,24 @@
         background: var(--line);
         border-radius: 999px;
       }
+
+      /* #2, #3: bring hover-card actions and layer toggles to a 44px target. */
+      .map-hover-action {
+        min-height: 44px;
+      }
+
+      .map-layer-list .check-row {
+        min-height: 44px;
+      }
+    }
+
+    /* #4: on the narrowest phones drop the district-code column so the zoning
+       legend stays two clean columns (color + meaning) instead of wrapping. */
+    @media (max-width: 480px) {
+      .zoning-legend-table th:nth-child(2),
+      .zoning-legend-table td:nth-child(2) {
+        display: none;
+      }
     }
   </style>
 </head>
@@ -2714,6 +2789,20 @@
 
   <script>
     const API_BASE = "https://chi-permits-api.divyam-c-karuri.workers.dev";
+    const ZONING_URL = "data/zoning.geojson";
+
+    // Category -> fill color, shared by the map fill layer and the legend swatches.
+    const ZONE_COLORS = {
+      residential: "#f2e06b",
+      business: "#f2a65a",
+      commercial: "#e5646e",
+      downtown: "#5b8ac9",
+      manufacturing: "#b39ddb",
+      planned_development: "#7fbf7f",
+      open_space: "#4caf7d",
+      transportation: "#b0b7c0",
+      other: "#c7ced6"
+    };
 
     const state = {
       mode: "map",
@@ -2748,13 +2837,16 @@
         sourceReady: false,
         cache: new Map(),
         gcIndex: null,
+        zoningLoaded: false,
+        zoningLoading: false,
+        zoneCache: new Map(),
         filteredRows: [],
         visibleRows: [],
         activePermitNumber: "",
         detailExpanded: true,
         drawer: "",
         showResults: true,
-        layers: { permits: true, clusters: false, heat: false },
+        layers: { permits: true, clusters: false, heat: false, zoning: false },
         settings: null,
         searchLocation: null,
         hoverPopup: null,
@@ -2939,13 +3031,19 @@
       if (!state.data[name]) {
         if (!quiet) $("results").innerHTML = `<div class="empty">Loading ${name.replaceAll("_", " ")}...</div>`;
         const apiCategory = name === "general_contractors" ? "general_contractor" : name === "open_subs" ? "open_tech" : null;
-        if (apiCategory) {
+        if (!apiCategory) throw new Error(`Unknown data: ${name}`);
+        try {
           const res = await fetch(`${API_BASE}/api/profiles?category=${apiCategory}&limit=5000`);
           if (!res.ok) throw new Error(`Failed to load ${name}`);
           const data = await res.json();
           state.data[name] = data.rows;
-        } else {
-          throw new Error(`Unknown data: ${name}`);
+        } catch (error) {
+          // Worker unreachable (e.g. local preview, CORS-locked to the Pages
+          // origin) — fall back to the bundled snapshot so profile data, and
+          // the map's GC workload colors, still work.
+          const res = await fetch(`data/${name}.json`);
+          if (!res.ok) throw error;
+          state.data[name] = await res.json();
         }
       }
       return state.data[name];
@@ -2953,8 +3051,15 @@
 
     async function init() {
       updateThemeButton();
-      const stats = await fetch(API_BASE + "/api/stats").then(r => r.json());
-      state.manifest = { ...stats, exported_at: stats.cached_at, files: {} };
+      try {
+        const stats = await fetch(API_BASE + "/api/stats").then(r => r.json());
+        state.manifest = { ...stats, exported_at: stats.cached_at, files: {} };
+      } catch {
+        // Worker unreachable (e.g. local preview, where CORS is locked to the
+        // Pages origin). The map draws from Socrata directly, so keep going with
+        // an empty manifest — only the header metrics go blank.
+        state.manifest = { files: {} };
+      }
       loadUserListCookie();
       loadUserNotes();
       renderStatus();
@@ -3344,6 +3449,7 @@
           <span class="tag">${esc(permit.permit_type)}</span>
           <span class="tag">${fmt(permit.gc_open_jobs || 0)} GC open jobs</span>
           ${permit.ward ? `<a class="tag clickable" href="index.html?mode=open_permits&ward=${enc(permit.ward)}">Ward ${esc(permit.ward)}</a>` : ""}
+          <span class="tag" id="detail-zone-tag" hidden></span>
         </div>
         ${permitFacts(permit, [
           ["Issued", permit.issue_date],
@@ -3378,6 +3484,7 @@
           ${row.wt ? `<span>Work: ${esc(row.wt)}</span>` : ""}
           <span>${fmt(row.go || 0)} GC open jobs${primaryContact ? ` &middot; ${esc(primaryContact)}` : ""}</span>
           ${gcPhone ? `<span>GC phone: ${esc(gcPhone)}</span>` : ""}
+          <span id="hover-zone-line" data-permit="${esc(clean(row.n))}">${esc(state.map.zoneCache.get(clean(row.n)) || "Zoning…")}</span>
           <div class="map-hover-actions">
             <button class="primary map-hover-action" onclick="event.stopPropagation(); addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "Saved" : "Add to list"}</button>
             <button class="map-hover-action danger" onclick="event.stopPropagation(); removePermitFromUserList('${permitNumber}')" ${saved ? "" : "disabled"}>Remove</button>
@@ -3394,6 +3501,10 @@
         .setLngLat(feature.geometry.coordinates)
         .setHTML(mapPermitHover(feature.properties))
         .addTo(state.map.map);
+      ensurePermitZone(feature.properties).then(label => {
+        const el = document.getElementById("hover-zone-line");
+        if (el && el.dataset.permit === number) el.textContent = label || "Zoning: n/a";
+      });
       const popupEl = state.map.hoverPopup.getElement();
       if (popupEl && popupEl.dataset.hoverBound !== "1") {
         popupEl.dataset.hoverBound = "1";
@@ -3530,6 +3641,24 @@
                 <label class="check-row"><input type="checkbox" ${mapLayerChecked("permits")} onchange="setMapLayer('permits', this.checked)"><span>Individual permit points</span></label>
                 <label class="check-row"><input type="checkbox" ${mapLayerChecked("clusters")} onchange="setMapLayer('clusters', this.checked)"><span>Clusters and counts</span></label>
                 <label class="check-row"><input type="checkbox" ${mapLayerChecked("heat")} onchange="setMapLayer('heat', this.checked)"><span>Density heat layer</span></label>
+                <label class="check-row"><input type="checkbox" ${mapLayerChecked("zoning")} onchange="setMapLayer('zoning', this.checked)"><span>Zoning districts</span></label>
+              </div>
+              <div id="zoning-legend" class="zoning-legend" hidden>
+                <table class="zoning-legend-table">
+                  <thead>
+                    <tr><th scope="col">Zone</th><th scope="col">Districts</th><th scope="col">What it allows</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><th scope="row"><span class="zoning-swatch" data-zcat="residential"></span>Residential</th><td>RS, RT, RM</td><td>Houses, two-flats, apartments</td></tr>
+                    <tr><th scope="row"><span class="zoning-swatch" data-zcat="business"></span>Business</th><td>B1&ndash;B3</td><td>Storefronts with housing above</td></tr>
+                    <tr><th scope="row"><span class="zoning-swatch" data-zcat="commercial"></span>Commercial</th><td>C1&ndash;C3</td><td>Shops, offices, auto &amp; service</td></tr>
+                    <tr><th scope="row"><span class="zoning-swatch" data-zcat="downtown"></span>Downtown</th><td>DX, DC, DR, DS</td><td>Dense downtown mixed-use</td></tr>
+                    <tr><th scope="row"><span class="zoning-swatch" data-zcat="manufacturing"></span>Manufacturing</th><td>M1&ndash;M3, PMD</td><td>Industrial &amp; production</td></tr>
+                    <tr><th scope="row"><span class="zoning-swatch" data-zcat="planned_development"></span>Planned Dev</th><td>PD</td><td>Large negotiated projects</td></tr>
+                    <tr><th scope="row"><span class="zoning-swatch" data-zcat="open_space"></span>Open space</th><td>POS</td><td>Parks, open &amp; protected land</td></tr>
+                    <tr><th scope="row"><span class="zoning-swatch" data-zcat="transportation"></span>Transportation</th><td>T</td><td>Transit &amp; right-of-way</td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </section>
@@ -3601,6 +3730,7 @@
         zoom: 10,
         style: {
           version: 8,
+          glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
           sources: {
             osm: {
               type: "raster",
@@ -3615,6 +3745,50 @@
       state.map.map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
       state.map.map.on("load", () => {
         addMapSearchPinImage();
+        // Zoning overlay: added first so it renders beneath every permit layer.
+        // Data is lazy-loaded (empty until the user toggles the layer on).
+        const zoneColorMatch = ["match", ["get", "zcat"]];
+        for (const [cat, color] of Object.entries(ZONE_COLORS)) {
+          if (cat === "other") continue;
+          zoneColorMatch.push(cat, color);
+        }
+        zoneColorMatch.push(ZONE_COLORS.other);
+        state.map.map.addSource("zoning", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] }
+        });
+        state.map.map.addLayer({
+          id: "zoning-fill",
+          type: "fill",
+          source: "zoning",
+          layout: { visibility: "none" },
+          paint: { "fill-color": zoneColorMatch, "fill-opacity": 0.32 }
+        });
+        state.map.map.addLayer({
+          id: "zoning-outline",
+          type: "line",
+          source: "zoning",
+          layout: { visibility: "none" },
+          paint: { "line-color": zoneColorMatch, "line-width": 0.6, "line-opacity": 0.55 }
+        });
+        state.map.map.addLayer({
+          id: "zoning-label",
+          type: "symbol",
+          source: "zoning",
+          minzoom: 13.5,
+          layout: {
+            visibility: "none",
+            "text-field": ["get", "zone_class"],
+            "text-font": ["Open Sans Semibold"],
+            "text-size": 11,
+            "text-allow-overlap": false
+          },
+          paint: {
+            "text-color": "#1f2937",
+            "text-halo-color": "#ffffff",
+            "text-halo-width": 1.4
+          }
+        });
         state.map.map.addSource("permit-pins", {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] }
@@ -3667,7 +3841,7 @@
           filter: ["has", "point_count"],
           layout: {
             "text-field": ["get", "point_count_abbreviated"],
-            "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+            "text-font": ["Open Sans Semibold"],
             "text-size": 12
           },
           paint: { "text-color": "#ffffff" }
@@ -3687,6 +3861,18 @@
             "circle-opacity": ["case", ["==", ["to-number", ["get", "active"]], 1], 1, ["==", ["to-number", ["get", "m"]], 1], 0.98, 0.72],
             "circle-stroke-color": ["case", ["==", ["to-number", ["get", "active"]], 1], "#f59e0b", "#ffffff"],
             "circle-stroke-width": ["case", ["==", ["to-number", ["get", "active"]], 1], 4, ["==", ["to-number", ["get", "m"]], 1], 3, 1.25]
+          }
+        });
+        state.map.map.addLayer({
+          id: "permit-hit",
+          type: "circle",
+          source: "permit-pins",
+          paint: {
+            // #1: invisible, but widens the tap/hover target well past the 5px
+            // dot so pins are reachable on touch. No visual change on desktop.
+            "circle-radius": 16,
+            "circle-color": "#000000",
+            "circle-opacity": 0
           }
         });
         state.map.map.addLayer({
@@ -3738,7 +3924,7 @@
             state.map.map.easeTo({ center: feature.geometry.coordinates, zoom });
           });
         });
-        state.map.map.on("click", "permit-points", event => {
+        state.map.map.on("click", "permit-hit", event => {
           const row = event.features[0].properties;
           selectMapPermit(row, true);
         });
@@ -3752,7 +3938,7 @@
         });
         state.map.map.on("click", event => {
           if (!state.map.hoverPinnedPermitNumber) return;
-          const features = state.map.map.queryRenderedFeatures(event.point, { layers: ["permit-points", "selected-permit-pin", "permit-clusters", "map-search-location"] });
+          const features = state.map.map.queryRenderedFeatures(event.point, { layers: ["permit-hit", "selected-permit-pin", "permit-clusters", "map-search-location"] });
           if (!features.length) dismissPinnedMapHover();
         });
         state.map.hoverPopup = new maplibregl.Popup({
@@ -3761,11 +3947,11 @@
           anchor: "bottom",
           offset: 16
         });
-        state.map.map.on("mousemove", "permit-points", event => {
+        state.map.map.on("mousemove", "permit-hit", event => {
           const feature = event.features && event.features[0];
           if (feature) showMapPermitHover(feature);
         });
-        state.map.map.on("mouseleave", "permit-points", () => {
+        state.map.map.on("mouseleave", "permit-hit", () => {
           scheduleMapHoverClose();
         });
         state.map.map.on("mousemove", "selected-permit-pin", event => {
@@ -3782,7 +3968,7 @@
         state.map.map.on("mouseleave", "map-search-location", () => {
           scheduleMapHoverClose();
         });
-        ["permit-clusters", "permit-points", "selected-permit-pin", "map-search-location"].forEach(layer => {
+        ["permit-clusters", "permit-hit", "selected-permit-pin", "map-search-location"].forEach(layer => {
           state.map.map.on("mouseenter", layer, () => { state.map.map.getCanvas().style.cursor = "pointer"; });
           state.map.map.on("mouseleave", layer, () => { state.map.map.getCanvas().style.cursor = ""; });
         });
@@ -3790,6 +3976,7 @@
         state.map.sourceReady = true;
         updateMapLayerVisibility();
         updateMapSource();
+        if (state.map.layers.zoning) ensureZoningLoaded();
       });
     }
 
@@ -4203,6 +4390,42 @@
       } else {
         sheet.classList.remove("hidden");
       }
+      fillPermitZone(row);
+    }
+
+    // Resolve a single permit's zoning district on demand (one point-in-polygon
+    // query against the city zoning boundaries), cached per permit number. Kept
+    // out of the bulk map fetch so it costs nothing until a permit is opened or
+    // hovered. Resolves to a display label, or "" when it can't be determined.
+    async function ensurePermitZone(row) {
+      const number = clean(row.n);
+      const lat = Number(row.lat), lon = Number(row.lon);
+      if (!number || !Number.isFinite(lat) || !Number.isFinite(lon)) return "";
+      if (state.map.zoneCache.has(number)) return state.map.zoneCache.get(number);
+      try {
+        const params = new URLSearchParams({
+          $select: "zone_class,pd_num",
+          $where: `intersects(the_geom, 'POINT(${lon} ${lat})')`,
+          $limit: "1"
+        });
+        const [hit] = await fetch(`https://data.cityofchicago.org/resource/dj47-wfun.json?${params}`).then(r => r.json());
+        const zc = clean(hit && hit.zone_class).trim();
+        const label = !zc ? "Zoning: n/a" : /^PD/i.test(zc) ? `Planned Development ${clean(hit.pd_num) || zc.replace(/^PD\s*/i, "")}` : `Zoned ${zc}`;
+        state.map.zoneCache.set(number, label);
+        return label;
+      } catch {
+        return ""; // non-fatal: caller leaves the zone line/tag empty
+      }
+    }
+
+    // Fill the selected permit's detail-card zone tag once its zone resolves.
+    async function fillPermitZone(row) {
+      const number = clean(row.n);
+      const label = await ensurePermitZone(row);
+      const tag = $("detail-zone-tag");
+      if (!tag || !label || clean(state.map.activePermitNumber) !== number) return;
+      tag.textContent = label;
+      tag.hidden = false;
     }
 
     function toggleMapDetail() {
@@ -4257,7 +4480,35 @@
 
     function setMapLayer(layer, visible) {
       state.map.layers[layer] = visible;
+      if (layer === "zoning" && visible) ensureZoningLoaded();
       updateMapLayerVisibility();
+    }
+
+    // Fetch the ~850 KB (gzipped) zoning GeoJSON once, the first time the layer
+    // is switched on, and paint the legend swatches from the shared color map.
+    async function ensureZoningLoaded() {
+      if (state.map.zoningLoaded || state.map.zoningLoading) return;
+      const source = state.map.map && state.map.map.getSource("zoning");
+      if (!source) return; // map not ready yet; retried from the load handler
+      state.map.zoningLoading = true;
+      const legend = $("zoning-legend");
+      if (legend) {
+        legend.querySelectorAll(".zoning-swatch").forEach(el => {
+          el.style.setProperty("--swatch", ZONE_COLORS[el.dataset.zcat] || ZONE_COLORS.other);
+        });
+      }
+      try {
+        const data = await fetch(ZONING_URL).then(r => {
+          if (!r.ok) throw new Error("Failed to load zoning data");
+          return r.json();
+        });
+        source.setData(data);
+        state.map.zoningLoaded = true;
+      } catch {
+        $("map-status-strip").textContent = "Zoning layer could not be loaded.";
+      } finally {
+        state.map.zoningLoading = false;
+      }
     }
 
     function setLayerVisibility(layerId, visible) {
@@ -4270,9 +4521,15 @@
       setLayerVisibility("permit-heat", state.map.layers.heat);
       setLayerVisibility("permit-point-shadows", state.map.layers.permits);
       setLayerVisibility("permit-points", state.map.layers.permits);
+      setLayerVisibility("permit-hit", state.map.layers.permits);
       setLayerVisibility("selected-permit-pin", state.map.layers.permits);
       setLayerVisibility("permit-clusters", state.map.layers.clusters);
       setLayerVisibility("cluster-count", state.map.layers.clusters);
+      setLayerVisibility("zoning-fill", state.map.layers.zoning);
+      setLayerVisibility("zoning-outline", state.map.layers.zoning);
+      setLayerVisibility("zoning-label", state.map.layers.zoning);
+      const legend = $("zoning-legend");
+      if (legend) legend.hidden = !state.map.layers.zoning;
     }
 
     function readCookie(name) {
