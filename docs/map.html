@@ -67,6 +67,7 @@
       --warning: #a15c06;
       --warning-soft: #fff7ed;
       --teal: #176b87;
+      --tif: #b5179e;
       --steel: #5b718d;
       --white: #ffffff;
       --tag-border: #b7dec9;
@@ -107,6 +108,7 @@
       --warning: #f6c56d;
       --warning-soft: #33240f;
       --teal: #78d5ec;
+      --tif: #f072d6;
       --steel: #b6c8dc;
       --white: #f8fbff;
       --tag-border: #316849;
@@ -1209,6 +1211,36 @@
       border-radius: 3px;
       vertical-align: -2px;
       background: var(--swatch, #c7ced6);
+    }
+
+    .tif-legend-key {
+      display: block;
+      padding: 8px 10px;
+      color: var(--muted);
+      font-size: 0.74rem;
+      line-height: 1.4;
+    }
+
+    .tif-swatch {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-right: 8px;
+      border: 1.5px dashed var(--tif);
+      border-radius: 3px;
+      vertical-align: -2px;
+      background: color-mix(in srgb, var(--tif) 16%, transparent);
+    }
+
+    .tag.tif-tag {
+      border-color: var(--tif);
+      color: var(--tif);
+      background: color-mix(in srgb, var(--tif) 12%, var(--panel));
+    }
+
+    .map-hover-card .hover-tif {
+      color: var(--tif);
+      font-weight: 700;
     }
 
     .map-result-rail {
@@ -2790,6 +2822,8 @@
   <script>
     const API_BASE = "https://chi-permits-api.divyam-c-karuri.workers.dev";
     const ZONING_URL = "data/zoning.geojson";
+    const TIF_URL = "data/tif.geojson";
+    const TIF_COLOR = "#b5179e";
 
     // Category -> fill color, shared by the map fill layer and the legend swatches.
     const ZONE_COLORS = {
@@ -2840,13 +2874,16 @@
         zoningLoaded: false,
         zoningLoading: false,
         zoneCache: new Map(),
+        tifLoaded: false,
+        tifLoading: false,
+        tifCache: new Map(),
         filteredRows: [],
         visibleRows: [],
         activePermitNumber: "",
         detailExpanded: true,
         drawer: "",
         showResults: true,
-        layers: { permits: true, clusters: false, heat: false, zoning: false },
+        layers: { permits: true, clusters: false, heat: false, zoning: false, tif: false },
         settings: null,
         searchLocation: null,
         hoverPopup: null,
@@ -3450,6 +3487,7 @@
           <span class="tag">${fmt(permit.gc_open_jobs || 0)} GC open jobs</span>
           ${permit.ward ? `<a class="tag clickable" href="index.html?mode=open_permits&ward=${enc(permit.ward)}">Ward ${esc(permit.ward)}</a>` : ""}
           <span class="tag" id="detail-zone-tag" hidden></span>
+          <span class="tag tif-tag" id="detail-tif-tag" hidden></span>
         </div>
         ${permitFacts(permit, [
           ["Issued", permit.issue_date],
@@ -3485,6 +3523,7 @@
           <span>${fmt(row.go || 0)} GC open jobs${primaryContact ? ` &middot; ${esc(primaryContact)}` : ""}</span>
           ${gcPhone ? `<span>GC phone: ${esc(gcPhone)}</span>` : ""}
           <span id="hover-zone-line" data-permit="${esc(clean(row.n))}">${esc(state.map.zoneCache.get(clean(row.n)) || "Zoning…")}</span>
+          <span id="hover-tif-line" class="hover-tif" data-permit="${esc(clean(row.n))}"${state.map.tifCache.get(clean(row.n)) ? "" : " hidden"}>${esc(state.map.tifCache.get(clean(row.n)) || "")}</span>
           <div class="map-hover-actions">
             <button class="primary map-hover-action" onclick="event.stopPropagation(); addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "Saved" : "Add to list"}</button>
             <button class="map-hover-action danger" onclick="event.stopPropagation(); removePermitFromUserList('${permitNumber}')" ${saved ? "" : "disabled"}>Remove</button>
@@ -3504,6 +3543,12 @@
       ensurePermitZone(feature.properties).then(label => {
         const el = document.getElementById("hover-zone-line");
         if (el && el.dataset.permit === number) el.textContent = label || "Zoning: n/a";
+      });
+      ensurePermitTif(feature.properties).then(label => {
+        const el = document.getElementById("hover-tif-line");
+        if (!el || el.dataset.permit !== number) return;
+        if (label) { el.textContent = label; el.hidden = false; }
+        else el.hidden = true;
       });
       const popupEl = state.map.hoverPopup.getElement();
       if (popupEl && popupEl.dataset.hoverBound !== "1") {
@@ -3642,6 +3687,7 @@
                 <label class="check-row"><input type="checkbox" ${mapLayerChecked("clusters")} onchange="setMapLayer('clusters', this.checked)"><span>Clusters and counts</span></label>
                 <label class="check-row"><input type="checkbox" ${mapLayerChecked("heat")} onchange="setMapLayer('heat', this.checked)"><span>Density heat layer</span></label>
                 <label class="check-row"><input type="checkbox" ${mapLayerChecked("zoning")} onchange="setMapLayer('zoning', this.checked)"><span>Zoning districts</span></label>
+                <label class="check-row"><input type="checkbox" ${mapLayerChecked("tif")} onchange="setMapLayer('tif', this.checked)"><span>TIF districts</span></label>
               </div>
               <div id="zoning-legend" class="zoning-legend" hidden>
                 <table class="zoning-legend-table">
@@ -3659,6 +3705,9 @@
                     <tr><th scope="row"><span class="zoning-swatch" data-zcat="transportation"></span>Transportation</th><td>T</td><td>Transit &amp; right-of-way</td></tr>
                   </tbody>
                 </table>
+              </div>
+              <div id="tif-legend" class="zoning-legend tif-legend" hidden>
+                <span class="tif-legend-key"><span class="tif-swatch"></span>TIF district &mdash; dashed boundary. Hover or open a permit inside one to see its name and expiry.</span>
               </div>
             </div>
           </section>
@@ -3787,6 +3836,44 @@
             "text-color": "#1f2937",
             "text-halo-color": "#ffffff",
             "text-halo-width": 1.4
+          }
+        });
+        // TIF overlay: distinct single color with a dashed boundary so it reads
+        // clearly even when stacked over the zoning fill. Also lazy-loaded.
+        state.map.map.addSource("tif", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] }
+        });
+        state.map.map.addLayer({
+          id: "tif-fill",
+          type: "fill",
+          source: "tif",
+          layout: { visibility: "none" },
+          paint: { "fill-color": TIF_COLOR, "fill-opacity": 0.16 }
+        });
+        state.map.map.addLayer({
+          id: "tif-outline",
+          type: "line",
+          source: "tif",
+          layout: { visibility: "none" },
+          paint: { "line-color": TIF_COLOR, "line-width": 1.6, "line-opacity": 0.85, "line-dasharray": [3, 2] }
+        });
+        state.map.map.addLayer({
+          id: "tif-label",
+          type: "symbol",
+          source: "tif",
+          minzoom: 11,
+          layout: {
+            visibility: "none",
+            "text-field": ["get", "name"],
+            "text-font": ["Open Sans Semibold"],
+            "text-size": 11,
+            "text-max-width": 8
+          },
+          paint: {
+            "text-color": TIF_COLOR,
+            "text-halo-color": "#ffffff",
+            "text-halo-width": 1.6
           }
         });
         state.map.map.addSource("permit-pins", {
@@ -3977,6 +4064,7 @@
         updateMapLayerVisibility();
         updateMapSource();
         if (state.map.layers.zoning) ensureZoningLoaded();
+        if (state.map.layers.tif) ensureTifLoaded();
       });
     }
 
@@ -4391,6 +4479,7 @@
         sheet.classList.remove("hidden");
       }
       fillPermitZone(row);
+      fillPermitTif(row);
     }
 
     // Resolve a single permit's zoning district on demand (one point-in-polygon
@@ -4423,6 +4512,42 @@
       const number = clean(row.n);
       const label = await ensurePermitZone(row);
       const tag = $("detail-zone-tag");
+      if (!tag || !label || clean(state.map.activePermitNumber) !== number) return;
+      tag.textContent = label;
+      tag.hidden = false;
+    }
+
+    // Resolve a permit's TIF district on demand, cached per permit. Unlike zoning
+    // (which covers the whole city), most permits are NOT inside a TIF, so this
+    // resolves to "" when there's no district and the tag/line stays hidden.
+    async function ensurePermitTif(row) {
+      const number = clean(row.n);
+      const lat = Number(row.lat), lon = Number(row.lon);
+      if (!number || !Number.isFinite(lat) || !Number.isFinite(lon)) return "";
+      if (state.map.tifCache.has(number)) return state.map.tifCache.get(number);
+      try {
+        const params = new URLSearchParams({
+          $select: "name,ref,expiration",
+          $where: `intersects(the_geom, 'POINT(${lon} ${lat})')`,
+          $limit: "1"
+        });
+        const [hit] = await fetch(`https://data.cityofchicago.org/resource/eejr-xtfb.json?${params}`).then(r => r.json());
+        const name = clean(hit && hit.name).trim();
+        const ref = clean(hit && hit.ref).replace(/\s+/g, "").trim();
+        const exp = clean(hit && hit.expiration).slice(0, 4);
+        const label = name ? `TIF: ${name}${ref ? ` (${ref})` : ""}${exp ? ` · expires ${exp}` : ""}` : "";
+        state.map.tifCache.set(number, label);
+        return label;
+      } catch {
+        return "";
+      }
+    }
+
+    // Fill the selected permit's detail-card TIF tag when it falls in a district.
+    async function fillPermitTif(row) {
+      const number = clean(row.n);
+      const label = await ensurePermitTif(row);
+      const tag = $("detail-tif-tag");
       if (!tag || !label || clean(state.map.activePermitNumber) !== number) return;
       tag.textContent = label;
       tag.hidden = false;
@@ -4481,7 +4606,28 @@
     function setMapLayer(layer, visible) {
       state.map.layers[layer] = visible;
       if (layer === "zoning" && visible) ensureZoningLoaded();
+      if (layer === "tif" && visible) ensureTifLoaded();
       updateMapLayerVisibility();
+    }
+
+    // Fetch the ~50 KB TIF overlay once, the first time the layer is enabled.
+    async function ensureTifLoaded() {
+      if (state.map.tifLoaded || state.map.tifLoading) return;
+      const source = state.map.map && state.map.map.getSource("tif");
+      if (!source) return;
+      state.map.tifLoading = true;
+      try {
+        const data = await fetch(TIF_URL).then(r => {
+          if (!r.ok) throw new Error("Failed to load TIF data");
+          return r.json();
+        });
+        source.setData(data);
+        state.map.tifLoaded = true;
+      } catch {
+        $("map-status-strip").textContent = "TIF layer could not be loaded.";
+      } finally {
+        state.map.tifLoading = false;
+      }
     }
 
     // Fetch the ~850 KB (gzipped) zoning GeoJSON once, the first time the layer
@@ -4528,8 +4674,13 @@
       setLayerVisibility("zoning-fill", state.map.layers.zoning);
       setLayerVisibility("zoning-outline", state.map.layers.zoning);
       setLayerVisibility("zoning-label", state.map.layers.zoning);
+      setLayerVisibility("tif-fill", state.map.layers.tif);
+      setLayerVisibility("tif-outline", state.map.layers.tif);
+      setLayerVisibility("tif-label", state.map.layers.tif);
       const legend = $("zoning-legend");
       if (legend) legend.hidden = !state.map.layers.zoning;
+      const tifLegend = $("tif-legend");
+      if (tifLegend) tifLegend.hidden = !state.map.layers.tif;
     }
 
     function readCookie(name) {
