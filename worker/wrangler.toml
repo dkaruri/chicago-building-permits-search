@@ -1,0 +1,15 @@
+name = "chi-permits-api"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+[triggers]
+crons = ["0 6 * * *"]  # 6 AM UTC daily — rebuild profiles + license cache
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = ""  # Fill after `wrangler kv namespace create CACHE`
+
+[vars]
+SOCRATA_DOMAIN = "data.cityofchicago.org"
+DATASET_ID = "ydr8-5enu"
+ALLOWED_ORIGIN = "https://dkaruri.github.io"
