@@ -4703,7 +4703,6 @@
     }
 
     async function ensurePermitMap() {
-      if (state.userPermitMap.size) return;
       const nums = state.userPermitNumbers.filter(n => !state.userPermitMap.has(n));
       if (!nums.length) return;
       const SOCRATA = "https://data.cityofchicago.org/resource/ydr8-5enu.json";
@@ -4767,6 +4766,10 @@
 
     async function addPermitsToUserList(rows, options = {}) {
       const skipModeRefresh = Boolean(options.skipModeRefresh);
+      for (const row of rows) {
+        const pn = clean(row.permit_number);
+        if (pn) state.userPermitMap.set(pn, row);
+      }
       const numbers = rows.map(row => clean(row.permit_number)).filter(Boolean);
       const next = [...state.userPermitNumbers];
       numbers.forEach(number => {
