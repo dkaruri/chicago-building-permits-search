@@ -1006,6 +1006,45 @@
       text-transform: uppercase;
     }
 
+    .permit-more-contacts {
+      display: grid;
+      gap: 3px;
+      margin-top: 10px;
+    }
+
+    .permit-more-contacts .pc-role {
+      margin-top: 6px;
+      color: var(--muted);
+      font-weight: 800;
+      font-size: 0.74rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .contractor-line {
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+
+    .contractor-line .ci-name {
+      font-weight: 600;
+    }
+
+    .contractor-line .ci-meta {
+      color: var(--muted);
+    }
+
+    .contractor-line .ci-meta a {
+      color: var(--primary);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .permit-more-contacts .pc-empty {
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+
     td.select-cell {
       cursor: pointer;
       vertical-align: middle;
@@ -2771,7 +2810,6 @@
          columns on mobile (still on desktop, in the tap-through detail, and CSV). */
       body.list-page .saved-permits-table td[data-label="Cost"],
       body.list-page .saved-permits-table td[data-label="Issued"],
-      body.list-page .saved-permits-table td[data-label="Ward"],
       body.list-page .saved-permits-table td.geo-zone,
       body.list-page .saved-permits-table td.geo-tif {
         display: none;
@@ -5818,7 +5856,7 @@
       const tableClass = options.select ? "results-table permits-table" : options.notes ? "saved-permits-table" : "";
       return `
         <table class="${tableClass}">
-          <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th><th>${head("Ward", "ward")}</th><th>${head("Cost", "cost")}</th>${geoHead}${notesHead}${moveHead}</tr></thead>
+          <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th>${options.move ? "" : `<th>${head("Ward", "ward")}</th>`}<th>${head("Cost", "cost")}</th>${geoHead}${notesHead}${moveHead}</tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr
               draggable="${options.select || options.reorder ? "true" : "false"}"
@@ -5833,10 +5871,10 @@
               <td data-label="Status">${esc(row.permit_status)}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
               <td data-label="Address">${options.move && clean(row.address) ? (() => { const u = mapsUrls(row.address); return `<span class="maps-picker"><button type="button" class="address-open" aria-haspopup="true" aria-expanded="false" aria-controls="maps-menu-${i}" onclick="event.stopPropagation(); toggleMapsMenu(this)">${esc(row.address)}<span class="chev" aria-hidden="true">▾</span></button><span class="maps-menu" id="maps-menu-${i}" role="menu"><span class="maps-menu-label">Open in</span><a role="menuitem" href="${esc(u.apple)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Apple Maps</a><a role="menuitem" href="${esc(u.google)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Google Maps</a><a role="menuitem" href="${esc(u.waze)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Waze</a></span></span>`; })() : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
-              <td data-label="Ward">${esc(row.ward)}</td>
+              ${options.move ? "" : `<td data-label="Ward">${esc(row.ward)}</td>`}
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
               ${options.geo ? `<td data-label="Zone" class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</td><td data-label="TIF district" class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</td>` : ""}
-              ${options.move ? `<td class="permit-more-cell" data-label="More"><button type="button" class="permit-more-toggle" aria-expanded="false" aria-controls="more-body-${i}" onclick="event.stopPropagation(); togglePermitMore(this)">Details<span class="chev" aria-hidden="true">▾</span></button><div class="permit-more-body" id="more-body-${i}"><div class="permit-more-grid"><span class="k">Issued</span><span>${esc(row.issue_date) || "—"}</span><span class="k">Ward</span><span>${esc(row.ward) || "—"}</span><span class="k">Cost</span><span>${money(row.reported_cost) || "—"}</span><span class="k">Zone</span><span class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</span><span class="k">TIF</span><span class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</span></div></div></td>` : ""}
+              ${options.move ? `<td class="permit-more-cell" data-label="More"><button type="button" class="permit-more-toggle" aria-expanded="false" aria-controls="more-body-${i}" onclick="event.stopPropagation(); togglePermitMore(this)">Details<span class="chev" aria-hidden="true">▾</span></button><div class="permit-more-body" id="more-body-${i}"><div class="permit-more-grid"><span class="k">Issued</span><span>${esc(row.issue_date) || "—"}</span><span class="k">Cost</span><span>${money(row.reported_cost) || "—"}</span><span class="k">Zone</span><span class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</span><span class="k">TIF</span><span class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</span></div><div class="permit-more-contacts"><div class="pc-role">General contractors</div>${contractorLinesHtml(row.general_contractors, "general_contractor")}<div class="pc-role">Open subs</div>${contractorLinesHtml(row.open_subs, "open_tech")}</div></div></td>` : ""}
               ${options.notes ? `<td data-label="Notes"><textarea class="permit-note" draggable="false" placeholder="Add note..." onclick="event.stopPropagation()" ondragstart="event.stopPropagation()" oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[clean(row.permit_number)] || "")}</textarea></td>` : ""}
               ${options.move ? `<td class="move-cell" data-label="Move"><div class="move-controls"><button class="icon-button" title="Move up" aria-label="Move ${esc(row.permit_number)} up" ${i === 0 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', -1)">&uarr;</button><button class="icon-button" title="Move down" aria-label="Move ${esc(row.permit_number)} down" ${i >= rows.length - 1 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', 1)">&darr;</button></div></td>` : ""}
             </tr>`).join("")}</tbody>
@@ -5884,6 +5922,55 @@
       const open = btn.getAttribute("aria-expanded") === "true";
       btn.setAttribute("aria-expanded", String(!open));
       body.classList.toggle("is-open", !open);
+      if (!open) fillContractorInfo(body);
+    }
+
+    // Contractor (GC / open sub) lines for a permit's Details dropdown. Names come
+    // from the permit; open-jobs + phone are filled on demand when the dropdown
+    // opens (see fillContractorInfo) — the role maps to the profile category.
+    function contractorLinesHtml(value, role) {
+      const names = clean(value).split("|").map(x => x.trim()).filter(Boolean);
+      if (!names.length) return `<div class="pc-empty">None listed</div>`;
+      return names.map(name => `<div class="contractor-line" data-contractor="${esc(name)}" data-role="${role}"><span class="ci-name">${esc(name)}</span><span class="ci-meta"> · …</span></div>`).join("");
+    }
+
+    const contractorInfoCache = new Map();
+
+    // Fetch one contractor's open-jobs + phone from the Worker profile
+    // (category general_contractor | open_tech). Phone comes from the license
+    // match (first non-"NA"); many contractors have none. Cached per name+role.
+    // Returns null when the Worker is unreachable (e.g. local preview) or no match.
+    async function fetchContractorInfo(name, role) {
+      const key = role + " " + name.toLowerCase();
+      if (contractorInfoCache.has(key)) return contractorInfoCache.get(key);
+      let info = null;
+      try {
+        const res = await fetch(`${API_BASE}/api/contact/${encodeURIComponent(name)}?category=${role}`);
+        if (res.ok) {
+          const p = await res.json();
+          const phone = (p.license_matches || []).map(m => clean(m.phone)).find(ph => ph && ph.toUpperCase() !== "NA") || "";
+          info = { open_jobs: p.open_jobs, phone };
+        }
+      } catch {}
+      contractorInfoCache.set(key, info);
+      return info;
+    }
+
+    async function fillContractorInfo(container) {
+      const lines = [...container.querySelectorAll(".contractor-line:not([data-filled])")];
+      await Promise.all(lines.map(async line => {
+        line.setAttribute("data-filled", "1");
+        const meta = line.querySelector(".ci-meta");
+        const info = await fetchContractorInfo(line.getAttribute("data-contractor"), line.getAttribute("data-role"));
+        if (!info) { meta.textContent = ""; return; }
+        const bits = [];
+        if (info.open_jobs != null) bits.push(esc(`${fmt(info.open_jobs)} open jobs`));
+        if (info.phone) {
+          const tel = info.phone.replace(/[^\d+]/g, "");
+          bits.push(`<a href="tel:${esc(tel)}" onclick="event.stopPropagation()">${esc(info.phone)}</a>`);
+        }
+        meta.innerHTML = bits.length ? " · " + bits.join(" · ") : "";
+      }));
     }
 
     function focalShareData() {
