@@ -4482,19 +4482,30 @@
     async function downloadUserListKml() {
       await withListAction("Preparing KML export...", async () => {
         await ensurePermitMap();
-        const rows = mapExportRows();
-        if (!rows.length) {
+        const permitRows = mapExportRows();
+        if (!permitRows.length) {
           clearUserRoute("At least one saved permit needs mapped coordinates to download a map file.");
           return;
         }
-        await resolveGeoForRows(rows);
+        await resolveGeoForRows(permitRows);
+        // Prepend the starting location (when set) as the route's first stop.
+        const rows = withFocalOrigin(permitRows);
         const listNote = state.userListNote ? `<p><strong>List note:</strong> ${esc(state.userListNote)}</p>` : "";
-        const placemarks = rows.map((row, index) => `
+        let ordinal = 0;
+        const placemarks = rows.map(row => {
+          const name = row.focal
+            ? `Start - ${row.address}`
+            : `${(ordinal += 1)}. Permit ${row.permit_number} - ${row.address}`;
+          const description = row.focal
+            ? `<p><strong>Starting location</strong></p>`
+            : `${listNote}${permitExportDescription(row)}`;
+          return `
           <Placemark>
-            <name>${xmlText(`${index + 1}. Permit ${row.permit_number} - ${row.address}`)}</name>
-            <description><![CDATA[${cdata(`${listNote}${permitExportDescription(row)}`)}]]></description>
+            <name>${xmlText(name)}</name>
+            <description><![CDATA[${cdata(description)}]]></description>
             <Point><coordinates>${Number(row.longitude)},${Number(row.latitude)},0</coordinates></Point>
-          </Placemark>`).join("");
+          </Placemark>`;
+        }).join("");
         const line = rows.length > 1 ? `
           <Placemark>
             <name>Permit list route order</name>
@@ -4513,7 +4524,7 @@
   </Document>
 </kml>`;
         downloadBlob(userListFilename("kml"), kml, "application/vnd.google-earth.kml+xml;charset=utf-8");
-        clearUserRoute(`Downloaded KML with ${fmt(rows.length)} mapped permits and their permit details.`);
+        clearUserRoute(`Downloaded KML with ${fmt(permitRows.length)} mapped permits and their permit details.`);
         announceListAction("KML export downloaded.");
       });
     }
@@ -4532,8 +4543,11 @@
           "work_type", "reported_cost", "processing_time", "latitude", "longitude",
           "general_contractors", "open_subs", "permit_note", "list_note", "work_description"
         ];
-        const body = rows.map((row, index) => [
-          index + 1,
+        // Prepend the starting location (when set) as row "Start".
+        const exportRows = withFocalOrigin(rows);
+        let ordinal = 0;
+        const body = exportRows.map(row => [
+          row.focal ? "Start" : (ordinal += 1),
           row.permit_number,
           row.permit_status,
           row.issue_date,
