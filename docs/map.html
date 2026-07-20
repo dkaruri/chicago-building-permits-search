@@ -2914,6 +2914,7 @@
     const userNotesKey = "chi_permit_user_notes";
     const themeKey = "chi_permit_theme";
     const mapSettingsKey = "chi_permit_map_settings";
+    const mapLayersKey = "chi_permit_map_layers";
     const mapSearchHoverKey = "__search_location__";
     const userListLimit = 220;
     const appModes = ["general_contractors", "open_subs", "open_permits", "map"];
@@ -3092,6 +3093,7 @@
 
     async function init() {
       updateThemeButton();
+      restoreMapLayers();
       try {
         const stats = await fetch(API_BASE + "/api/stats").then(r => r.json());
         state.manifest = { ...stats, exported_at: stats.cached_at, files: {} };
@@ -3344,6 +3346,27 @@
         localStorage.setItem(mapSettingsKey, JSON.stringify(state.map.settings));
       } catch {}
       renderMapMode();
+    }
+
+    function saveMapLayers() {
+      try {
+        localStorage.setItem(mapLayersKey, JSON.stringify(state.map.layers));
+      } catch {}
+    }
+
+    // Restore previously toggled layers over the defaults. Only known keys with
+    // boolean values are copied, so corrupt/foreign storage can't inject state.
+    function restoreMapLayers() {
+      let saved = {};
+      try {
+        saved = JSON.parse(localStorage.getItem(mapLayersKey) || "{}");
+      } catch {
+        saved = {};
+      }
+      if (!saved || typeof saved !== "object") return;
+      for (const key of Object.keys(state.map.layers)) {
+        if (typeof saved[key] === "boolean") state.map.layers[key] = saved[key];
+      }
     }
 
     function monthKey(dateText) {
@@ -4693,6 +4716,7 @@
 
     function setMapLayer(layer, visible) {
       state.map.layers[layer] = visible;
+      saveMapLayers();
       if (layer === "zoning" && visible) ensureZoningLoaded();
       if (layer === "tif" && visible) ensureTifLoaded();
       updateMapLayerVisibility();
