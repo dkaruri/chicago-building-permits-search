@@ -4892,6 +4892,16 @@
       $("user-route-summary").textContent = state.userRouteSummary || fallback;
     }
 
+    // Stepped progress for the drive-time sort. The waits are opaque network
+    // calls (no fetch progress), so the percentage advances at real milestones
+    // (matrix fetched, order optimized, legs measured) rather than pretending to
+    // fill smoothly.
+    function setRouteProgress(done, total, label) {
+      const pct = Math.round((done / total) * 100);
+      state.userRouteSummary = `Sorting by drive time… ${pct}% — ${label}`;
+      renderRouteSummary();
+    }
+
     function hideGoogleRouteChunks() {
       state.routeChunksVisible = false;
       const container = $("user-route-chunks");
@@ -5291,13 +5301,17 @@
         return;
       }
       try {
-        state.userRouteSummary = "Sorting by estimated driving time...";
-        renderRouteSummary();
+        setRouteProgress(0, 3, "fetching drive times…");
         const matrix = await fetchDurationMatrix(routable);
+        setRouteProgress(1, 3, "optimizing route order…");
+        // Yield so the 33% state paints before the synchronous optimize (which
+        // can block the thread for ~1s on a full 100-stop list).
+        await new Promise(resolve => setTimeout(resolve, 0));
         const ordered = greedyRouteOrder(routable, matrix);
         const missing = rows.filter(row => !hasCoordinates(row)).map(row => clean(row.permit_number));
         state.userPermitNumbers = [...ordered.map(row => clean(row.permit_number)), ...missing];
         saveUserListCookie();
+        setRouteProgress(2, 3, "measuring route legs…");
         await calculateUserListRoute();
       } catch (error) {
         clearUserRoute(error.message || "The list could not be sorted by driving time right now.");
