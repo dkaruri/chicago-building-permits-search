@@ -53,6 +53,8 @@ export default {
           "GET /api/profiles?category=general_contractor|open_tech",
           "GET /api/contact/:name",
           "GET /api/stats",
+          "POST /api/lists  (body: {permits, focal}) -> {id}",
+          "GET /api/lists/:id -> {permits, focal}",
         ],
       },
       200,
