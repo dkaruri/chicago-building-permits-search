@@ -1822,7 +1822,11 @@
       .layout, .content { grid-template-columns: 1fr; }
       .user-list-toolbar { grid-template-columns: 1fr; }
       .controls, .detail { position: static; }
-      .table-wrap { max-height: none; }
+      /* Match .user-list-panel .table-wrap's specificity so the cap is actually
+         removed here — otherwise the saved list stays a ~46vh inner scroll box
+         that locks up page scrolling on mobile. */
+      .table-wrap,
+      .user-list-panel .table-wrap { max-height: none; overflow: visible; }
     }
 
     @media (max-width: 640px) {
