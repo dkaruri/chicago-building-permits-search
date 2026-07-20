@@ -3149,6 +3149,43 @@
       if ($("ward") && params.has("ward")) $("ward").value = params.get("ward") || "";
     }
 
+    async function applySharedList() {
+      const id = new URLSearchParams(location.hash.slice(1)).get("s");
+      if (!id || !/^[A-Za-z0-9]{1,16}$/.test(id)) return;
+      const stripHash = () => history.replaceState(null, "", location.pathname);
+      let data;
+      try {
+        const res = await fetch(`${API_BASE}/api/lists/${encodeURIComponent(id)}`);
+        if (!res.ok) throw new Error("not found");
+        data = await res.json();
+      } catch {
+        clearUserRoute("This shared list link has expired or could not be loaded.");
+        stripHash();
+        return;
+      }
+      const permits = Array.isArray(data.permits) ? data.permits.map(clean).filter(Boolean) : [];
+      if (!permits.length) { stripHash(); return; }
+      const existing = state.userPermitNumbers.length;
+      if (existing && !window.confirm(`Replace your saved list (${fmt(existing)} permits) with this shared list (${fmt(permits.length)} permits)?`)) {
+        stripHash();
+        return;
+      }
+      state.userPermitNumbers = permits;
+      saveUserListCookie();
+      const f = data.focal;
+      if (f && Number.isFinite(Number(f.lat)) && Number.isFinite(Number(f.lon))) {
+        state.focalPoint = { address: f.label || "", label: f.label || "", latitude: Number(f.lat), longitude: Number(f.lon), resolved: true, permitNumber: null, matched: false };
+      } else {
+        state.focalPoint = null;
+      }
+      saveFocalPoint();
+      const focalInput = $("focal-input");
+      if (focalInput) focalInput.value = state.focalPoint ? (state.focalPoint.address || "") : "";
+      renderFocalStatus();
+      await ensurePermitMap();
+      stripHash();
+    }
+
     function dateTimeLabel(value) {
       if (!value) return "";
       const date = new Date(value);
@@ -3264,6 +3301,7 @@
       const focalInput = $("focal-input");
       if (focalInput && state.focalPoint) focalInput.value = state.focalPoint.address || "";
       renderFocalStatus();
+      await applySharedList();
       applyInitialUrlParams();
       renderStatus();
       initListMenus();
