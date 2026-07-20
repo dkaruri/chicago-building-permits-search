@@ -617,6 +617,42 @@
       background: var(--surface-subtle);
     }
 
+    .focal-row {
+      margin: 10px 0 8px;
+    }
+
+    .focal-label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--steel);
+      margin-bottom: 4px;
+    }
+
+    .focal-controls {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .focal-controls input {
+      flex: 1 1 220px;
+      min-width: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      color: inherit;
+    }
+
+    .focal-status {
+      margin-top: 6px;
+      color: var(--steel);
+    }
+
+    .focal-status.is-matched { color: var(--accent, #167a4a); }
+    .focal-status.is-unresolved { color: #a15c06; }
+
     .list-action-status {
       min-height: 0;
       margin: 0;
@@ -2657,6 +2693,15 @@
           </div>
         </div>
       </div>
+      <div class="focal-row" role="group" aria-label="Starting location">
+        <label class="focal-label" for="focal-input">Starting location</label>
+        <div class="focal-controls">
+          <input id="focal-input" type="text" placeholder="Address to start routes from (e.g. 233 S Wacker Dr)" onkeydown="if(event.key==='Enter'){event.preventDefault();setFocalPoint();}">
+          <button data-list-action onclick="setFocalPoint()">Set</button>
+          <button class="subtle-danger" data-list-action onclick="clearFocalPoint()">Clear</button>
+        </div>
+        <div id="focal-status" class="focal-status small" aria-live="polite"></div>
+      </div>
       <div id="user-route-summary" class="route-summary small" aria-live="polite">Add at least two permits with mapped coordinates to estimate driving distances.</div>
       <div id="list-action-status" class="list-action-status" aria-live="polite"></div>
       <div id="user-route-chunks" class="route-chunks" aria-live="polite"></div>
@@ -2762,6 +2807,7 @@
       userPermitMap: new Map(),
       userListNote: "",
       userPermitNotes: {},
+      focalPoint: null,
       draggedPermitNumber: "",
       userRouteLegs: [],
       userRouteSummary: "",
@@ -2800,6 +2846,7 @@
     const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const userListKey = "chi_permit_user_list";
     const userNotesKey = "chi_permit_user_notes";
+    const focalPointKey = "chi_permit_focal";
     const themeKey = "chi_permit_theme";
     const mapSettingsKey = "chi_permit_map_settings";
     const userListLimit = 220;
@@ -3000,6 +3047,10 @@
       }
       loadUserListCookie();
       loadUserNotes();
+      loadFocalPoint();
+      const focalInput = $("focal-input");
+      if (focalInput && state.focalPoint) focalInput.value = state.focalPoint.address || "";
+      renderFocalStatus();
       applyInitialUrlParams();
       renderStatus();
       initListMenus();
@@ -4134,6 +4185,129 @@
       return state.userPermitNumbers.map(number => state.userPermitMap.get(number)).filter(Boolean);
     }
 
+    // ---- Focal point (static route start address) ----
+
+    function loadFocalPoint() {
+      let raw = "";
+      try {
+        raw = localStorage.getItem(focalPointKey) || "";
+      } catch {
+        raw = "";
+      }
+      if (!raw) { state.focalPoint = null; return; }
+      try {
+        const saved = JSON.parse(raw);
+        state.focalPoint = saved && typeof saved === "object" ? saved : null;
+      } catch {
+        state.focalPoint = null;
+      }
+    }
+
+    function saveFocalPoint() {
+      try {
+        if (state.focalPoint) localStorage.setItem(focalPointKey, JSON.stringify(state.focalPoint));
+        else localStorage.removeItem(focalPointKey);
+      } catch {}
+    }
+
+    // Match the typed address against permits already in the saved list only.
+    // Exact normalized address first, then a loose contains either direction.
+    function focalMatchInList(text) {
+      const target = norm(text);
+      if (!target) return null;
+      const rows = userListRows().filter(hasCoordinates);
+      return rows.find(row => norm(row.address) === target)
+        || rows.find(row => norm(row.address).includes(target) || target.includes(norm(row.address)))
+        || null;
+    }
+
+    async function setFocalPoint() {
+      const input = $("focal-input");
+      const text = clean(input ? input.value : "").trim();
+      if (!text) { clearFocalPoint(); return; }
+      await ensurePermitMap(); // hydrate saved rows so list matching can work
+      const match = focalMatchInList(text);
+      if (match) {
+        state.focalPoint = {
+          address: clean(match.address) || text,
+          latitude: Number(match.latitude),
+          longitude: Number(match.longitude),
+          permitNumber: clean(match.permit_number),
+          matched: true,
+          resolved: true,
+        };
+      } else {
+        const geo = await geocodeMapSearch(text);
+        if (geo && Number.isFinite(Number(geo.lat)) && Number.isFinite(Number(geo.lon))) {
+          state.focalPoint = {
+            address: text,
+            label: geo.label || text,
+            latitude: Number(geo.lat),
+            longitude: Number(geo.lon),
+            permitNumber: null,
+            matched: false,
+            resolved: true,
+          };
+        } else {
+          state.focalPoint = { address: text, permitNumber: null, matched: false, resolved: false };
+        }
+      }
+      saveFocalPoint();
+      renderFocalStatus();
+      clearUserRoute("Starting location changed. Recalculate driving distances when ready.");
+    }
+
+    function clearFocalPoint() {
+      state.focalPoint = null;
+      saveFocalPoint();
+      const input = $("focal-input");
+      if (input) input.value = "";
+      renderFocalStatus();
+      clearUserRoute("Starting location cleared. Recalculate driving distances when ready.");
+    }
+
+    function renderFocalStatus() {
+      const el = $("focal-status");
+      if (!el) return;
+      el.classList.remove("is-matched", "is-unresolved");
+      const fp = state.focalPoint;
+      if (!fp) {
+        el.textContent = "No starting location set. Routes start from the first saved permit.";
+        return;
+      }
+      if (!fp.resolved) {
+        el.classList.add("is-unresolved");
+        el.textContent = `Couldn't locate "${fp.address}". Routes will start from the first saved permit.`;
+        return;
+      }
+      if (fp.matched) {
+        el.classList.add("is-matched");
+        el.textContent = `Start: ${fp.address} — matched permit ${fp.permitNumber}`;
+      } else {
+        el.textContent = `Start: ${fp.label || fp.address} — geocoded`;
+      }
+    }
+
+    // Synthetic route row for the focal point, or null when none is usable.
+    function focalOriginRow() {
+      const fp = state.focalPoint;
+      if (!fp || !fp.resolved || !Number.isFinite(Number(fp.latitude)) || !Number.isFinite(Number(fp.longitude))) {
+        return null;
+      }
+      return {
+        permit_number: "",
+        address: fp.address || fp.label || "Starting location",
+        latitude: Number(fp.latitude),
+        longitude: Number(fp.longitude),
+        focal: true,
+      };
+    }
+
+    function withFocalOrigin(rows) {
+      const origin = focalOriginRow();
+      return origin ? [origin, ...rows] : rows;
+    }
+
     function hasCoordinates(row) {
       return Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude));
     }
@@ -4239,16 +4413,17 @@
     function routeChunkStops(chunk, offset) {
       return chunk.map((row, index) => {
         const stopNumber = offset + index + 1;
-        return `<li><strong>${fmt(stopNumber)}.</strong> ${esc(row.address)} <span class="muted">Permit ${esc(row.permit_number)}</span></li>`;
+        const tag = row.focal ? `<span class="muted">Start</span>` : `<span class="muted">Permit ${esc(row.permit_number)}</span>`;
+        return `<li><strong>${fmt(stopNumber)}.</strong> ${esc(row.address)} ${tag}</li>`;
       }).join("");
     }
 
     async function openGoogleMapsRoute() {
       await withListAction("Preparing Google Maps route...", async () => {
         await ensurePermitMap();
-        const rows = mapExportRows();
+        const rows = withFocalOrigin(mapExportRows());
         if (rows.length < 2) {
-          clearUserRoute("At least two saved permits need mapped coordinates to open a driving route.");
+          clearUserRoute("Add a starting location or at least two saved permits with mapped coordinates to open a driving route.");
           return;
         }
         const routeRows = rows.slice(0, 5);
@@ -4266,10 +4441,10 @@
     async function showGoogleRouteChunks() {
       await withListAction("Creating Google Maps route chunks...", async () => {
         await ensurePermitMap();
-        const rows = mapExportRows();
+        const rows = withFocalOrigin(mapExportRows());
         if (rows.length < 2) {
           hideGoogleRouteChunks();
-          clearUserRoute("At least two saved permits need mapped coordinates to create Google route chunks.");
+          clearUserRoute("Add a starting location or at least two saved permits with mapped coordinates to create Google route chunks.");
           return;
         }
         const chunkSize = 5;
@@ -4436,9 +4611,10 @@
       await withListAction("Calculating driving distances...", async () => {
         await ensurePermitMap();
         const rows = userListRows();
-        const routable = routeRows(rows);
+        const routablePermits = routeRows(rows);
+        const routable = withFocalOrigin(routablePermits);
         if (routable.length < 2) {
-          clearUserRoute("At least two saved permits need mapped coordinates to estimate driving distances.");
+          clearUserRoute("Add a starting location or at least two saved permits with mapped coordinates to estimate driving distances.");
           return;
         }
         try {
@@ -4447,7 +4623,7 @@
           state.userRouteLegs = await fetchRouteLegs(routable);
           const totalDistance = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.distance || 0), 0);
           const totalDuration = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.duration || 0), 0);
-          const skipped = rows.length - routable.length;
+          const skipped = rows.length - routablePermits.length;
           state.userRouteSummary = `Current route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} saved permits missing coordinates)` : ""}.`;
           announceListAction("Driving distances calculated.");
           await renderUserList();
@@ -4490,27 +4666,31 @@
       await withListAction("Sorting by estimated driving time...", async () => {
         await ensurePermitMap();
         const rows = userListRows();
-        const routable = routeRows(rows);
-        if (routable.length < 2) {
+        const routablePermits = routeRows(rows);
+        if (routablePermits.length < 2) {
           clearUserRoute("At least two saved permits need mapped coordinates to sort by driving time.");
           return;
         }
-        if (routable.length > 50) {
+        if (routablePermits.length > 50) {
           clearUserRoute("Sort by drive time is limited to 50 mapped permits at a time.");
           return;
         }
         try {
           state.userRouteSummary = "Sorting by estimated driving time...";
           renderRouteSummary();
+          // Prepend the focal point so the greedy order stays anchored to it as
+          // the fixed start; strip it back out before persisting the permit list.
+          const routable = withFocalOrigin(routablePermits);
           const matrix = await fetchDurationMatrix(routable);
           const ordered = greedyRouteOrder(routable, matrix);
+          const orderedPermits = ordered.filter(row => !row.focal);
           const missing = rows.filter(row => !hasCoordinates(row)).map(row => clean(row.permit_number));
-          state.userPermitNumbers = [...ordered.map(row => clean(row.permit_number)), ...missing];
+          state.userPermitNumbers = [...orderedPermits.map(row => clean(row.permit_number)), ...missing];
           saveUserListCookie();
           state.userRouteLegs = await fetchRouteLegs(ordered);
           const totalDistance = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.distance || 0), 0);
           const totalDuration = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.duration || 0), 0);
-          const skipped = rows.length - routable.length;
+          const skipped = rows.length - routablePermits.length;
           state.userRouteSummary = `Sorted route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} saved permits missing coordinates)` : ""}.`;
           announceListAction("List sorted by estimated driving time.");
           await renderUserList();
