@@ -865,12 +865,83 @@
       white-space: nowrap;
     }
 
-    /* Tappable address that opens the phone's Maps app. */
-    .address-link {
+    /* Tappable address that opens a chooser of map apps (Apple/Google/Waze),
+       since iOS has no system map-app picker. */
+    .maps-picker {
+      position: relative;
+      display: inline-block;
+    }
+
+    .address-open {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0;
+      border: 0;
+      background: none;
       color: var(--primary);
+      font: inherit;
+      font-weight: inherit;
       text-decoration: underline;
       text-underline-offset: 2px;
+      text-align: left;
+      cursor: pointer;
       touch-action: manipulation;
+    }
+
+    .address-open .chev {
+      font-size: 0.7em;
+      text-decoration: none;
+      transition: transform 0.2s ease;
+    }
+
+    .address-open[aria-expanded="true"] .chev {
+      transform: rotate(180deg);
+    }
+
+    .maps-menu {
+      display: none;
+      position: absolute;
+      z-index: 20;
+      left: 0;
+      margin-top: 6px;
+      min-width: 168px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 10px 24px var(--shadow);
+    }
+
+    .maps-menu.is-open {
+      display: block;
+    }
+
+    .maps-menu-label {
+      display: block;
+      padding: 6px 10px 3px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .maps-menu a {
+      display: flex;
+      align-items: center;
+      min-height: 44px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      color: var(--ink);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .maps-menu a:hover,
+    .maps-menu a:focus {
+      background: var(--primary-soft);
+      color: var(--primary);
     }
 
     /* Collapsible per-permit details (mobile only; the desktop table uses real
@@ -5717,7 +5788,7 @@
               <td data-label="Permit">${options.move ? `<span class="list-ordinal" aria-label="Stop ${i + 1}">${i + 1}</span>` : ""}<strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
               <td data-label="Status">${esc(row.permit_status)}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
-              <td data-label="Address">${options.move && clean(row.address) ? `<a class="address-link" href="${esc(mapsSearchUrl(row.address))}" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Open ${esc(row.address)} in Maps">${esc(row.address)}</a>` : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
+              <td data-label="Address">${options.move && clean(row.address) ? (() => { const u = mapsUrls(row.address); return `<span class="maps-picker"><button type="button" class="address-open" aria-haspopup="true" aria-expanded="false" aria-controls="maps-menu-${i}" onclick="event.stopPropagation(); toggleMapsMenu(this)">${esc(row.address)}<span class="chev" aria-hidden="true">▾</span></button><span class="maps-menu" id="maps-menu-${i}" role="menu"><span class="maps-menu-label">Open in</span><a role="menuitem" href="${esc(u.apple)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Apple Maps</a><a role="menuitem" href="${esc(u.google)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Google Maps</a><a role="menuitem" href="${esc(u.waze)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Waze</a></span></span>`; })() : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
               <td data-label="Ward">${esc(row.ward)}</td>
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
               ${options.geo ? `<td data-label="Zone" class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</td><td data-label="TIF district" class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</td>` : ""}
@@ -5728,16 +5799,40 @@
         </table>`;
     }
 
-    // Deep link an address into the phone's Maps app. iOS → Apple Maps universal
-    // link; Android → geo: (lets the OS show the user's map-app chooser);
-    // desktop/other → Google Maps search. Addresses are Chicago permits.
-    function mapsSearchUrl(address) {
+    // Universal deep links for the three common map apps. iOS has no system
+    // map-app chooser (and no geo: support), so we offer the choice ourselves —
+    // each link opens the installed app or that app's web fallback. Addresses
+    // are Chicago permits, so anchor the query to the city.
+    function mapsUrls(address) {
       const q = encodeURIComponent(`${clean(address)}, Chicago, IL`);
-      const ua = navigator.userAgent || "";
-      if (/iPad|iPhone|iPod/.test(ua)) return `https://maps.apple.com/?q=${q}`;
-      if (/Android/.test(ua)) return `geo:0,0?q=${q}`;
-      return `https://www.google.com/maps/search/?api=1&query=${q}`;
+      return {
+        apple: `https://maps.apple.com/?q=${q}`,
+        google: `https://www.google.com/maps/search/?api=1&query=${q}`,
+        waze: `https://waze.com/ul?q=${q}&navigate=yes`,
+      };
     }
+
+    function closeAllMapsMenus() {
+      document.querySelectorAll(".address-open[aria-expanded='true']").forEach(btn => {
+        btn.setAttribute("aria-expanded", "false");
+        const menu = document.getElementById(btn.getAttribute("aria-controls"));
+        if (menu) menu.classList.remove("is-open");
+      });
+    }
+
+    function toggleMapsMenu(btn) {
+      const menu = document.getElementById(btn.getAttribute("aria-controls"));
+      if (!menu) return;
+      const open = btn.getAttribute("aria-expanded") === "true";
+      closeAllMapsMenus();
+      if (!open) {
+        btn.setAttribute("aria-expanded", "true");
+        menu.classList.add("is-open");
+      }
+    }
+
+    document.addEventListener("click", closeAllMapsMenus);
+    document.addEventListener("keydown", event => { if (event.key === "Escape") closeAllMapsMenus(); });
 
     function togglePermitMore(btn) {
       const body = document.getElementById(btn.getAttribute("aria-controls"));
