@@ -2,13 +2,21 @@
 
 **Date:** 2026-07-20
 **Page:** `docs/map.html` (self-contained HTML+JS app)
-**Status:** approved design, pending spec review
+**Status:** shipped
+
+> **Update 2026-07-20:** Behavior changed from dim-mode to a **hard filter** at
+> the user's request. Permits outside the radius are now **removed** from the map
+> (pins, clusters, result count, and visible list) rather than dimmed. The `ir`
+> per-feature flag and the dimmed `circle-opacity` cases were dropped;
+> `applyMapFilters` now filters `filteredRows` to the radius. The translucent
+> circle and status note are unchanged. Sections below describing dim-mode are
+> superseded by this note.
 
 ## Goal
 
 Let a user focus the permit map on a mile radius around an address they search.
-Permits inside the radius render normally; permits outside are **dimmed but kept
-visible** (not removed). A translucent circle shows the search area.
+Only permits inside the radius are shown; permits outside are removed from the
+map and the result list. A translucent circle shows the search area.
 
 ## User flow
 
