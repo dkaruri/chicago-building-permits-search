@@ -3686,8 +3686,8 @@
                 <label class="check-row"><input type="checkbox" ${mapLayerChecked("permits")} onchange="setMapLayer('permits', this.checked)"><span>Individual permit points</span></label>
                 <label class="check-row"><input type="checkbox" ${mapLayerChecked("clusters")} onchange="setMapLayer('clusters', this.checked)"><span>Clusters and counts</span></label>
                 <label class="check-row"><input type="checkbox" ${mapLayerChecked("heat")} onchange="setMapLayer('heat', this.checked)"><span>Density heat layer</span></label>
-                <label class="check-row"><input type="checkbox" ${mapLayerChecked("zoning")} onchange="setMapLayer('zoning', this.checked)"><span>Zoning districts</span></label>
-                <label class="check-row"><input type="checkbox" ${mapLayerChecked("tif")} onchange="setMapLayer('tif', this.checked)"><span>TIF districts</span></label>
+                <label class="check-row"><input type="checkbox" ${mapLayerChecked("zoning")} onchange="setMapLayer('zoning', this.checked)"><span id="layer-label-zoning">Zoning districts</span></label>
+                <label class="check-row"><input type="checkbox" ${mapLayerChecked("tif")} onchange="setMapLayer('tif', this.checked)"><span id="layer-label-tif">TIF districts</span></label>
               </div>
               <div id="zoning-legend" class="zoning-legend" hidden>
                 <table class="zoning-legend-table">
@@ -3804,7 +3804,15 @@
         zoneColorMatch.push(ZONE_COLORS.other);
         state.map.map.addSource("zoning", {
           type: "geojson",
-          data: { type: "FeatureCollection", features: [] }
+          data: { type: "FeatureCollection", features: [] },
+          // 14.9k polygons choke MapLibre's tiler on mobile at the defaults
+          // (maxzoom 18, tolerance 0.375, buffer 128). Labels only appear at
+          // z13.5, so cap tile depth and simplify/trim the per-tile geometry so
+          // the worker can keep up on low-power devices. Sub-meter simplification
+          // is invisible under the 0.32 fill opacity.
+          maxzoom: 14,
+          tolerance: 1,
+          buffer: 64
         });
         state.map.map.addLayer({
           id: "zoning-fill",
@@ -4610,21 +4618,41 @@
       updateMapLayerVisibility();
     }
 
+    // Fetch a GeoJSON overlay with a hard timeout. Without it a stalled
+    // connection (common on mobile) never rejects, so the layer's loading flag
+    // stays true forever and the overlay can never load or retry.
+    async function fetchGeoJson(url, timeoutMs = 20000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    function setLayerLabel(layer, text) {
+      const el = $(`layer-label-${layer}`);
+      if (el) el.textContent = text;
+    }
+
     // Fetch the ~50 KB TIF overlay once, the first time the layer is enabled.
     async function ensureTifLoaded() {
       if (state.map.tifLoaded || state.map.tifLoading) return;
       const source = state.map.map && state.map.map.getSource("tif");
       if (!source) return;
       state.map.tifLoading = true;
+      setLayerLabel("tif", "TIF districts (loading…)");
       try {
-        const data = await fetch(TIF_URL).then(r => {
-          if (!r.ok) throw new Error("Failed to load TIF data");
-          return r.json();
-        });
+        const data = await fetchGeoJson(TIF_URL);
         source.setData(data);
         state.map.tifLoaded = true;
+        setLayerLabel("tif", "TIF districts");
       } catch {
-        $("map-status-strip").textContent = "TIF layer could not be loaded.";
+        setLayerLabel("tif", "TIF districts (tap to retry)");
+        $("map-status-strip").textContent = "TIF layer could not be loaded. Toggle it again to retry.";
       } finally {
         state.map.tifLoading = false;
       }
@@ -4637,6 +4665,7 @@
       const source = state.map.map && state.map.map.getSource("zoning");
       if (!source) return; // map not ready yet; retried from the load handler
       state.map.zoningLoading = true;
+      setLayerLabel("zoning", "Zoning districts (loading…)");
       const legend = $("zoning-legend");
       if (legend) {
         legend.querySelectorAll(".zoning-swatch").forEach(el => {
@@ -4644,14 +4673,13 @@
         });
       }
       try {
-        const data = await fetch(ZONING_URL).then(r => {
-          if (!r.ok) throw new Error("Failed to load zoning data");
-          return r.json();
-        });
+        const data = await fetchGeoJson(ZONING_URL);
         source.setData(data);
         state.map.zoningLoaded = true;
+        setLayerLabel("zoning", "Zoning districts");
       } catch {
-        $("map-status-strip").textContent = "Zoning layer could not be loaded.";
+        setLayerLabel("zoning", "Zoning districts (tap to retry)");
+        $("map-status-strip").textContent = "Zoning layer could not be loaded. Toggle it again to retry.";
       } finally {
         state.map.zoningLoading = false;
       }
