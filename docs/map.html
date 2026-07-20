@@ -5243,8 +5243,8 @@
         clearUserRoute("At least two saved permits need mapped coordinates to sort by driving time.");
         return;
       }
-      if (routable.length > 50) {
-        clearUserRoute("Sort by drive time is limited to 50 mapped permits at a time.");
+      if (routable.length > 100) {
+        clearUserRoute("Sort by drive time is limited to 100 mapped permits at a time.");
         return;
       }
       try {

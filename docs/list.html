@@ -4671,8 +4671,11 @@
           clearUserRoute("At least two saved permits need mapped coordinates to sort by driving time.");
           return;
         }
-        if (routablePermits.length > 50) {
-          clearUserRoute("Sort by drive time is limited to 50 mapped permits at a time.");
+        // OSRM's public Table service caps a request at 100 coordinates total;
+        // the focal-point origin (when set) counts as one of them.
+        const coordBudget = 100 - (focalOriginRow() ? 1 : 0);
+        if (routablePermits.length > coordBudget) {
+          clearUserRoute(`Sort by drive time is limited to ${coordBudget} mapped permits at a time.`);
           return;
         }
         try {
