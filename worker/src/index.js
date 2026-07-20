@@ -1,18 +1,20 @@
 import { handlePermits } from "./permits.js";
 import { handleProfiles, handleContactDetail } from "./profiles.js";
 import { handleStats } from "./stats.js";
+import { handleLists } from "./lists.js";
 
 const ROUTES = [
   { pattern: /^\/api\/permits/, handler: handlePermits },
   { pattern: /^\/api\/profiles/, handler: handleProfiles },
   { pattern: /^\/api\/contact\//, handler: handleContactDetail },
   { pattern: /^\/api\/stats/, handler: handleStats },
+  { pattern: /^\/api\/lists/, handler: handleLists },
 ];
 
 function corsHeaders(env) {
   return {
     "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN || "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
 }
@@ -27,7 +29,7 @@ export default {
     for (const route of ROUTES) {
       if (route.pattern.test(url.pathname)) {
         try {
-          const response = await route.handler(url, env);
+          const response = await route.handler(url, env, request);
           // Attach CORS headers to every response
           const headers = new Headers(response.headers);
           for (const [k, v] of Object.entries(corsHeaders(env))) {
