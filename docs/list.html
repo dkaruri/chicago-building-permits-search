@@ -865,6 +865,76 @@
       white-space: nowrap;
     }
 
+    /* Tappable address that opens the phone's Maps app. */
+    .address-link {
+      color: var(--primary);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      touch-action: manipulation;
+    }
+
+    /* Collapsible per-permit details (mobile only; the desktop table uses real
+       columns, so this cell is hidden there). */
+    .permit-more-cell {
+      display: none;
+    }
+
+    .permit-more-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 40px;
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 0.86rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .permit-more-toggle .chev {
+      transition: transform 0.2s ease;
+    }
+
+    .permit-more-toggle[aria-expanded="true"] .chev {
+      transform: rotate(180deg);
+    }
+
+    .permit-more-body {
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+      transition: max-height 0.25s ease, opacity 0.25s ease;
+    }
+
+    .permit-more-body.is-open {
+      max-height: 320px;
+      opacity: 1;
+      margin-top: 8px;
+    }
+
+    .permit-more-grid {
+      display: grid;
+      grid-template-columns: minmax(60px, 28%) 1fr;
+      gap: 5px 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .permit-more-grid .k {
+      align-self: center;
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 0.74rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
     td.select-cell {
       cursor: pointer;
       vertical-align: middle;
@@ -2639,6 +2709,15 @@
       }
       body.list-page .saved-permits-table td[data-label="Address"] .small {
         font-weight: 400;
+      }
+
+      /* Reveal the collapsible details cell on mobile (hidden label). */
+      body.list-page .saved-permits-table td.permit-more-cell {
+        display: block;
+        padding: 4px 0 0;
+      }
+      body.list-page .saved-permits-table td.permit-more-cell::before {
+        display: none;
       }
 
       body.list-page .saved-permits-table td::before {
@@ -5638,14 +5717,34 @@
               <td data-label="Permit">${options.move ? `<span class="list-ordinal" aria-label="Stop ${i + 1}">${i + 1}</span>` : ""}<strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
               <td data-label="Status">${esc(row.permit_status)}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
-              <td data-label="Address">${esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
+              <td data-label="Address">${options.move && clean(row.address) ? `<a class="address-link" href="${esc(mapsSearchUrl(row.address))}" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Open ${esc(row.address)} in Maps">${esc(row.address)}</a>` : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
               <td data-label="Ward">${esc(row.ward)}</td>
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
               ${options.geo ? `<td data-label="Zone" class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</td><td data-label="TIF district" class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</td>` : ""}
+              ${options.move ? `<td class="permit-more-cell" data-label="More"><button type="button" class="permit-more-toggle" aria-expanded="false" aria-controls="more-body-${i}" onclick="event.stopPropagation(); togglePermitMore(this)">Details<span class="chev" aria-hidden="true">▾</span></button><div class="permit-more-body" id="more-body-${i}"><div class="permit-more-grid"><span class="k">Issued</span><span>${esc(row.issue_date) || "—"}</span><span class="k">Ward</span><span>${esc(row.ward) || "—"}</span><span class="k">Cost</span><span>${money(row.reported_cost) || "—"}</span><span class="k">Zone</span><span class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</span><span class="k">TIF</span><span class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</span></div></div></td>` : ""}
               ${options.notes ? `<td data-label="Notes"><textarea class="permit-note" draggable="false" placeholder="Add note..." onclick="event.stopPropagation()" ondragstart="event.stopPropagation()" oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[clean(row.permit_number)] || "")}</textarea></td>` : ""}
               ${options.move ? `<td class="move-cell" data-label="Move"><div class="move-controls"><button class="icon-button" title="Move up" aria-label="Move ${esc(row.permit_number)} up" ${i === 0 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', -1)">&uarr;</button><button class="icon-button" title="Move down" aria-label="Move ${esc(row.permit_number)} down" ${i >= rows.length - 1 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', 1)">&darr;</button></div></td>` : ""}
             </tr>`).join("")}</tbody>
         </table>`;
+    }
+
+    // Deep link an address into the phone's Maps app. iOS → Apple Maps universal
+    // link; Android → geo: (lets the OS show the user's map-app chooser);
+    // desktop/other → Google Maps search. Addresses are Chicago permits.
+    function mapsSearchUrl(address) {
+      const q = encodeURIComponent(`${clean(address)}, Chicago, IL`);
+      const ua = navigator.userAgent || "";
+      if (/iPad|iPhone|iPod/.test(ua)) return `https://maps.apple.com/?q=${q}`;
+      if (/Android/.test(ua)) return `geo:0,0?q=${q}`;
+      return `https://www.google.com/maps/search/?api=1&query=${q}`;
+    }
+
+    function togglePermitMore(btn) {
+      const body = document.getElementById(btn.getAttribute("aria-controls"));
+      if (!body) return;
+      const open = btn.getAttribute("aria-expanded") === "true";
+      btn.setAttribute("aria-expanded", String(!open));
+      body.classList.toggle("is-open", !open);
     }
 
     function togglePermitSelection(encodedNumber, checked) {
