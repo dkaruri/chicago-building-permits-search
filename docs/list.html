@@ -2890,6 +2890,8 @@
             <details class="action-menu" data-list-menu>
               <summary aria-haspopup="true">More</summary>
               <div class="action-menu-panel" role="menu" aria-label="More list tools">
+                <button role="menuitem" data-list-action onclick="shareUserList()">Share list<span class="menu-hint">Copy a short link</span></button>
+                <div class="action-menu-sep" role="separator"></div>
                 <button role="menuitem" data-list-action onclick="optimizeUserListRoute()">Sort by drive time</button>
                 <button role="menuitem" data-list-action onclick="showGoogleRouteChunks()">Google route chunks</button>
                 <div class="action-menu-sep" role="separator"></div>
@@ -5844,6 +5846,55 @@
       const open = btn.getAttribute("aria-expanded") === "true";
       btn.setAttribute("aria-expanded", String(!open));
       body.classList.toggle("is-open", !open);
+    }
+
+    function focalShareData() {
+      const fp = state.focalPoint;
+      if (!fp || !fp.resolved || !Number.isFinite(Number(fp.latitude)) || !Number.isFinite(Number(fp.longitude))) return null;
+      return { lat: Number(fp.latitude), lon: Number(fp.longitude), label: fp.address || fp.label || "" };
+    }
+
+    function showShareFallback(url) {
+      state.userRouteSummary = `Share link: ${url}`;
+      renderRouteSummary();
+      announceListAction("Share link ready — copy it from the status line.");
+    }
+
+    async function shareUserList() {
+      if (!state.userPermitNumbers.length) {
+        clearUserRoute("Add permits to your list before sharing.");
+        return;
+      }
+      await withListAction("Creating share link...", async () => {
+        let id;
+        try {
+          const res = await fetch(`${API_BASE}/api/lists`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ permits: state.userPermitNumbers, focal: focalShareData() }),
+          });
+          if (!res.ok) throw new Error("share failed");
+          id = (await res.json()).id;
+        } catch {
+          clearUserRoute("Sharing needs the live site. Try again on the published page.");
+          return;
+        }
+        const shareUrl = `${location.origin}${location.pathname}#s=${id}`;
+        if (navigator.share) {
+          try { await navigator.share({ title: "Chicago Permit List", url: shareUrl }); return; }
+          catch { /* cancelled or blocked after await — fall through to copy */ }
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          try {
+            await navigator.clipboard.writeText(shareUrl);
+            state.userRouteSummary = "Share link copied to clipboard.";
+            renderRouteSummary();
+            announceListAction("Share link copied.");
+            return;
+          } catch { /* fall through */ }
+        }
+        showShareFallback(shareUrl);
+      });
     }
 
     function togglePermitSelection(encodedNumber, checked) {
