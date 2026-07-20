@@ -964,9 +964,9 @@
     }
 
     .map-toolbar {
-      display: grid;
+      display: flex;
+      flex-wrap: wrap;
       width: 100%;
-      grid-template-columns: minmax(240px, 1fr) auto auto;
       gap: 8px;
       align-items: center;
       padding: 10px;
@@ -982,6 +982,7 @@
       grid-template-columns: 1fr auto;
       gap: 8px;
       align-items: center;
+      flex: 1 1 240px;
       min-width: 0;
     }
 
@@ -1986,7 +1987,8 @@
         border-radius: 0;
       }
       .map-toolbar {
-        grid-template-columns: 1fr;
+        flex-direction: column;
+        align-items: stretch;
         width: auto;
         margin-inline: 0;
         gap: 7px;
@@ -1995,6 +1997,7 @@
       }
       .map-search {
         grid-template-columns: minmax(0, 1fr) auto;
+        flex: 0 0 auto;
       }
       .map-toolbar button,
       .map-drawer button,
