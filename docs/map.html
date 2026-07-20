@@ -3658,6 +3658,7 @@
             </div>
             <button id="map-filter-toggle" onclick="toggleMapDrawer('filters')" aria-expanded="false">Filters and Layers ${mapWindowIcon(false)}</button>
             <span id="map-count-pill" class="map-count-pill">Loading</span>
+            <button id="map-add-all" onclick="addAllMapPermitsToList()" disabled>Add all to list</button>
           </div>
           <section id="map-filter-drawer" class="map-drawer hidden" aria-label="Map filters">
             <div class="map-drawer-head">
@@ -4461,6 +4462,12 @@
       const visibleText = state.map.visibleRows.length ? `${fmt(state.map.visibleRows.length)} visible` : "No visible results";
       $("result-count").textContent = `${fmt(state.map.filteredRows.length)} mapped permits`;
       $("map-count-pill").textContent = `${fmt(state.map.filteredRows.length)} permits`;
+      const addAllBtn = $("map-add-all");
+      if (addAllBtn) {
+        const n = state.map.filteredRows.length;
+        addAllBtn.disabled = n === 0;
+        addAllBtn.textContent = n ? `Add all ${fmt(n)} to list` : "Add all to list";
+      }
       $("map-visible-summary").textContent = `${visibleText} of ${fmt(state.map.filteredRows.length)} filtered permits`;
       const matches = state.map.filteredRows.filter(row => Number(row.m || 0) === 1).length;
       const geocoded = state.map.searchLocation ? ` | zoomed to address area` : "";
@@ -5446,6 +5453,23 @@
     async function addSelectedPermits() {
       const selected = state.filteredRows.filter(row => state.selectedPermitNumbers.has(clean(row.permit_number)));
       await addPermitsToUserList(selected);
+    }
+
+    async function addAllMapPermitsToList() {
+      const rows = state.map.filteredRows || [];
+      if (!rows.length) return;
+      const alreadySaved = new Set(state.userPermitNumbers);
+      const toAdd = rows.filter(row => !alreadySaved.has(clean(row.n)));
+      if (!toAdd.length) return;
+      const room = userListLimit - state.userPermitNumbers.length;
+      if (room <= 0) {
+        window.alert(`Your list is already at the ${fmt(userListLimit)}-permit limit. Remove some before adding more.`);
+        return;
+      }
+      if (toAdd.length > room && !window.confirm(`Adding ${fmt(toAdd.length)} permits, but the list holds ${fmt(userListLimit)} — only the first ${fmt(room)} will be added. Continue?`)) {
+        return;
+      }
+      await addPermitsToUserList(toAdd.slice(0, room).map(mapRowToPermit), { skipModeRefresh: state.mode === "map" });
     }
 
     async function addPermitFromEncoded(encoded) {
