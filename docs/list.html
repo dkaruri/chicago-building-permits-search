@@ -4382,6 +4382,21 @@
         .join("");
     }
 
+    // Concise KML bubble: address first (bold, copy-ready for map-app search),
+    // then just permit number, work type, and any note. Keeps pins navigable
+    // instead of dumping every field — the CSV export carries the full detail.
+    function kmlPlacemarkDescription(row) {
+      if (row.focal) return `<b>${esc(row.address)}</b><br/>Starting location`;
+      const lines = [`<b>${esc(row.address || "Address unavailable")}</b>`];
+      const number = clean(row.permit_number);
+      if (number) lines.push(`Permit ${esc(number)}`);
+      const type = clean(row.work_type || row.permit_type);
+      if (type) lines.push(esc(type));
+      const note = clean(state.userPermitNotes[number]);
+      if (note) lines.push(`Note: ${esc(note)}`);
+      return lines.join("<br/>");
+    }
+
     function xmlText(value) {
       return esc(value);
     }
@@ -4517,25 +4532,34 @@
         await resolveGeoForRows(permitRows);
         // Prepend the starting location (when set) as the route's first stop.
         const rows = withFocalOrigin(permitRows);
-        const listNote = state.userListNote ? `<p><strong>List note:</strong> ${esc(state.userListNote)}</p>` : "";
+        // Cycle a palette of distinct colors so adjacent pins never blend. KML
+        // color is aabbggr; tint the shared white pushpin. Google's canonical
+        // icon hrefs are honored by Google Earth / My Maps.
+        const pinColors = ["e6194b", "3cb44b", "4363d8", "f58231", "911eb4", "42d4f4", "f032e6", "bfef45", "fabed4", "469990"];
+        const toKmlColor = hex => `ff${hex.slice(4, 6)}${hex.slice(2, 4)}${hex.slice(0, 2)}`;
+        const pinHref = "http://maps.google.com/mapfiles/kml/pushpin/wht-pushpin.png";
+        const pinStyles = pinColors.map((hex, i) => `
+    <Style id="pin${i}"><IconStyle><color>${toKmlColor(hex)}</color><scale>1.1</scale><Icon><href>${pinHref}</href></Icon></IconStyle><LabelStyle><scale>0.8</scale></LabelStyle></Style>`).join("");
+        const extraStyles = `
+    <Style id="startPin"><IconStyle><color>ff2fce54</color><scale>1.3</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/go.png</href></Icon></IconStyle><LabelStyle><scale>0.9</scale></LabelStyle></Style>
+    <Style id="routeLine"><LineStyle><color>80646464</color><width>3</width></LineStyle></Style>`;
         let ordinal = 0;
         const placemarks = rows.map(row => {
-          const name = row.focal
-            ? `Start - ${row.address}`
-            : `${(ordinal += 1)}. Permit ${row.permit_number} - ${row.address}`;
-          const description = row.focal
-            ? `<p><strong>Starting location</strong></p>`
-            : `${listNote}${permitExportDescription(row)}`;
+          const label = clean(row.address) || `Permit ${clean(row.permit_number)}` || "Saved permit";
+          const name = row.focal ? `Start · ${label}` : `${(ordinal += 1)}. ${label}`;
+          const styleUrl = row.focal ? "#startPin" : `#pin${(ordinal - 1) % pinColors.length}`;
           return `
           <Placemark>
             <name>${xmlText(name)}</name>
-            <description><![CDATA[${cdata(description)}]]></description>
+            <styleUrl>${styleUrl}</styleUrl>
+            <description><![CDATA[${cdata(kmlPlacemarkDescription(row))}]]></description>
             <Point><coordinates>${Number(row.longitude)},${Number(row.latitude)},0</coordinates></Point>
           </Placemark>`;
         }).join("");
         const line = rows.length > 1 ? `
           <Placemark>
-            <name>Permit list route order</name>
+            <name>Route order</name>
+            <styleUrl>#routeLine</styleUrl>
             <LineString>
               <tessellate>1</tessellate>
               <coordinates>${rows.map(row => `${Number(row.longitude)},${Number(row.latitude)},0`).join(" ")}</coordinates>
@@ -4545,7 +4569,7 @@
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
     <name>Chicago Permit List</name>
-    <description>${xmlText(state.userListNote || "Saved Chicago building permits")}</description>
+    <description>${xmlText(state.userListNote || "Saved Chicago building permits")}</description>${pinStyles}${extraStyles}
     ${placemarks}
     ${line}
   </Document>
