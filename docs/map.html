@@ -5520,7 +5520,12 @@
       if (!rows.length) return;
       const alreadySaved = new Set(state.userPermitNumbers);
       const toAdd = rows.filter(row => !alreadySaved.has(clean(row.n)));
-      if (!toAdd.length) return;
+      if (!toAdd.length) {
+        // Everything shown is already saved — say so instead of a silent no-op.
+        state.userRouteSummary = `All ${fmt(rows.length)} filtered permits are already in your list.`;
+        renderRouteSummary();
+        return;
+      }
       const room = userListLimit - state.userPermitNumbers.length;
       if (room <= 0) {
         window.alert(`Your list is already at the ${fmt(userListLimit)}-permit limit. Remove some before adding more.`);
@@ -5529,7 +5534,13 @@
       if (toAdd.length > room && !window.confirm(`Adding ${fmt(toAdd.length)} permits, but the list holds ${fmt(userListLimit)} — only the first ${fmt(room)} will be added. Continue?`)) {
         return;
       }
-      await addPermitsToUserList(toAdd.slice(0, room).map(mapRowToPermit), { skipModeRefresh: state.mode === "map" });
+      const added = toAdd.slice(0, room);
+      await addPermitsToUserList(added.map(mapRowToPermit), { skipModeRefresh: state.mode === "map" });
+      // Success feedback in the list panel's aria-live region (announced to
+      // screen readers; overrides the generic "List changed" set by the add).
+      const n = added.length;
+      state.userRouteSummary = `Added ${fmt(n)} ${n === 1 ? "permit" : "permits"} to your list. Recalculate driving distances when ready.`;
+      renderRouteSummary();
     }
 
     async function addPermitFromEncoded(encoded) {
