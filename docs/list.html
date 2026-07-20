@@ -4135,6 +4135,7 @@
     }
 
     function clearUserRoute(message = "") {
+      clearRouteProgress();
       state.userRouteLegs = [];
       state.userRouteSummary = message;
       hideGoogleRouteChunks();
@@ -4143,17 +4144,33 @@
 
     function renderRouteSummary() {
       const fallback = "Add at least two permits with mapped coordinates to estimate driving distances.";
+      const p = state.routeProgress;
+      if (p) {
+        const secs = Math.floor((Date.now() - p.startedAt) / 1000);
+        $("user-route-summary").textContent = `Sorting by drive time… ${p.pct}% — ${p.label} (${secs}s)`;
+        return;
+      }
       $("user-route-summary").textContent = state.userRouteSummary || fallback;
     }
 
     // Stepped progress for the drive-time sort. The waits are opaque network
     // calls (no fetch progress), so the percentage advances at real milestones
     // (matrix fetched, order optimized, legs measured) rather than pretending to
-    // fill smoothly.
+    // fill smoothly. A 1s ticker appends elapsed seconds so long waits stay legible.
     function setRouteProgress(done, total, label) {
-      const pct = Math.round((done / total) * 100);
-      state.userRouteSummary = `Sorting by drive time… ${pct}% — ${label}`;
+      if (!state.routeProgress) {
+        state.routeProgress = { startedAt: Date.now(), pct: 0, label };
+        state.routeProgressTimer = setInterval(renderRouteSummary, 1000);
+      }
+      state.routeProgress.pct = Math.round((done / total) * 100);
+      state.routeProgress.label = label;
       renderRouteSummary();
+    }
+
+    function clearRouteProgress() {
+      if (state.routeProgressTimer) clearInterval(state.routeProgressTimer);
+      state.routeProgressTimer = null;
+      state.routeProgress = null;
     }
 
     function announceListAction(message = "") {
@@ -4765,6 +4782,7 @@
           const totalDistance = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.distance || 0), 0);
           const totalDuration = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.duration || 0), 0);
           const skipped = rows.length - routablePermits.length;
+          clearRouteProgress();
           state.userRouteSummary = `Sorted route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} saved permits missing coordinates)` : ""}.`;
           announceListAction("List sorted by estimated driving time.");
           await renderUserList();
