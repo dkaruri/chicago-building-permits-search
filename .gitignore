@@ -9,3 +9,4 @@ var/
 *.db
 .env
 .DS_Store
+verify-tmp/

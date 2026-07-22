@@ -5925,6 +5925,34 @@
       if (!open) fillContractorInfo(body);
     }
 
+    // Best-effort building/dwelling type from the free-text work description.
+    // Heuristic only — callers MUST label the result "approx.". "" when nothing matches.
+    function parseBuildingType(desc) {
+      const s = (desc || "").toUpperCase();
+      const num = s.match(/\b(\d{1,3})[- ]?UNIT\b/);
+      if (num) return `${num[1]}-Unit`;
+      if (/\bSINGLE[- ]FAMILY\b/.test(s)) return "Single Family";
+      if (/\bTWO[- ]?FLAT\b/.test(s)) return "Two-Flat";
+      if (/\bTHREE[- ]?FLAT\b/.test(s)) return "Three-Flat";
+      if (/\bTOWN\s?HO(ME|USE)\b/.test(s)) return "Townhome";
+      if (/\bCONDO(MINIUM)?\b/.test(s)) return "Condominium";
+      if (/\bMIXED[- ]USE\b/.test(s)) return "Mixed Use";
+      if (/\bAPARTMENT|MULTI[- ]?FAMILY\b/.test(s)) return "Apartment / Multi-Family";
+      if (/\bCOMMERCIAL\b/.test(s)) return "Commercial";
+      return "";
+    }
+
+    // Trade portion of a license type string, e.g. "General Contractor (Class E)" -> "General Contractor".
+    function parseLicenseType(licenseType) {
+      return (licenseType || "").replace(/\s*\(Class\s+[A-Z]\)\s*/i, "").trim();
+    }
+
+    // Class letter from a license type string, e.g. "... (Class E)" -> "E". "" when none.
+    function parseLicenseClass(licenseType) {
+      const m = (licenseType || "").match(/\(Class\s+([A-Z])\)/i);
+      return m ? m[1].toUpperCase() : "";
+    }
+
     // Contractor (GC / open sub) lines for a permit's Details dropdown. Names come
     // from the permit; open-jobs + phone are filled on demand when the dropdown
     // opens (see fillContractorInfo) — the role maps to the profile category.
