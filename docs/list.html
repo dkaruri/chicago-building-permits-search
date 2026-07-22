@@ -1045,6 +1045,13 @@
       color: var(--muted);
     }
 
+    .pm-contractors .clic { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+    .pm-contractors .lic-type { font-size: 0.72rem; font-weight: 600; color: var(--primary); background: var(--primary-soft); padding: 2px 8px; border-radius: 6px; }
+    .pm-contractors .lic-class { font-size: 0.72rem; font-weight: 600; color: var(--ink); background: var(--paper); border: 1px solid var(--line); padding: 2px 8px; border-radius: 6px; }
+    .pm-contractors .cdoes { font-size: 0.79rem; color: var(--ink); margin-top: 4px; }
+    .pm-contractors .cdoes .dk { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+    .pm-contractors .cmeta-line { font-size: 0.79rem; color: var(--muted); margin-top: 4px; }
+
     td.select-cell {
       cursor: pointer;
       vertical-align: middle;
@@ -6063,7 +6070,9 @@
         if (res.ok) {
           const p = await res.json();
           const phone = (p.license_matches || []).map(m => clean(m.phone)).find(ph => ph && ph.toUpperCase() !== "NA") || "";
-          info = { open_jobs: p.open_jobs, phone };
+          const license_type = (p.license_matches || []).map(m => clean(m.license_type)).find(Boolean) || "";
+          const does = (p.work_types || []).slice(0, 3).map(w => clean(w.work_type)).filter(Boolean);
+          info = { open_jobs: p.open_jobs, phone, license_type, does };
         }
       } catch {}
       contractorInfoCache.set(key, info);
@@ -6084,6 +6093,35 @@
           bits.push(`<a href="tel:${esc(tel)}" onclick="event.stopPropagation()">${esc(info.phone)}</a>`);
         }
         meta.innerHTML = bits.length ? " · " + bits.join(" · ") : "";
+      }));
+    }
+
+    // Fill License type / Class / Does / open-jobs / phone into each contractor
+    // line inside a permit-detail overlay body (Task 4). Distinct from
+    // fillContractorInfo (index.html-style Details dropdown) — this one also
+    // renders license type/class chips and the top-3 "Does" work types.
+    async function fillPermitContractors(body) {
+      const lines = [...body.querySelectorAll(".contractor-line:not([data-filled])")];
+      await Promise.all(lines.map(async line => {
+        line.setAttribute("data-filled", "1");
+        const meta = line.querySelector(".ci-meta");
+        const info = await fetchContractorInfo(line.getAttribute("data-contractor"), line.getAttribute("data-role"));
+        if (!info) { meta.textContent = ""; return; }
+        const licType = parseLicenseType(info.license_type);
+        const cls = parseLicenseClass(info.license_type);
+        const chips = [];
+        if (licType) chips.push(`<span class="lic-type">${esc(licType)}</span>`);
+        if (cls) chips.push(`<span class="lic-class">Class ${esc(cls)}</span>`);
+        const bits = [];
+        if (info.open_jobs != null) bits.push(esc(`${fmt(info.open_jobs)} open jobs`));
+        if (info.phone) {
+          const tel = info.phone.replace(/[^\d+]/g, "");
+          bits.push(`<a href="tel:${esc(tel)}" onclick="event.stopPropagation()">${esc(info.phone)}</a>`);
+        }
+        meta.innerHTML =
+          (chips.length ? `<div class="clic">${chips.join("")}</div>` : "") +
+          (info.does && info.does.length ? `<div class="cdoes"><span class="dk">Does</span> ${info.does.map(esc).join(" · ")}</div>` : "") +
+          (bits.length ? `<div class="cmeta-line">${bits.join(" · ")}</div>` : "");
       }));
     }
 
@@ -6218,7 +6256,7 @@
     // Public entry point for opening a permit's detail overlay.
     function openPermitDetail(row) {
       state.activeDetail = { type: "permit", row };
-      openPermitModal(permitDetailHtml(row), { onOpen: body => { /* async fills wired in Tasks 4–5 */ } });
+      openPermitModal(permitDetailHtml(row), { onOpen: body => { fillPermitContractors(body); } });
     }
 
     function showPermitDetail(row, pushHistory = true) {
