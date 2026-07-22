@@ -2891,6 +2891,25 @@
         white-space: nowrap;
       }
     }
+
+    body.modal-open { overflow: hidden; }
+    .permit-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .permit-modal[hidden] { display: none; }
+    .permit-modal-backdrop { position: absolute; inset: 0; background: rgba(16,26,40,0.55); }
+    .permit-modal-card {
+      position: relative; z-index: 1; display: flex; flex-direction: column;
+      width: min(560px, 92vw); max-height: 88vh; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+      box-shadow: 0 24px 60px -18px rgba(16,26,40,0.45);
+    }
+    .permit-modal-body { overflow-y: auto; overscroll-behavior: contain; }
+    @media (max-width: 640px) {
+      .permit-modal-card { width: 100vw; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .permit-modal:not([hidden]) .permit-modal-card { animation: permitRise 0.24s ease; }
+      @keyframes permitRise { from { opacity: 0; transform: translateY(14px); } }
+    }
   </style>
 </head>
 <body class="list-page">
@@ -3293,6 +3312,58 @@
 
     function closeDetail() {
       hideDetail();
+    }
+
+    let _permitModalPrevFocus = null;
+    let _permitModalScrollY = 0;
+    let _permitModalHistory = false;
+
+    function openPermitModal(html, opts = {}) {
+      const modal = $("permit-modal");
+      const body = $("permit-modal-body");
+      _permitModalPrevFocus = document.activeElement;
+      _permitModalScrollY = window.scrollY;
+      body.innerHTML = html;
+      modal.hidden = false;
+      document.body.classList.add("modal-open");
+      // Browser back closes the modal (Android/iOS back gesture).
+      history.pushState({ permitModal: true }, "");
+      _permitModalHistory = true;
+      // Focus first focusable control (or the card) for keyboard users.
+      const focusable = body.querySelector("button, a[href], textarea, input, [tabindex]");
+      (focusable || modal.querySelector(".permit-modal-card")).focus?.();
+      if (opts.onOpen) opts.onOpen(body);
+    }
+
+    function closePermitModal(fromPopState = false) {
+      const modal = $("permit-modal");
+      if (modal.hidden) return;
+      modal.hidden = true;
+      $("permit-modal-body").innerHTML = "";
+      document.body.classList.remove("modal-open");
+      window.scrollTo(0, _permitModalScrollY);
+      if (_permitModalPrevFocus && _permitModalPrevFocus.focus) _permitModalPrevFocus.focus();
+      if (_permitModalHistory && !fromPopState) { _permitModalHistory = false; history.back(); }
+      else { _permitModalHistory = false; }
+    }
+
+    window.addEventListener("popstate", () => {
+      if (!$("permit-modal").hidden) closePermitModal(true);
+    });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && !$("permit-modal").hidden) closePermitModal();
+      if (e.key === "Tab" && !$("permit-modal").hidden) trapPermitModalFocus(e);
+    });
+
+    // Keep Tab focus inside the open modal.
+    function trapPermitModalFocus(e) {
+      const nodes = [...$("permit-modal").querySelectorAll(
+        'button:not([disabled]), a[href], textarea, input, [tabindex]:not([tabindex="-1"])'
+      )].filter(n => n.offsetParent !== null);
+      if (!nodes.length) return;
+      const first = nodes[0], last = nodes[nodes.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     }
 
     function detailBack() {
@@ -6172,5 +6243,12 @@
       console.error(error);
     });
   </script>
+
+  <div id="permit-modal" class="permit-modal" hidden>
+    <div class="permit-modal-backdrop" onclick="closePermitModal()"></div>
+    <div class="permit-modal-card" role="dialog" aria-modal="true" aria-labelledby="permit-modal-title" tabindex="-1">
+      <div id="permit-modal-body" class="permit-modal-body"></div>
+    </div>
+  </div>
 </body>
 </html>
