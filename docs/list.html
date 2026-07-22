@@ -3252,17 +3252,22 @@
     function openPermitModal(html, opts = {}) {
       const modal = $("permit-modal");
       const body = $("permit-modal-body");
-      _permitModalPrevFocus = document.activeElement;
-      _permitModalScrollY = window.scrollY;
+      const alreadyOpen = !modal.hidden;
+      if (!alreadyOpen) {
+        _permitModalPrevFocus = document.activeElement;
+        _permitModalScrollY = window.scrollY;
+      }
       body.innerHTML = html;
-      modal.hidden = false;
-      document.body.classList.add("modal-open");
-      // Browser back closes the modal (Android/iOS back gesture).
-      history.pushState({ permitModal: true }, "");
-      _permitModalHistory = true;
-      // Focus first focusable control (or the card) for keyboard users.
-      const focusable = body.querySelector("button, a[href], textarea, input, [tabindex]");
-      (focusable || modal.querySelector(".permit-modal-card")).focus?.();
+      if (!alreadyOpen) {
+        modal.hidden = false;
+        document.body.classList.add("modal-open");
+        // Browser back closes the modal (Android/iOS back gesture).
+        history.pushState({ permitModal: true }, "");
+        _permitModalHistory = true;
+        // Focus first focusable control (or the card) for keyboard users.
+        const focusable = body.querySelector("button, a[href], textarea, input, [tabindex]");
+        (focusable || modal.querySelector(".permit-modal-card")).focus?.();
+      }
       if (opts.onOpen) opts.onOpen(body);
     }
 
