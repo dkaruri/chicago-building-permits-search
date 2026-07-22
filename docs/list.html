@@ -944,83 +944,6 @@
       color: var(--primary);
     }
 
-    /* Collapsible per-permit details (mobile only; the desktop table uses real
-       columns, so this cell is hidden there). */
-    .permit-more-cell {
-      display: none;
-    }
-
-    .permit-more-toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      min-height: 40px;
-      padding: 6px 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--primary-soft);
-      color: var(--primary);
-      font-weight: 700;
-      font-size: 0.86rem;
-      cursor: pointer;
-      touch-action: manipulation;
-    }
-
-    .permit-more-toggle .chev {
-      transition: transform 0.2s ease;
-    }
-
-    .permit-more-toggle[aria-expanded="true"] .chev {
-      transform: rotate(180deg);
-    }
-
-    .permit-more-body {
-      max-height: 0;
-      overflow: hidden;
-      opacity: 0;
-      transition: max-height 0.25s ease, opacity 0.25s ease;
-    }
-
-    .permit-more-body.is-open {
-      max-height: 320px;
-      opacity: 1;
-      margin-top: 8px;
-    }
-
-    .permit-more-grid {
-      display: grid;
-      grid-template-columns: minmax(60px, 28%) 1fr;
-      gap: 5px 10px;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-    }
-
-    .permit-more-grid .k {
-      align-self: center;
-      color: var(--muted);
-      font-weight: 700;
-      font-size: 0.74rem;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-
-    .permit-more-contacts {
-      display: grid;
-      gap: 3px;
-      margin-top: 10px;
-    }
-
-    .permit-more-contacts .pc-role {
-      margin-top: 6px;
-      color: var(--muted);
-      font-weight: 800;
-      font-size: 0.74rem;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-
     .contractor-line {
       font-size: 0.9rem;
       line-height: 1.4;
@@ -1038,11 +961,6 @@
       color: var(--primary);
       text-decoration: underline;
       text-underline-offset: 2px;
-    }
-
-    .permit-more-contacts .pc-empty {
-      font-size: 0.86rem;
-      color: var(--muted);
     }
 
     .pm-contractors .clic { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
@@ -2829,15 +2747,6 @@
       }
       body.list-page .saved-permits-table td[data-label="Address"] .small {
         font-weight: 400;
-      }
-
-      /* Reveal the collapsible details cell on mobile (hidden label). */
-      body.list-page .saved-permits-table td.permit-more-cell {
-        display: block;
-        padding: 4px 0 0;
-      }
-      body.list-page .saved-permits-table td.permit-more-cell::before {
-        display: none;
       }
 
       body.list-page .saved-permits-table td::before {
@@ -5902,6 +5811,10 @@
       showPermitDetail(JSON.parse(decodeURIComponent(encoded)));
     }
 
+    function openPermitDetailFromEncoded(encoded) {
+      openPermitDetail(JSON.parse(decodeURIComponent(encoded)));
+    }
+
     function permitFacts(row, facts) {
       const items = facts
         .filter(([label, value]) => clean(value) !== "")
@@ -5956,7 +5869,7 @@
               ondragstart="permitDragStart(event, '${enc(row.permit_number)}')"
               ondragend="permitDragEnd()"
               ${options.reorder ? `ondragover="savedPermitDragOver(event, this)" ondragleave="savedPermitDragLeave(this)" ondrop="savedPermitDrop(event, this, '${enc(row.permit_number)}')"` : ""}
-              onclick="${options.select ? `selectPermit(${i})` : `showPermitFromEncoded('${enc(JSON.stringify(row))}')`}"
+              onclick="${options.select ? `selectPermit(${i})` : `openPermitDetailFromEncoded('${enc(JSON.stringify(row))}')`}"
             >
               ${options.remove ? `<td class="select-cell" data-label="Remove"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell" data-label="Select" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
@@ -5967,7 +5880,6 @@
               ${options.move ? "" : `<td data-label="Ward">${esc(row.ward)}</td>`}
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
               ${options.geo ? `<td data-label="Zone" class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</td><td data-label="TIF district" class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</td>` : ""}
-              ${options.move ? `<td class="permit-more-cell" data-label="More"><button type="button" class="permit-more-toggle" aria-expanded="false" aria-controls="more-body-${i}" onclick="event.stopPropagation(); togglePermitMore(this)">Details<span class="chev" aria-hidden="true">▾</span></button><div class="permit-more-body" id="more-body-${i}"><div class="permit-more-grid"><span class="k">Issued</span><span>${esc(row.issue_date) || "—"}</span><span class="k">Cost</span><span>${money(row.reported_cost) || "—"}</span><span class="k">Zone</span><span class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</span><span class="k">TIF</span><span class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</span></div><div class="permit-more-contacts"><div class="pc-role">General contractors</div>${contractorLinesHtml(row.general_contractors, "general_contractor")}<div class="pc-role">Open subs</div>${contractorLinesHtml(row.open_subs, "open_tech")}</div></div></td>` : ""}
               ${options.notes ? `<td data-label="Notes"><textarea class="permit-note" draggable="false" placeholder="Add note..." onclick="event.stopPropagation()" ondragstart="event.stopPropagation()" oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[clean(row.permit_number)] || "")}</textarea></td>` : ""}
               ${options.move ? `<td class="move-cell" data-label="Move"><div class="move-controls"><button class="icon-button" title="Move up" aria-label="Move ${esc(row.permit_number)} up" ${i === 0 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', -1)">&uarr;</button><button class="icon-button" title="Move down" aria-label="Move ${esc(row.permit_number)} down" ${i >= rows.length - 1 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', 1)">&darr;</button></div></td>` : ""}
             </tr>`).join("")}</tbody>
@@ -6008,15 +5920,6 @@
 
     document.addEventListener("click", closeAllMapsMenus);
     document.addEventListener("keydown", event => { if (event.key === "Escape") closeAllMapsMenus(); });
-
-    function togglePermitMore(btn) {
-      const body = document.getElementById(btn.getAttribute("aria-controls"));
-      if (!body) return;
-      const open = btn.getAttribute("aria-expanded") === "true";
-      btn.setAttribute("aria-expanded", String(!open));
-      body.classList.toggle("is-open", !open);
-      if (!open) fillContractorInfo(body);
-    }
 
     // Best-effort building/dwelling type from the free-text work description.
     // Heuristic only — callers MUST label the result "approx.". "" when nothing matches.
