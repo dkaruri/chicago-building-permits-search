@@ -80,7 +80,8 @@ values render as an em-dash (`—`); empty contractor lists render "None listed"
 5. **Costs & fees**
    - Reported cost
    - Total fee
-6. **General contractors** and **Open subs** — one entry per contractor:
+6. **General contractors** and **Open subs** — one entry per contractor, in this
+   order:
    - Name
    - **License type** — the trade from the matched license (e.g. "General
      Contractor", "Electrical Contractor (General)", "Plumbing Contractor",
@@ -88,6 +89,10 @@ values render as an em-dash (`—`); empty contractor lists render "None listed"
    - **Class** — A–E, parsed from the license type string when present
      (e.g. "General Contractor (Class E)" → Class E); omitted when the license
      has no class.
+   - **Does** — the contractor's **top 3 work types**, from the profile's
+     `work_types` aggregate (e.g. "Electrical Work · Fire Alarm System ·
+     Low-Voltage"). Shown after License type / Class. Omitted when the profile
+     has no work-type data.
    - Open-jobs count and a tap-to-call phone link; "no phone on file" when the
      match has no non-`NA` phone. (Fetched on demand from the Worker
      `/api/contact/:name?category=…`, exactly as the current dropdown does.)
@@ -110,13 +115,16 @@ Verified against the live data sources on 2026-07-22:
   like `N-unit`, `two/three/four-flat`, `single family`, `apartment`,
   `townhome`, `condo`, `mixed use`. This is heuristic and frequently absent —
   hence the mandatory "approx." badge. No new data source is introduced.
-- **Contractors (License type, Class, open jobs, phone):** the Worker
+- **Contractors (License type, Class, Does, open jobs, phone):** the Worker
   `/api/contact/:name?category=general_contractor|open_tech` already returns
-  `open_jobs` and `license_matches[]`, where each match carries `license_type`
+  `open_jobs`, `work_types` (top-6 `{ work_type, jobs }`), and
+  `license_matches[]`, where each match carries `license_type`
   (e.g. `"General Contractor (Class E)"`), `license_number`, `phone`,
   `license_expiration_date`. Frontend derives:
   - License type = `license_type` with any `"(Class X)"` suffix stripped.
   - Class = the `X` captured from `"(Class X)"`, if present.
+  - Does = the top 3 `work_types[].work_type` labels, already sorted by job
+    count in the profile.
   - Phone = first `license_matches[].phone` that is truthy and not `"NA"`.
 
 **No field shown is fabricated.** Building type is the only heuristic value and
@@ -195,8 +203,9 @@ moved into the detail screen.
    close; the modal scrolls internally with no double-scroll or jump.
 4. All listed sections/fields render in the specified order, with `—` for
    missing values and the "approx." badge on Building type.
-5. Contractors show License type + Class (when present) plus open jobs and a
-   working tap-to-call link (or "no phone on file").
+5. Contractors show License type + Class (when present), a "Does" line of their
+   top 3 work types (when present), plus open jobs and a working tap-to-call
+   link (or "no phone on file").
 6. The Search Directory permit views (index.html + list.html search side) render
    the identical section set and presentation.
 7. Existing `chi_permit_user_notes` are intact after the update; notes edited in
