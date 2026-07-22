@@ -2910,6 +2910,21 @@
       .permit-modal:not([hidden]) .permit-modal-card { animation: permitRise 0.24s ease; }
       @keyframes permitRise { from { opacity: 0; transform: translateY(14px); } }
     }
+    .pm-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px 14px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
+    .pm-head .pm-title { flex: 1; min-width: 0; }
+    .pm-head .pm-title .k { font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .pm-head .pm-title .v { font-weight: 700; font-size: 1.02rem; }
+    .pm-close { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; font-size: 1.05rem; flex: none; }
+    .pm-content { padding: 4px 18px 22px; }
+    .pm-tagrow { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px 0 6px; }
+    .pm-tag { font-size: 0.74rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--primary-soft); border: 1px solid var(--line); color: var(--primary); }
+    .pm-block { padding: 14px 0; border-top: 1px solid var(--line); }
+    .pm-block h3 { margin: 0 0 10px; font-size: 0.72rem; letter-spacing: 0.11em; text-transform: uppercase; color: var(--primary); font-weight: 700; }
+    .pm-facts { display: grid; grid-template-columns: minmax(96px, 34%) 1fr; gap: 7px 14px; }
+    .pm-facts dt { color: var(--muted); font-size: 0.8rem; margin: 0; }
+    .pm-facts dd { margin: 0; font-size: 0.88rem; }
+    .approx { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: #8a6100; background: #fbf0dc; padding: 1px 6px; border-radius: 5px; margin-left: 6px; cursor: help; }
+    .notes-stub { border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; background: var(--panel-2, var(--paper)); color: var(--muted); font-size: 0.86rem; }
   </style>
 </head>
 <body class="list-page">
@@ -6142,6 +6157,68 @@
 
     function selectPermit(index) {
       showPermitDetail(state.visibleRows[index]);
+    }
+
+    // One fact row list; missing values render as an em-dash.
+    function pmFacts(pairs) {
+      return `<dl class="pm-facts">${pairs.map(([k, v, extra]) =>
+        `<dt>${esc(k)}</dt><dd>${v ? esc(v) : "—"}${extra || ""}</dd>`).join("")}</dl>`;
+    }
+
+    // Ordered section builders — insert future sections here (extensibility seam).
+    function permitDetailSections(row) {
+      const num = clean(row.permit_number);
+      const bt = parseBuildingType(row.work_description);
+      const approx = bt ? ` <span class="approx" title="Guessed from the work description — not an official field">approx.</span>` : "";
+      const saved = isInUserList(row.permit_number);
+      const payload = enc(JSON.stringify(row));
+      return [
+        () => `<div class="pm-head">
+            <div class="pm-title"><div class="k">Permit</div><div class="v" id="permit-modal-title">${esc(row.permit_number)}</div></div>
+            <button class="primary" onclick="addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "✓ Saved" : "Add to list"}</button>
+            <button class="pm-close" aria-label="Close" onclick="closePermitModal()">✕</button>
+          </div>
+          <div class="pm-content">
+          <div class="pm-tagrow">
+            <span class="pm-tag">${esc(row.permit_status)}</span>
+            <span class="pm-tag">${esc(row.permit_type)}</span>
+            ${row.reported_cost ? `<span class="pm-tag">${money(row.reported_cost)}</span>` : ""}
+          </div>`,
+        () => `<section class="pm-block"><h3>Location</h3>${pmFacts([
+            ["Address", clean(row.address)],
+            ["Neighborhood", clean(row.community_area)],
+            ["Zone", "", `<span class="geo-zone" data-permit="${esc(num)}">${geoZoneCache.has(num) ? esc(geoZoneCache.get(num) || "—") : "…"}</span>`],
+            ["TIF district", "", `<span class="geo-tif" data-permit="${esc(num)}">${geoTifCache.has(num) ? esc(geoTifCache.get(num) || "—") : "…"}</span>`],
+          ])}</section>`,
+        () => `<section class="pm-block"><h3>Permit details</h3>${pmFacts([
+            ["Issue date", clean(row.issue_date)],
+            ["Permit type", clean(row.permit_type)],
+            ["Status", clean(row.permit_status)],
+            ["Building type", bt, approx],
+            ["Review type", clean(row.review_type)],
+            ["Work type", clean(row.work_type)],
+            ["Processing time", days ? days(row.processing_time) : clean(row.processing_time)],
+          ])}</section>`,
+        () => row.work_description ? `<section class="pm-block"><h3>Work description</h3><p class="small">${esc(row.work_description)}</p></section>` : "",
+        () => `<section class="pm-block"><h3>Costs &amp; fees</h3>${pmFacts([
+            ["Reported cost", money(row.reported_cost)],
+            ["Total fee", money(row.total_fee)],
+          ])}</section>`,
+        () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div></section>`,
+        () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div></section>`,
+        () => `<section class="pm-block"><h3>Notes</h3><div class="notes-stub">Notes for this permit — coming this session.</div></section>`,
+        () => `</div>`, // close .pm-content
+      ];
+    }
+
+    function permitDetailHtml(row) {
+      return permitDetailSections(row).map(fn => fn()).join("");
+    }
+
+    // Public entry point for opening a permit's detail overlay.
+    function openPermitDetail(row) {
+      state.activeDetail = { type: "permit", row };
+      openPermitModal(permitDetailHtml(row), { onOpen: body => { /* async fills wired in Tasks 4–5 */ } });
     }
 
     function showPermitDetail(row, pushHistory = true) {
