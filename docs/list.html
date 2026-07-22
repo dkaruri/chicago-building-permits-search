@@ -2840,7 +2840,7 @@
     .pm-facts dt { color: var(--muted); font-size: 0.8rem; margin: 0; }
     .pm-facts dd { margin: 0; font-size: 0.88rem; }
     .approx { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: #8a6100; background: #fbf0dc; padding: 1px 6px; border-radius: 5px; margin-left: 6px; cursor: help; }
-    .notes-stub { border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; background: var(--panel-2, var(--paper)); color: var(--muted); font-size: 0.86rem; }
+    .pm-note { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 0.88rem; padding: 9px 11px; resize: vertical; }
   </style>
 </head>
 <body class="list-page">
@@ -6147,7 +6147,10 @@
           ])}</section>`,
         () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div></section>`,
         () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div></section>`,
-        () => `<section class="pm-block"><h3>Notes</h3><div class="notes-stub">Notes for this permit — coming this session.</div></section>`,
+        () => `<section class="pm-block"><h3>Notes</h3>
+            <textarea class="pm-note" placeholder="Add a note about this permit…" aria-label="Note for permit ${esc(row.permit_number)}"
+              oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[num] || "")}</textarea>
+          </section>`,
         () => `</div>`, // close .pm-content
       ];
     }
