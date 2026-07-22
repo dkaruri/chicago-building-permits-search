@@ -6253,10 +6253,24 @@
       return permitDetailSections(row).map(fn => fn()).join("");
     }
 
+    // Fill Zone / TIF district into a permit-detail overlay body (Task 5),
+    // resolving via the existing geo cache/fetch (shared with the saved-list
+    // table columns) rather than a fresh lookup path.
+    async function fillPermitGeo(body, row) {
+      const num = clean(row.permit_number);
+      if (!geoZoneCache.has(num) || !geoTifCache.has(num)) {
+        try { await resolveGeoForRows([row]); } catch {}
+      }
+      const zone = body.querySelector(`.geo-zone[data-permit="${CSS.escape(num)}"]`);
+      const tif = body.querySelector(`.geo-tif[data-permit="${CSS.escape(num)}"]`);
+      if (zone) zone.textContent = geoZoneCache.get(num) || "—";
+      if (tif) tif.textContent = geoTifCache.get(num) || "—";
+    }
+
     // Public entry point for opening a permit's detail overlay.
     function openPermitDetail(row) {
       state.activeDetail = { type: "permit", row };
-      openPermitModal(permitDetailHtml(row), { onOpen: body => { fillPermitContractors(body); } });
+      openPermitModal(permitDetailHtml(row), { onOpen: body => { fillPermitContractors(body); fillPermitGeo(body, row); } });
     }
 
     function showPermitDetail(row, pushHistory = true) {
