@@ -6180,51 +6180,7 @@
     }
 
     function showPermitDetail(row, pushHistory = true) {
-      state.activeDetail = { type: "permit", row };
-      const payload = enc(JSON.stringify(row));
-      const saved = isInUserList(row.permit_number);
-      showDetail(detailShell(`
-        <div class="panel-head">
-          <h3>${esc(row.permit_number)}</h3>
-          <div class="panel-actions">
-            <button class="primary" onclick="addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "Saved in list" : "Add to list"}</button>
-          </div>
-        </div>
-        <div class="tag-row">
-          <span class="tag">${esc(row.permit_status)}</span>
-          <span class="tag">${esc(row.permit_type)}</span>
-          ${row.ward ? `<span class="tag clickable" onclick="searchWard('${enc(row.ward)}')">Ward ${esc(row.ward)}</span>` : ""}
-          ${row.reported_cost ? `<span class="tag">${money(row.reported_cost)}</span>` : ""}
-        </div>
-        <div class="detail-section">
-          <h4>Location</h4>
-          ${permitFacts(row, [
-            ["Address", row.address],
-            ["Ward", row.ward],
-            ["Community area", row.community_area]
-          ])}
-        </div>
-        <div class="detail-section">
-          <h4>Permit details</h4>
-          ${permitFacts(row, [
-            ["Issued", row.issue_date],
-            ["Permit type", row.permit_type],
-            ["Status", row.permit_status],
-            ["Review type", row.review_type],
-            ["Work type", row.work_type],
-            ["Processing days", days(row.processing_time)]
-          ])}
-        </div>
-        <div class="detail-section">
-          <h4>Costs and fees</h4>
-          ${permitFacts(row, [
-            ["Reported cost", money(row.reported_cost)],
-            ["Total fee", money(row.total_fee)]
-          ])}
-        </div>
-        ${row.work_description ? `<div class="detail-section"><h4>Work description</h4><p class="permit-description small">${esc(row.work_description)}</p></div>` : ""}
-        <div class="detail-section"><h4>General contractors</h4>${nameTags(row.general_contractors, "general_contractors")}</div>
-        <div class="detail-section"><h4>Open subs</h4>${nameTags(row.open_subs, "open_subs")}</div>`), pushHistory);
+      openPermitDetail(row);
     }
 
     async function openContactProfile(encodedName, mode) {
