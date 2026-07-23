@@ -6910,18 +6910,24 @@
         return;
       }
       await withListAction("Creating share link...", async () => {
-        let id;
-        try {
-          const res = await fetch(`${API_BASE}/api/lists`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ permits: state.userPermitNumbers, focal: focalShareData() }),
-          });
-          if (!res.ok) throw new Error("share failed");
-          id = (await res.json()).id;
-        } catch {
-          clearUserRoute("Sharing needs the live site. Try again on the published page.");
-          return;
+        const list = activeList();
+        // Reuse this list's existing share id — don't mint a new orphan copy
+        // (a fresh id would also point at a different real-time room).
+        let id = list && list.sharedId;
+        if (!id) {
+          try {
+            const res = await fetch(`${API_BASE}/api/lists`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ permits: state.userPermitNumbers, focal: focalShareData() }),
+            });
+            if (!res.ok) throw new Error("share failed");
+            id = (await res.json()).id;
+          } catch {
+            clearUserRoute("Sharing needs the live site. Try again on the published page.");
+            return;
+          }
+          if (list && id) { list.sharedId = id; saveUserLists(); }
         }
         const shareUrl = `${location.origin}${location.pathname}#s=${id}`;
         if (navigator.share) {
