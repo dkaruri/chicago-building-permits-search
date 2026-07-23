@@ -14,6 +14,14 @@ preview_id = "3c2c6bb057214491b8c30d7d0ff609de"
 binding = "PHOTOS"
 bucket_name = "chi-permits-photos"
 
+[[durable_objects.bindings]]
+name = "LIST_ROOM"
+class_name = "ListRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ListRoom"]
+
 [vars]
 SOCRATA_DOMAIN = "data.cityofchicago.org"
 DATASET_ID = "ydr8-5enu"
