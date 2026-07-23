@@ -3,6 +3,7 @@ import { handleProfiles, handleContactDetail } from "./profiles.js";
 import { handleStats } from "./stats.js";
 import { handleLists } from "./lists.js";
 import { handleTags } from "./tags.js";
+import { handleNotes } from "./notes.js";
 
 const ROUTES = [
   { pattern: /^\/api\/permits/, handler: handlePermits },
@@ -11,6 +12,7 @@ const ROUTES = [
   { pattern: /^\/api\/stats/, handler: handleStats },
   { pattern: /^\/api\/lists/, handler: handleLists },
   { pattern: /^\/api\/tags/, handler: handleTags },
+  { pattern: /^\/api\/notes/, handler: handleNotes },
 ];
 
 function corsHeaders(env) {
@@ -61,6 +63,8 @@ export default {
           "PUT /api/lists/:id  (body: any subset) -> {id, rev}",
           "GET /api/tags -> {tags}",
           "PUT /api/tags  (body: {name, slot})",
+          "GET·POST /api/notes/:permit ; PUT·DELETE /api/notes/:permit/:id",
+          "GET /api/notes/counts?p=a,b,c -> {counts}",
         ],
       },
       200,
