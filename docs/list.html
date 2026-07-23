@@ -3079,6 +3079,10 @@
     .pc-drop { font: inherit; min-height: 44px; min-width: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--danger); cursor: pointer; }
     .pc-msg { color: var(--warning); font-size: .82rem; margin: .4rem 0; }
     .pc-foot { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .8rem; }
+
+    .tp-gallery { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .45rem; }
+    .tp-shot { display: block; border-radius: 6px; overflow: hidden; border: 1px solid var(--line-strong); }
+    .tp-shot img { display: block; width: 96px; height: 72px; object-fit: cover; }
   </style>
 </head>
 <body class="list-page">
@@ -7040,6 +7044,13 @@
       return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     }
 
+    function photoGalleryHtml(post, permit) {
+      const photos = Array.isArray(post.photos) ? post.photos : [];
+      if (!photos.length) return "";
+      return `<div class="tp-gallery">${photos.map(ph =>
+        `<a class="tp-shot" href="${API_BASE}/api/photo/${encodeURIComponent(permit)}/${encodeURIComponent(ph.id)}" target="_blank" rel="noopener"><img loading="lazy" src="${API_BASE}/api/photo/${encodeURIComponent(permit)}/${encodeURIComponent(ph.id)}" alt="${esc(ph.caption || "Site photo")}"></a>`).join("")}</div>`;
+    }
+
     function threadPostHtml(post) {
       const when = dateStampLabel(post.ts) + (post.editedTs ? " \u00b7 edited" : "");
       const head = `<p class="tp-head"><span class="tp-who">${esc(post.author || "anonymous")}</span><time>${esc(when)}</time>` +
@@ -7063,7 +7074,7 @@
         if (post.gc && post.gc.name) rows.push(["Their GC", esc(post.gc.name) + (post.gc.phone ? ` \u00b7 <a href="tel:${esc(post.gc.phone)}">${esc(post.gc.phone)}</a>` : "")]);
         return `<article class="tp walk">${head}<dl class="tp-kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl>${acts}</article>`;
       }
-      const photo = post.kind === "photo" ? `<p class="tp-photo-note">\ud83d\udcf7 photo</p>` : "";
+      const photo = post.kind === "photo" ? photoGalleryHtml(post, currentThreadPermit) : "";
       return `<article class="tp">${head}<p class="tp-text">${esc(post.text || "")}</p>${photo}${acts}</article>`;
     }
 
@@ -7132,6 +7143,13 @@
     async function deleteNotePost(permit, id) {
       if (!window.confirm("Delete this public note?")) return;
       try {
+        const t = state.threads && state.threads[permit];
+        const post = t && t.posts.find(p => p.id === id);
+        if (post && post.kind === "photo") {
+          for (const ph of (post.photos || [])) {
+            await fetch(`${API_BASE}/api/photo/${encodeURIComponent(permit)}/${encodeURIComponent(ph.id)}`, { method: "DELETE" }).catch(() => {});
+          }
+        }
         await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}/${encodeURIComponent(id)}`, { method: "DELETE" });
         await fetchThread(permit);
         pmAnnounce("Note deleted.");
