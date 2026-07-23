@@ -155,8 +155,10 @@ export function sanitizeCustom(value) {
     if (!CUSTOM_ID_RE.test(id)) continue;
     const addr = String(item.addr ?? "").trim().slice(0, MAX_ADDR);
     if (!addr) continue;
-    const lat = Number(item.lat);
-    const lon = Number(item.lon);
+    // Number(null) is 0 and finite, so a null coordinate would be stored as
+    // 0,0 rather than "no location". Treat null/undefined as absent.
+    const lat = item.lat == null ? NaN : Number(item.lat);
+    const lon = item.lon == null ? NaN : Number(item.lon);
     const use = String(item.use ?? "").toLowerCase();
     out.push({
       id,

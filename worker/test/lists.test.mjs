@@ -415,3 +415,10 @@ test("POST round-trips custom stops", async () => {
   assert.equal(body.custom[0].addr, "3701 W Ainslie St");
   assert.equal(body.meta.count, 2, "custom stops count toward the list size");
 });
+
+test("sanitizeCustom treats an explicit null coordinate as no location", () => {
+  // Number(null) is 0 and finite, so this used to be stored as 0,0.
+  const out = sanitizeCustom([{ id: "c_1", addr: "Coach house", lat: null, lon: null }]);
+  assert.equal(out[0].lat, null);
+  assert.equal(out[0].lon, null);
+});
