@@ -2671,6 +2671,67 @@
     body.directory-page #user-list-panel {
       display: none;
     }
+
+    .contractor-line {
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+
+    .contractor-line .ci-name {
+      font-weight: 600;
+    }
+
+    .contractor-line .ci-meta {
+      color: var(--muted);
+    }
+
+    .contractor-line .ci-meta a {
+      color: var(--primary);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .pm-contractors .clic { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+    .pm-contractors .lic-type { font-size: 0.72rem; font-weight: 600; color: var(--primary); background: var(--primary-soft); padding: 2px 8px; border-radius: 6px; }
+    .pm-contractors .lic-class { font-size: 0.72rem; font-weight: 600; color: var(--ink); background: var(--paper); border: 1px solid var(--line); padding: 2px 8px; border-radius: 6px; }
+    .pm-contractors .cdoes { font-size: 0.79rem; color: var(--ink); margin-top: 4px; }
+    .pm-contractors .cdoes .dk { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+    .pm-contractors .cmeta-line { font-size: 0.79rem; color: var(--muted); margin-top: 4px; }
+
+    body.modal-open { overflow: hidden; }
+    .permit-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .permit-modal[hidden] { display: none; }
+    .permit-modal-backdrop { position: absolute; inset: 0; background: rgba(16,26,40,0.55); }
+    .permit-modal-card {
+      position: relative; z-index: 1; display: flex; flex-direction: column;
+      width: min(560px, 92vw); max-height: 88vh; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+      box-shadow: 0 24px 60px -18px rgba(16,26,40,0.45);
+    }
+    .permit-modal-body { overflow-y: auto; overscroll-behavior: contain; }
+    @media (max-width: 640px) {
+      .permit-modal-card { width: 100vw; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .permit-modal:not([hidden]) .permit-modal-card { animation: permitRise 0.24s ease; }
+      @keyframes permitRise { from { opacity: 0; transform: translateY(14px); } }
+    }
+    .pm-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px 14px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
+    .pm-head .pm-title { flex: 1; min-width: 0; }
+    .pm-head button.primary { width: auto; flex: none; white-space: nowrap; }
+    .pm-head .pm-title .k { font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .pm-head .pm-title .v { font-weight: 700; font-size: 1.02rem; }
+    .pm-close { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; font-size: 1.05rem; flex: none; }
+    .pm-content { padding: 4px 18px 22px; }
+    .pm-tagrow { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px 0 6px; }
+    .pm-tag { font-size: 0.74rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--primary-soft); border: 1px solid var(--line); color: var(--primary); }
+    .pm-block { padding: 14px 0; border-top: 1px solid var(--line); }
+    .pm-block h3 { margin: 0 0 10px; font-size: 0.72rem; letter-spacing: 0.11em; text-transform: uppercase; color: var(--primary); font-weight: 700; }
+    .pm-facts { display: grid; grid-template-columns: minmax(96px, 34%) 1fr; gap: 7px 14px; }
+    .pm-facts dt { color: var(--muted); font-size: 0.8rem; margin: 0; }
+    .pm-facts dd { margin: 0; font-size: 0.88rem; }
+    .approx { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--warning); background: var(--warning-soft); padding: 1px 6px; border-radius: 5px; margin-left: 6px; cursor: help; }
+    .pm-note { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 0.88rem; padding: 9px 11px; resize: vertical; }
   </style>
 </head>
 <body class="directory-page">
@@ -5225,53 +5286,280 @@
       showPermitDetail(state.visibleRows[index]);
     }
 
-    function showPermitDetail(row, pushHistory = true) {
-      state.activeDetailKey = detailRowKey(row);
-      state.activeDetail = { type: "permit", row };
-      const payload = enc(JSON.stringify(row));
+    let _permitModalPrevFocus = null;
+    let _permitModalScrollY = 0;
+    let _permitModalHistory = false;
+
+    function openPermitModal(html, opts = {}) {
+      const modal = $("permit-modal");
+      const body = $("permit-modal-body");
+      const alreadyOpen = !modal.hidden;
+      if (!alreadyOpen) {
+        _permitModalPrevFocus = document.activeElement;
+        _permitModalScrollY = window.scrollY;
+      }
+      body.innerHTML = html;
+      if (!alreadyOpen) {
+        modal.hidden = false;
+        document.body.classList.add("modal-open");
+        // Browser back closes the modal (Android/iOS back gesture).
+        history.pushState({ permitModal: true }, "");
+        _permitModalHistory = true;
+        // Focus first focusable control (or the card) for keyboard users.
+        const focusable = body.querySelector('button:not([disabled]), a[href], textarea:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
+        (focusable || modal.querySelector(".permit-modal-card")).focus?.();
+      }
+      if (opts.onOpen) opts.onOpen(body);
+    }
+
+    function closePermitModal(fromPopState = false) {
+      const modal = $("permit-modal");
+      if (modal.hidden) return;
+      modal.hidden = true;
+      $("permit-modal-body").innerHTML = "";
+      document.body.classList.remove("modal-open");
+      window.scrollTo(0, _permitModalScrollY);
+      if (_permitModalPrevFocus && _permitModalPrevFocus.focus) _permitModalPrevFocus.focus();
+      if (_permitModalHistory && !fromPopState) { _permitModalHistory = false; history.back(); }
+      else { _permitModalHistory = false; }
+    }
+
+    window.addEventListener("popstate", () => {
+      if (!$("permit-modal").hidden) closePermitModal(true);
+    });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && !$("permit-modal").hidden) closePermitModal();
+      if (e.key === "Tab" && !$("permit-modal").hidden) trapPermitModalFocus(e);
+    });
+
+    // Keep Tab focus inside the open modal.
+    function trapPermitModalFocus(e) {
+      const nodes = [...$("permit-modal").querySelectorAll(
+        'button:not([disabled]), a[href], textarea:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )].filter(n => n.offsetParent !== null);
+      if (!nodes.length) return;
+      const first = nodes[0], last = nodes[nodes.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+
+    const geoZoneCache = new Map();
+    const geoTifCache = new Map();
+
+    async function ensurePermitZone(row) {
+      const number = clean(row.permit_number);
+      const lat = Number(row.latitude), lon = Number(row.longitude);
+      if (!number || !Number.isFinite(lat) || !Number.isFinite(lon)) return "";
+      if (geoZoneCache.has(number)) return geoZoneCache.get(number);
+      try {
+        const params = new URLSearchParams({ $select: "zone_class,pd_num", $where: `intersects(the_geom, 'POINT(${lon} ${lat})')`, $limit: "1" });
+        const [hit] = await fetch(`https://data.cityofchicago.org/resource/dj47-wfun.json?${params}`).then(r => r.json());
+        const zc = clean(hit && hit.zone_class).trim();
+        const label = !zc ? "" : /^PD/i.test(zc) ? `PD ${clean(hit.pd_num) || zc.replace(/^PD\s*/i, "")}` : zc;
+        geoZoneCache.set(number, label);
+        return label;
+      } catch {
+        return "";
+      }
+    }
+
+    async function ensurePermitTif(row) {
+      const number = clean(row.permit_number);
+      const lat = Number(row.latitude), lon = Number(row.longitude);
+      if (!number || !Number.isFinite(lat) || !Number.isFinite(lon)) return "";
+      if (geoTifCache.has(number)) return geoTifCache.get(number);
+      try {
+        const params = new URLSearchParams({ $select: "name,ref,expiration", $where: `intersects(the_geom, 'POINT(${lon} ${lat})')`, $limit: "1" });
+        const [hit] = await fetch(`https://data.cityofchicago.org/resource/eejr-xtfb.json?${params}`).then(r => r.json());
+        const name = clean(hit && hit.name).trim();
+        const ref = clean(hit && hit.ref).replace(/\s+/g, "").trim();
+        const exp = clean(hit && hit.expiration).slice(0, 4);
+        const label = name ? `${name}${ref ? ` (${ref})` : ""}${exp ? ` · ${exp}` : ""}` : "";
+        geoTifCache.set(number, label);
+        return label;
+      } catch {
+        return "";
+      }
+    }
+
+    // Resolve zone + TIF for every row before an export builds its rows.
+    async function resolveGeoForRows(rows) {
+      await Promise.all(rows.flatMap(row => [ensurePermitZone(row), ensurePermitTif(row)]));
+    }
+
+    function parseBuildingType(desc) {
+      const s = (desc || "").toUpperCase();
+      const num = s.match(/\b(\d{1,3})[- ]?UNITS?\b/);
+      if (num) return `${num[1]}-Unit`;
+      if (/\bSINGLE[- ]FAMILY\b/.test(s)) return "Single Family";
+      if (/\bTWO[- ]?FLAT\b/.test(s)) return "Two-Flat";
+      if (/\bTHREE[- ]?FLAT\b/.test(s)) return "Three-Flat";
+      if (/\bTOWN\s?HO(ME|USE)\b/.test(s)) return "Townhome";
+      if (/\bCONDO(MINIUM)?\b/.test(s)) return "Condominium";
+      if (/\bMIXED[- ]USE\b/.test(s)) return "Mixed Use";
+      if (/\bAPARTMENT|MULTI[- ]?FAMILY\b/.test(s)) return "Apartment / Multi-Family";
+      if (/\bCOMMERCIAL\b/.test(s)) return "Commercial";
+      return "";
+    }
+
+    // Trade portion of a license type string, e.g. "General Contractor (Class E)" -> "General Contractor".
+    function parseLicenseType(licenseType) {
+      return (licenseType || "").replace(/\s*\(Class\s+[A-Z]\)\s*/i, "").trim();
+    }
+
+    // Class letter from a license type string, e.g. "... (Class E)" -> "E". "" when none.
+    function parseLicenseClass(licenseType) {
+      const m = (licenseType || "").match(/\(Class\s+([A-Z])\)/i);
+      return m ? m[1].toUpperCase() : "";
+    }
+
+    // Contractor (GC / open sub) lines for a permit's Details dropdown. Names come
+    // from the permit; open-jobs + phone are filled on demand when the dropdown
+    // opens (see fillContractorInfo) — the role maps to the profile category.
+    function contractorLinesHtml(value, role) {
+      const names = clean(value).split("|").map(x => x.trim()).filter(Boolean);
+      if (!names.length) return `<div class="pc-empty">None listed</div>`;
+      return names.map(name => `<div class="contractor-line" data-contractor="${esc(name)}" data-role="${role}"><span class="ci-name">${esc(name)}</span><span class="ci-meta"> · …</span></div>`).join("");
+    }
+
+    const contractorInfoCache = new Map();
+
+    // Fetch one contractor's open-jobs + phone from the Worker profile
+    // (category general_contractor | open_tech). Phone comes from the license
+    // match (first non-"NA"); many contractors have none. Cached per name+role.
+    // Returns null when the Worker is unreachable (e.g. local preview) or no match.
+    async function fetchContractorInfo(name, role) {
+      const key = role + " " + name.toLowerCase();
+      if (contractorInfoCache.has(key)) return contractorInfoCache.get(key);
+      let info = null;
+      try {
+        const res = await fetch(`${API_BASE}/api/contact/${encodeURIComponent(name)}?category=${role}`);
+        if (res.ok) {
+          const p = await res.json();
+          const phone = (p.license_matches || []).map(m => clean(m.phone)).find(ph => ph && ph.toUpperCase() !== "NA") || "";
+          const license_type = (p.license_matches || []).map(m => clean(m.license_type)).find(Boolean) || "";
+          const does = (p.work_types || []).slice(0, 3).map(w => clean(w.work_type)).filter(Boolean);
+          info = { open_jobs: p.open_jobs, phone, license_type, does };
+        }
+      } catch {}
+      contractorInfoCache.set(key, info);
+      return info;
+    }
+
+    // Fill License type / Class / Does / open-jobs / phone into each contractor
+    // line inside a permit-detail overlay body (Task 4). Distinct from
+    // fillContractorInfo (index.html-style Details dropdown) — this one also
+    // renders license type/class chips and the top-3 "Does" work types.
+    async function fillPermitContractors(body) {
+      const lines = [...body.querySelectorAll(".contractor-line:not([data-filled])")];
+      await Promise.all(lines.map(async line => {
+        line.setAttribute("data-filled", "1");
+        const meta = line.querySelector(".ci-meta");
+        const info = await fetchContractorInfo(line.getAttribute("data-contractor"), line.getAttribute("data-role"));
+        if (!info) { meta.textContent = ""; return; }
+        const licType = parseLicenseType(info.license_type);
+        const cls = parseLicenseClass(info.license_type);
+        const chips = [];
+        if (licType) chips.push(`<span class="lic-type">${esc(licType)}</span>`);
+        if (cls) chips.push(`<span class="lic-class">Class ${esc(cls)}</span>`);
+        const bits = [];
+        if (info.open_jobs != null) bits.push(esc(`${fmt(info.open_jobs)} open jobs`));
+        if (info.phone) {
+          const tel = info.phone.replace(/[^\d+]/g, "");
+          bits.push(`<a href="tel:${esc(tel)}" onclick="event.stopPropagation()">${esc(info.phone)}</a>`);
+        }
+        meta.innerHTML =
+          (chips.length ? `<div class="clic">${chips.join("")}</div>` : "") +
+          (info.does && info.does.length ? `<div class="cdoes"><span class="dk">Does</span> ${info.does.map(esc).join(" · ")}</div>` : "") +
+          (bits.length ? `<div class="cmeta-line">${bits.join(" · ")}</div>` : "");
+      }));
+    }
+
+    // One fact row list; missing values render as an em-dash.
+    function pmFacts(pairs) {
+      return `<dl class="pm-facts">${pairs.map(([k, v, extra]) =>
+        `<dt>${esc(k)}</dt><dd>${v ? esc(v) : "—"}${extra || ""}</dd>`).join("")}</dl>`;
+    }
+
+    // Ordered section builders — insert future sections here (extensibility seam).
+    function permitDetailSections(row) {
+      const num = clean(row.permit_number);
+      const bt = parseBuildingType(row.work_description);
+      const approx = bt ? ` <span class="approx" title="Guessed from the work description — not an official field">approx.</span>` : "";
       const saved = isInUserList(row.permit_number);
-      showDetail(detailShell(`
-        <div class="panel-head">
-          <h3>${esc(row.permit_number)}</h3>
-          <div class="panel-actions">
-            <button class="primary" onclick="addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "Saved in list" : "Add to list"}</button>
+      const payload = enc(JSON.stringify(row));
+      return [
+        () => `<div class="pm-head">
+            <div class="pm-title"><div class="k">Permit</div><div class="v" id="permit-modal-title">${esc(row.permit_number)}</div></div>
+            <button class="primary" onclick="addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "✓ Saved" : "Add to list"}</button>
+            <button class="pm-close" aria-label="Close" onclick="closePermitModal()">✕</button>
           </div>
-        </div>
-        <div class="tag-row">
-          <span class="tag">${esc(row.permit_status)}</span>
-          <span class="tag">${esc(row.permit_type)}</span>
-          ${row.ward ? `<span class="tag clickable" onclick="searchWard('${enc(row.ward)}')">Ward ${esc(row.ward)}</span>` : ""}
-          ${row.reported_cost ? `<span class="tag">${money(row.reported_cost)}</span>` : ""}
-        </div>
-        <div class="detail-section">
-          <h4>Location</h4>
-          ${permitFacts(row, [
-            ["Address", row.address],
-            ["Ward", row.ward],
-            ["Community area", row.community_area]
-          ])}
-        </div>
-        <div class="detail-section">
-          <h4>Permit details</h4>
-          ${permitFacts(row, [
-            ["Issued", row.issue_date],
-            ["Permit type", row.permit_type],
-            ["Status", row.permit_status],
-            ["Review type", row.review_type],
-            ["Work type", row.work_type],
-            ["Processing days", days(row.processing_time)]
-          ])}
-        </div>
-        <div class="detail-section">
-          <h4>Costs and fees</h4>
-          ${permitFacts(row, [
+          <div class="pm-content">
+          <div class="pm-tagrow">
+            <span class="pm-tag">${esc(row.permit_status)}</span>
+            <span class="pm-tag">${esc(row.permit_type)}</span>
+            ${row.reported_cost ? `<span class="pm-tag">${money(row.reported_cost)}</span>` : ""}
+          </div>`,
+        () => `<section class="pm-block"><h3>Location</h3>${pmFacts([
+            ["Address", clean(row.address)],
+            ["Neighborhood", clean(row.community_area)],
+            ["Zone", "", `<span class="geo-zone" data-permit="${esc(num)}">${geoZoneCache.has(num) ? esc(geoZoneCache.get(num) || "—") : "…"}</span>`],
+            ["TIF district", "", `<span class="geo-tif" data-permit="${esc(num)}">${geoTifCache.has(num) ? esc(geoTifCache.get(num) || "—") : "…"}</span>`],
+          ])}</section>`,
+        () => `<section class="pm-block"><h3>Permit details</h3>${pmFacts([
+            ["Issue date", clean(row.issue_date)],
+            ["Permit type", clean(row.permit_type)],
+            ["Status", clean(row.permit_status)],
+            ["Building type", bt, approx],
+            ["Review type", clean(row.review_type)],
+            ["Work type", clean(row.work_type)],
+            ["Processing time", days ? days(row.processing_time) : clean(row.processing_time)],
+          ])}</section>`,
+        () => row.work_description ? `<section class="pm-block"><h3>Work description</h3><p class="small">${esc(row.work_description)}</p></section>` : "",
+        () => `<section class="pm-block"><h3>Costs &amp; fees</h3>${pmFacts([
             ["Reported cost", money(row.reported_cost)],
-            ["Total fee", money(row.total_fee)]
-          ])}
-        </div>
-        ${row.work_description ? `<div class="detail-section"><h4>Work description</h4><p class="permit-description small">${esc(row.work_description)}</p></div>` : ""}
-        <div class="detail-section"><h4>General contractors</h4>${nameTags(row.general_contractors, "general_contractors")}</div>
-        <div class="detail-section"><h4>Open subs</h4>${nameTags(row.open_subs, "open_subs")}</div>`), pushHistory);
+            ["Total fee", money(row.total_fee)],
+          ])}</section>`,
+        () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div></section>`,
+        () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div></section>`,
+        () => `<section class="pm-block"><h3>Notes</h3>
+            <textarea class="pm-note" placeholder="Add a note about this permit…" aria-label="Note for permit ${esc(row.permit_number)}"
+              oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[num] || "")}</textarea>
+          </section>`,
+        () => `</div>`, // close .pm-content
+      ];
+    }
+
+    function permitDetailHtml(row) {
+      return permitDetailSections(row).map(fn => fn()).join("");
+    }
+
+    // Fill Zone / TIF district into a permit-detail overlay body (Task 5),
+    // resolving via the existing geo cache/fetch (shared with the saved-list
+    // table columns) rather than a fresh lookup path.
+    async function fillPermitGeo(body, row) {
+      const num = clean(row.permit_number);
+      if (!geoZoneCache.has(num) || !geoTifCache.has(num)) {
+        try { await resolveGeoForRows([row]); } catch {}
+      }
+      const zone = body.querySelector(`.geo-zone[data-permit="${CSS.escape(num)}"]`);
+      const tif = body.querySelector(`.geo-tif[data-permit="${CSS.escape(num)}"]`);
+      if (zone) zone.textContent = geoZoneCache.get(num) || "—";
+      if (tif) tif.textContent = geoTifCache.get(num) || "—";
+    }
+
+    // Public entry point for opening a permit's detail overlay.
+    function openPermitDetail(row) {
+      state.activeDetail = { type: "permit", row };
+      openPermitModal(permitDetailHtml(row), { onOpen: body => { fillPermitContractors(body); fillPermitGeo(body, row); } });
+    }
+
+    function openPermitDetailFromEncoded(encoded) {
+      openPermitDetail(JSON.parse(decodeURIComponent(encoded)));
+    }
+
+    function showPermitDetail(row, pushHistory = true) {
+      openPermitDetail(row);
     }
 
     async function openContactProfile(encodedName, mode) {
@@ -5327,5 +5615,12 @@
       console.error(error);
     });
   </script>
+
+  <div id="permit-modal" class="permit-modal" hidden>
+    <div class="permit-modal-backdrop" onclick="closePermitModal()"></div>
+    <div class="permit-modal-card" role="dialog" aria-modal="true" aria-labelledby="permit-modal-title" tabindex="-1">
+      <div id="permit-modal-body" class="permit-modal-body"></div>
+    </div>
+  </div>
 </body>
 </html>
