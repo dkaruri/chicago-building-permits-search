@@ -1763,11 +1763,6 @@
       margin: 8px 0 10px;
     }
 
-    .permit-note {
-      min-width: 240px;
-      min-height: 58px;
-      font-size: 0.82rem;
-    }
 
     .route-leg {
       color: var(--steel);
@@ -1938,10 +1933,6 @@
       .user-list-panel table td.select-cell::before,
       .user-list-panel table td.move-cell::before {
         display: none;
-      }
-      .permit-note {
-        min-width: 0;
-        width: 100%;
       }
       .pager-controls {
         width: 100%;
@@ -2776,10 +2767,6 @@
         justify-content: flex-start;
       }
 
-      body.list-page .permit-note {
-        min-height: 56px;
-        font-size: 1rem;
-      }
 
       body.list-page .move-controls {
         display: inline-flex;
@@ -2990,6 +2977,14 @@
       color: var(--muted); border: 1px dashed var(--line-strong); border-radius: 3px;
       padding: 0 .2rem; margin-left: .25rem; white-space: nowrap;
     }
+
+    .note-count-cell { white-space: nowrap; }
+    .notecount {
+      display: inline-flex; align-items: center; gap: .25rem; font-size: .78rem; font-weight: 600;
+      color: var(--t7); background: transparent; border: 1px solid var(--t7);
+      border-radius: 999px; padding: .05rem .45rem; font-variant-numeric: tabular-nums;
+    }
+    .notecount.zero { color: var(--muted); border-color: var(--line); font-weight: 500; }
   </style>
 </head>
 <body class="list-page">
@@ -6469,7 +6464,7 @@
               ${options.move ? "" : `<td data-label="Ward">${esc(row.ward)}</td>`}
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
               ${options.geo ? `<td data-label="Zone" class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</td><td data-label="TIF district" class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</td>` : ""}
-              ${options.notes ? `<td data-label="Notes"><textarea class="permit-note" draggable="false" placeholder="Add note..." onclick="event.stopPropagation()" ondragstart="event.stopPropagation()" oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[clean(row.permit_number)] || "")}</textarea></td>` : ""}
+              ${options.notes ? (() => { const nt = state.userPermitNotes[clean(row.permit_number)] || ""; return `<td class="note-count-cell" data-label="Notes">${nt ? `<span class="notecount" title="You have a private note on this permit">✎ 1</span>` : `<span class="notecount zero">0</span>`}</td>`; })() : ""}
               ${options.move ? `<td class="move-cell" data-label="Move"><div class="move-controls"><button class="icon-button" title="Move up" aria-label="Move ${esc(row.permit_number)} up" ${i === 0 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', -1)">&uarr;</button><button class="icon-button" title="Move down" aria-label="Move ${esc(row.permit_number)} down" ${i >= rows.length - 1 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', 1)">&darr;</button></div></td>` : ""}
             </tr>`).join("")}</tbody>
         </table>`;
