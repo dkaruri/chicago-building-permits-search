@@ -2841,7 +2841,7 @@
     .pm-facts dt { color: var(--muted); font-size: 0.8rem; margin: 0; }
     .pm-facts dd { margin: 0; font-size: 0.88rem; }
     .approx { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--warning); background: var(--warning-soft); padding: 1px 6px; border-radius: 5px; margin-left: 6px; cursor: help; }
-    .pm-note { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 0.88rem; padding: 9px 11px; resize: vertical; }
+    .pm-note { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 1rem; padding: 9px 11px; resize: vertical; }
 
     /* ---- List directory ---- */
     .tag {
@@ -3013,6 +3013,27 @@
       padding: 0 .25rem; margin-left: .35rem; white-space: nowrap;
     }
     .added.warn { color: var(--warning); border-color: var(--warning); }
+
+    .pm-note-draft { border: 1px solid var(--line); border-radius: 8px; padding: .6rem; background: var(--surface-subtle); margin-bottom: .8rem; }
+    .pm-draft-label { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); margin-bottom: .35rem; }
+    .pm-lock { font-weight: 600; }
+    .pm-post-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+    .pm-post-btns { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .pm-thread { display: grid; gap: .6rem; }
+    .tp { border: 1px solid var(--cell-line); border-left: 3px solid var(--t7); border-radius: 0 8px 8px 0; padding: .55rem .7rem; background: var(--surface-subtle); }
+    .tp-head { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; font-size: .78rem; color: var(--muted); margin-bottom: .25rem; }
+    .tp-who { font-weight: 700; color: var(--ink); font-size: .84rem; }
+    .tp-kind { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border: 1px solid var(--t7); color: var(--t7); border-radius: 3px; padding: 0 .25rem; }
+    .tp-text { font-size: .88rem; }
+    .tp-kv { display: grid; grid-template-columns: auto 1fr; gap: .2rem .7rem; font-size: .85rem; margin: 0; }
+    .tp-kv dt { color: var(--muted); }
+    .tp-kv dd { margin: 0; }
+    .tp-act { display: flex; gap: .5rem; margin-top: .35rem; }
+    .tp-act button { font: inherit; font-size: .78rem; font-weight: 600; background: none; border: 1px solid transparent; padding: .3rem .5rem; border-radius: 6px; color: var(--muted); cursor: pointer; min-height: 40px; }
+    .tp-act button:hover { border-color: var(--line); }
+    .tp-act button.del { color: var(--danger); }
+    .tp-count { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .2rem; }
+    .tp-empty { color: var(--muted); font-size: .85rem; }
   </style>
 </head>
 <body class="list-page">
@@ -6918,6 +6939,145 @@
     }
 
     // One fact row list; missing values render as an em-dash.
+    // ---- Public note thread (Phase 3) ----
+    const ESTIMATE_LABELS = { "same-day": "Same day", "1-3d": "1\u20133 days", "week": "About a week", "longer": "Longer", "unknown": "Didn't say" };
+    const JOB_LABELS = { "new": "New build", "remodel": "Remodel" };
+    let currentThreadPermit = "";
+
+    // Both pages need this; index.html has no announceListAction. Self-contained
+    // aria-live region so the shared thread code is identical on both.
+    function pmAnnounce(msg) {
+      let el = document.getElementById("pm-live");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "pm-live";
+        el.setAttribute("aria-live", "polite");
+        el.style.cssText = "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;";
+        document.body.appendChild(el);
+      }
+      el.textContent = msg;
+    }
+
+    function dateStampLabel(ts) {
+      const d = new Date(Number(ts) * 1000);
+      if (!Number.isFinite(d.getTime())) return "";
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    }
+
+    function threadPostHtml(post) {
+      const when = dateStampLabel(post.ts) + (post.editedTs ? " \u00b7 edited" : "");
+      const head = `<p class="tp-head"><span class="tp-who">${esc(post.author || "anonymous")}</span><time>${esc(when)}</time>` +
+        `<span class="tp-kind">${post.kind === "walk" ? "Walkthrough" : post.kind === "photo" ? "Photo" : "Note"}</span></p>`;
+      const acts = `<p class="tp-act">` +
+        `<button type="button" onclick="editNotePost('${esc(currentThreadPermit)}','${esc(post.id)}')">Edit</button>` +
+        `<button type="button" class="del" onclick="deleteNotePost('${esc(currentThreadPermit)}','${esc(post.id)}')">Delete</button></p>`;
+      if (post.kind === "walk") {
+        const p = post.party;
+        const rows = [
+          ["Job", esc(JOB_LABELS[post.job] || "\u2014")],
+          ["On site", post.onsite === "sub" ? "Open sub" : post.onsite === "gc" ? "General contractor" : "Nobody"],
+        ];
+        if (p) {
+          if (p.name) rows.push(["Company", esc(p.name)]);
+          if (p.phone) rows.push(["Phone", `<a href="tel:${esc(p.phone)}">${esc(p.phone)}</a>`]);
+          if (p.covers) rows.push(["Covers", esc(p.covers)]);
+          const cap = [p.jobs ? `${p.jobs} jobs at a time` : "", ESTIMATE_LABELS[p.estimate] ? `estimates ${ESTIMATE_LABELS[p.estimate]}` : ""].filter(Boolean).join(" \u00b7 ");
+          if (cap) rows.push(["Capacity", esc(cap)]);
+        }
+        if (post.gc && post.gc.name) rows.push(["Their GC", esc(post.gc.name) + (post.gc.phone ? ` \u00b7 <a href="tel:${esc(post.gc.phone)}">${esc(post.gc.phone)}</a>` : "")]);
+        return `<article class="tp walk">${head}<dl class="tp-kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl>${acts}</article>`;
+      }
+      const photo = post.kind === "photo" ? `<p class="tp-photo-note">\ud83d\udcf7 photo</p>` : "";
+      return `<article class="tp">${head}<p class="tp-text">${esc(post.text || "")}</p>${photo}${acts}</article>`;
+    }
+
+    async function fetchThread(permit) {
+      state.threads = state.threads || {};
+      state.threads[permit] = { loading: true, posts: [], error: "" };
+      renderThread(permit);
+      try {
+        const res = await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}`);
+        if (!res.ok) throw new Error("thread unavailable");
+        const data = await res.json();
+        state.threads[permit] = { loading: false, posts: Array.isArray(data.notes) ? data.notes : [], error: "" };
+      } catch {
+        state.threads[permit] = { loading: false, posts: [], error: "Public notes could not be loaded." };
+      }
+      renderThread(permit);
+      if (typeof fillReportedSubs === "function") fillReportedSubs(permit);
+    }
+
+    function renderThread(permit) {
+      currentThreadPermit = permit;
+      const host = document.getElementById("pm-thread");
+      if (!host) return;
+      const t = (state.threads && state.threads[permit]) || { loading: true, posts: [] };
+      if (t.loading) { host.innerHTML = `<p class="tp-empty">Loading public notes\u2026</p>`; return; }
+      if (t.error) { host.innerHTML = `<p class="tp-empty">${esc(t.error)}</p>`; return; }
+      host.innerHTML = t.posts.length
+        ? `<h4 class="tp-count">Public notes \u00b7 ${t.posts.length}</h4>${t.posts.map(threadPostHtml).join("")}`
+        : `<p class="tp-empty">No public notes yet. Post one above.</p>`;
+    }
+
+    async function postNoteText(permit) {
+      const box = document.getElementById("pm-note-draft");
+      const text = (box && box.value || "").trim();
+      if (!text) { pmAnnounce("Type a note before posting."); return; }
+      const author = (localStorage.getItem("chi_permit_author") || "").trim();
+      const btn = document.getElementById("pm-post-btn");
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind: "text", author, text }),
+        });
+        if (!res.ok) throw new Error("post failed");
+        await fetchThread(permit);
+        pmAnnounce("Note posted.");
+        const first = document.querySelector("#pm-thread .tp");
+        if (first) { first.setAttribute("tabindex", "-1"); first.focus(); }
+      } catch {
+        pmAnnounce("Could not post \u2014 this needs the live site.");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function postNoteFromDraft(encodedPermit) {
+      const permit = decodeURIComponent(encodedPermit);
+      if (!(localStorage.getItem("chi_permit_author") || "").trim()) {
+        const name = window.prompt("Post publicly as (leave blank for anonymous):", "");
+        if (name === null) return;
+        try { localStorage.setItem("chi_permit_author", name.trim()); } catch { /* storage blocked */ }
+      }
+      await postNoteText(permit);
+    }
+
+    async function deleteNotePost(permit, id) {
+      if (!window.confirm("Delete this public note?")) return;
+      try {
+        await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}/${encodeURIComponent(id)}`, { method: "DELETE" });
+        await fetchThread(permit);
+        pmAnnounce("Note deleted.");
+      } catch { pmAnnounce("Could not delete right now."); }
+    }
+
+    async function editNotePost(permit, id) {
+      const t = state.threads && state.threads[permit];
+      const post = t && t.posts.find(p => p.id === id);
+      if (!post) return;
+      if (post.kind === "walk") { if (typeof openWalkthrough === "function") openWalkthrough(permit, id); return; }
+      const next = window.prompt("Edit note", post.text || "");
+      if (next === null) return;
+      try {
+        await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}/${encodeURIComponent(id)}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: next }),
+        });
+        await fetchThread(permit);
+        pmAnnounce("Note updated.");
+      } catch { pmAnnounce("Could not update right now."); }
+    }
+
     function pmFacts(pairs) {
       return `<dl class="pm-facts">${pairs.map(([k, v, extra]) =>
         `<dt>${esc(k)}</dt><dd>${v ? esc(v) : "—"}${extra || ""}</dd>`).join("")}</dl>`;
@@ -6965,8 +7125,19 @@
         () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div></section>`,
         () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div></section>`,
         () => `<section class="pm-block"><h3>Notes</h3>
-            <textarea class="pm-note" placeholder="Add a note about this permit…" aria-label="Note for permit ${esc(row.permit_number)}"
-              oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[num] || "")}</textarea>
+            <div class="pm-note-draft">
+              <label class="pm-draft-label" for="pm-note-draft">My note <span class="pm-lock">\ud83d\udd12 private to this browser</span></label>
+              <textarea id="pm-note-draft" class="pm-note" placeholder="Private note, saved as you type\u2026" aria-label="Private note for permit ${esc(row.permit_number)}"
+                oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[num] || "")}</textarea>
+              <div class="pm-post-row">
+                <span class="small">Posting as <strong>${esc((typeof localStorage !== "undefined" && localStorage.getItem("chi_permit_author")) || "anonymous")}</strong></span>
+                <span class="pm-post-btns">
+                  <button type="button" onclick="openWalkthrough('${enc(row.permit_number)}')">Log walkthrough</button>
+                  <button type="button" class="primary" id="pm-post-btn" onclick="postNoteFromDraft('${enc(row.permit_number)}')">Post to permit</button>
+                </span>
+              </div>
+            </div>
+            <div id="pm-thread" class="pm-thread"></div>
           </section>`,
         () => `</div>`, // close .pm-content
       ];
@@ -6993,7 +7164,7 @@
     // Public entry point for opening a permit's detail overlay.
     function openPermitDetail(row) {
       state.activeDetail = { type: "permit", row };
-      openPermitModal(permitDetailHtml(row), { onOpen: body => { fillPermitContractors(body); fillPermitGeo(body, row); } });
+      openPermitModal(permitDetailHtml(row), { onOpen: body => { fillPermitContractors(body); fillPermitGeo(body, row); const pn = clean(row.permit_number); if (pn) fetchThread(pn); } });
     }
 
     function showPermitDetail(row, pushHistory = true) {
