@@ -3014,6 +3014,8 @@
       selectedPermitNumbers: new Set(),
       userPermitNumbers: [],
       userPermitMap: new Map(),
+      lists: {},
+      activeListId: "local_1",
       userListNote: "",
       userPermitNotes: {},
       focalPoint: null,
@@ -3054,6 +3056,8 @@
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
     const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const userListKey = "chi_permit_user_list";
+    // Legacy key above is left readable for one release as a rollback path.
+    const listsKey = "chi_permit_lists";
     const userNotesKey = "chi_permit_user_notes";
     const focalPointKey = "chi_permit_focal";
     const themeKey = "chi_permit_theme";
@@ -4361,30 +4365,69 @@
       document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
     }
 
-    function loadUserListCookie() {
+    // Pure so it can be unit-tested outside the browser. Returns the v2 store
+    // shape from whatever was found in localStorage, falling back to migrating
+    // the legacy pipe-joined chi_permit_user_list value.
+    function migrateUserLists(raw, legacy) {
+      const capped = value => Array.from(new Set(
+        String(value || "").split("|").map(v => v.trim()).filter(Boolean)
+      )).slice(0, userListLimit);
+      const fresh = () => ({
+        lastUsed: "local_1",
+        lists: { local_1: { name: "My Permit List", permits: capped(legacy), focal: null, sharedId: null } },
+      });
+      let data = null;
+      try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
+      if (!data || typeof data !== "object" || !data.lists || typeof data.lists !== "object") return fresh();
+      const ids = Object.keys(data.lists);
+      if (!ids.length) return fresh();
+      return {
+        lastUsed: data.lists[data.lastUsed] ? data.lastUsed : ids[0],
+        lists: data.lists,
+      };
+    }
+
+    function loadUserLists() {
       let raw = "";
+      let legacy = "";
       try {
+        raw = localStorage.getItem(listsKey) || "";
         const stored = localStorage.getItem(userListKey);
-        raw = stored == null ? readCookie(userListKey) : stored;
+        legacy = stored == null ? readCookie(userListKey) : stored;
       } catch (error) {
-        raw = readCookie(userListKey);
+        legacy = readCookie(userListKey);
       }
-      state.userPermitNumbers = raw
-        .split("|")
-        .map(value => value.trim())
-        .filter(Boolean)
-        .slice(0, userListLimit);
+      const migrated = migrateUserLists(raw, legacy);
+      state.lists = migrated.lists;
+      state.activeListId = migrated.lastUsed;
+      if (!raw) saveUserLists();
+    }
+
+    function saveUserLists() {
+      try {
+        localStorage.setItem(listsKey, JSON.stringify({ lastUsed: state.activeListId, lists: state.lists }));
+      } catch (error) {
+        /* storage full or blocked - the in-memory lists still work this session */
+      }
+    }
+
+    function activeList() {
+      return state.lists[state.activeListId] || null;
+    }
+
+    // Kept under the old names so the ~30 existing call sites are untouched.
+    // They now read and write the active list rather than a single global one.
+    function loadUserListCookie() {
+      loadUserLists();
+      const list = activeList();
+      state.userPermitNumbers = list ? [...list.permits] : [];
     }
 
     function saveUserListCookie() {
       state.userPermitNumbers = Array.from(new Set(state.userPermitNumbers)).slice(0, userListLimit);
-      const value = state.userPermitNumbers.join("|");
-      try {
-        localStorage.setItem(userListKey, value);
-        deleteCookie(userListKey);
-      } catch (error) {
-        writeCookie(userListKey, value);
-      }
+      const list = activeList();
+      if (list) list.permits = [...state.userPermitNumbers];
+      saveUserLists();
     }
 
     function loadUserNotes() {
