@@ -22,7 +22,7 @@
   <meta name="twitter:description" content="Review, reorder, route, annotate, and export saved Chicago building permits.">
   <meta name="twitter:image" content="https://dkaruri.github.io/chicago-building-permits-search/assets/search-directory-preview.png">
   <meta name="twitter:image:alt" content="Chicago Building Permits Search preview card by Divyam Karuri">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=database_search,list,map_search,moon_stars,policy,sunny" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_photo_alternate,csv,database_search,edit,list,map_search,moon_stars,photo,policy,route,share,sunny" rel="stylesheet">
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
@@ -2969,6 +2969,12 @@
     .back-to-dir { font-size: .85rem; text-decoration: none; color: var(--primary); margin-right: .2rem; }
     .back-to-dir:hover { text-decoration: underline; }
     .list-details-btn { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; }
+
+    .material-symbols-outlined {
+      font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+      font-size: 20px; line-height: 1;
+    }
+    .toolbar-primary button { display: inline-flex; align-items: center; gap: .4rem; }
   </style>
 </head>
 <body class="list-page">
@@ -3014,25 +3020,27 @@
           <a href="#" class="back-to-dir" onclick="event.preventDefault();showDirectory()">&#8592; All lists</a>
           <h2 id="user-list-title">My Permit List</h2>
           <span id="user-list-count" class="small"></span>
-          <button type="button" class="list-details-btn" onclick="openListDetails()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14.5 6.5l3 3"/></svg>
-            <span id="list-details-label">Edit details</span>
-          </button>
         </div>
         <div class="user-list-toolbar" role="group" aria-label="My Permit List actions">
           <div class="toolbar-primary">
-            <button class="primary" data-list-action onclick="calculateUserListRoute()">Estimate distances</button>
-            <button data-list-action onclick="openGoogleMapsRoute()">Open in Google Maps</button>
+            <button data-list-action onclick="openListDetails()">
+              <span class="material-symbols-outlined" aria-hidden="true">edit</span><span id="list-details-label">Edit details</span>
+            </button>
+            <button class="primary" data-list-action onclick="optimizeUserListRoute()">
+              <span class="material-symbols-outlined" aria-hidden="true">route</span>Optimize route
+            </button>
+            <button data-list-action onclick="shareUserList()">
+              <span class="material-symbols-outlined" aria-hidden="true">share</span>Share
+            </button>
+            <button data-list-action onclick="downloadUserListCsv()">
+              <span class="material-symbols-outlined" aria-hidden="true">csv</span>Export CSV
+            </button>
+            <button data-list-action onclick="openAddAddress()">+ Add address</button>
             <details class="action-menu" data-list-menu>
               <summary aria-haspopup="true">More</summary>
               <div class="action-menu-panel" role="menu" aria-label="More list tools">
-                <button role="menuitem" data-list-action onclick="shareUserList()">Share list<span class="menu-hint">Copy a short link</span></button>
-                <div class="action-menu-sep" role="separator"></div>
-                <button role="menuitem" data-list-action onclick="optimizeUserListRoute()">Sort by drive time</button>
+                <button role="menuitem" data-list-action onclick="openGoogleMapsRoute()">Open in Google Maps</button>
                 <button role="menuitem" data-list-action onclick="showGoogleRouteChunks()">Google route chunks</button>
-                <div class="action-menu-sep" role="separator"></div>
-                <button role="menuitem" data-list-action onclick="downloadUserListKml()">Export KML<span class="menu-hint">Google Earth / My Maps</span></button>
-                <button role="menuitem" data-list-action onclick="downloadUserListCsv()">Export CSV<span class="menu-hint">Spreadsheet</span></button>
               </div>
             </details>
           </div>
@@ -3064,7 +3072,7 @@
           for drive-time sorting. Results are estimates from OpenStreetMap-based routing and are not traffic-aware.
           Google Maps route export uses
           <a href="https://developers.google.com/maps/documentation/urls/get-started#directions-action" target="_blank" rel="noopener">Google Maps URLs</a>;
-          the mobile route link opens the first five mapped stops. Google route chunks create sequential Google Maps links for every mapped stop, while KML and CSV include every saved permit with details.
+          the mobile route link opens the first five mapped stops. Google route chunks create sequential Google Maps links for every mapped stop, while CSV includes every saved permit with details.
         </p>
       </details>
       <label class="list-note">List note
@@ -5099,20 +5107,6 @@
         .join("");
     }
 
-    // Concise KML bubble: address first (bold, copy-ready for map-app search),
-    // then just permit number, work type, and any note. Keeps pins navigable
-    // instead of dumping every field — the CSV export carries the full detail.
-    function kmlPlacemarkDescription(row) {
-      if (row.focal) return `<b>${esc(row.address)}</b><br/>Starting location`;
-      const lines = [`<b>${esc(row.address || "Address unavailable")}</b>`];
-      const number = clean(row.permit_number);
-      if (number) lines.push(`Permit ${esc(number)}`);
-      const type = clean(row.work_type || row.permit_type);
-      if (type) lines.push(esc(type));
-      const note = clean(state.userPermitNotes[number]);
-      if (note) lines.push(`Note: ${esc(note)}`);
-      return lines.join("<br/>");
-    }
 
     function xmlText(value) {
       return esc(value);
@@ -5189,7 +5183,7 @@
         const url = googleMapsDirectionsUrl(routeRows);
         const skipped = rows.length - routeRows.length;
         state.userRouteSummary = skipped
-          ? `Opened Google Maps for the first ${fmt(routeRows.length)} mapped stops. Download KML or CSV for all ${fmt(rows.length)} mapped permits.`
+          ? `Opened Google Maps for the first ${fmt(routeRows.length)} mapped stops. Download CSV for all ${fmt(rows.length)} mapped permits.`
           : `Opened Google Maps for ${fmt(routeRows.length)} mapped stops.`;
         renderRouteSummary();
         announceListAction("Google Maps route opened in a new tab.");
@@ -5238,64 +5232,6 @@
       });
     }
 
-    async function downloadUserListKml() {
-      await withListAction("Preparing KML export...", async () => {
-        await ensurePermitMap();
-        const permitRows = mapExportRows();
-        if (!permitRows.length) {
-          clearUserRoute("At least one saved permit needs mapped coordinates to download a map file.");
-          return;
-        }
-        await resolveGeoForRows(permitRows);
-        // Prepend the starting location (when set) as the route's first stop.
-        const rows = withFocalOrigin(permitRows);
-        // Cycle a palette of distinct colors so adjacent pins never blend. KML
-        // color is aabbggr; tint the shared white pushpin. Google's canonical
-        // icon hrefs are honored by Google Earth / My Maps.
-        const pinColors = ["e6194b", "3cb44b", "4363d8", "f58231", "911eb4", "42d4f4", "f032e6", "bfef45", "fabed4", "469990"];
-        const toKmlColor = hex => `ff${hex.slice(4, 6)}${hex.slice(2, 4)}${hex.slice(0, 2)}`;
-        const pinHref = "http://maps.google.com/mapfiles/kml/pushpin/wht-pushpin.png";
-        const pinStyles = pinColors.map((hex, i) => `
-    <Style id="pin${i}"><IconStyle><color>${toKmlColor(hex)}</color><scale>1.1</scale><Icon><href>${pinHref}</href></Icon></IconStyle><LabelStyle><scale>0.8</scale></LabelStyle></Style>`).join("");
-        const extraStyles = `
-    <Style id="startPin"><IconStyle><color>ff2fce54</color><scale>1.3</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/go.png</href></Icon></IconStyle><LabelStyle><scale>0.9</scale></LabelStyle></Style>
-    <Style id="routeLine"><LineStyle><color>80646464</color><width>3</width></LineStyle></Style>`;
-        let ordinal = 0;
-        const placemarks = rows.map(row => {
-          const label = clean(row.address) || `Permit ${clean(row.permit_number)}` || "Saved permit";
-          const name = row.focal ? `Start · ${label}` : `${(ordinal += 1)}. ${label}`;
-          const styleUrl = row.focal ? "#startPin" : `#pin${(ordinal - 1) % pinColors.length}`;
-          return `
-          <Placemark>
-            <name>${xmlText(name)}</name>
-            <styleUrl>${styleUrl}</styleUrl>
-            <description><![CDATA[${cdata(kmlPlacemarkDescription(row))}]]></description>
-            <Point><coordinates>${Number(row.longitude)},${Number(row.latitude)},0</coordinates></Point>
-          </Placemark>`;
-        }).join("");
-        const line = rows.length > 1 ? `
-          <Placemark>
-            <name>Route order</name>
-            <styleUrl>#routeLine</styleUrl>
-            <LineString>
-              <tessellate>1</tessellate>
-              <coordinates>${rows.map(row => `${Number(row.longitude)},${Number(row.latitude)},0`).join(" ")}</coordinates>
-            </LineString>
-          </Placemark>` : "";
-        const kml = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-  <Document>
-    <name>Chicago Permit List</name>
-    <description>${xmlText(state.userListNote || "Saved Chicago building permits")}</description>${pinStyles}${extraStyles}
-    ${placemarks}
-    ${line}
-  </Document>
-</kml>`;
-        downloadBlob(userListFilename("kml"), kml, "application/vnd.google-earth.kml+xml;charset=utf-8");
-        clearUserRoute(`Downloaded KML with ${fmt(permitRows.length)} mapped permits and their permit details.`);
-        announceListAction("KML export downloaded.");
-      });
-    }
 
     async function downloadUserListCsv() {
       await withListAction("Preparing CSV export...", async () => {
