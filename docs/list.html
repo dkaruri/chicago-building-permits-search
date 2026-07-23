@@ -487,6 +487,42 @@
       width: 100%;
     }
 
+    .title-row-end {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .live-presence {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent-hover);
+      font-size: 0.78rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .live-presence[hidden] { display: none; }
+    .live-presence .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+      animation: presencePulse 2s ease-out infinite;
+    }
+    @keyframes presencePulse {
+      0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+      70% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); }
+      100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .live-presence .dot { animation: none; }
+    }
+
     .user-list-toolbar {
       position: relative;
       z-index: 20;
@@ -2976,7 +3012,10 @@
         <div class="user-list-title-row">
           <a href="#" class="back-to-dir" onclick="event.preventDefault();showDirectory()">&#8592; All lists</a>
           <h2 id="user-list-title">My Permit List</h2>
-          <span id="user-list-count" class="small"></span>
+          <span class="title-row-end">
+            <span id="user-list-count" class="small"></span>
+            <span id="live-presence" class="live-presence" role="status" aria-live="polite" hidden></span>
+          </span>
         </div>
         <div class="user-list-toolbar" role="group" aria-label="My Permit List actions">
           <div class="toolbar-primary">
@@ -3471,6 +3510,24 @@
       if (title) title.textContent = (list && list.name) || "My Permit List";
       const label = $("list-details-label");
       if (label) label.textContent = list && list.sharedId ? "Edit details" : "Publish\u2026";
+      renderPresence();
+    }
+
+    // Shows how many people currently have this published list open (Phase C).
+    // Presence flows in over the live socket; hidden unless 2+ are connected.
+    function renderPresence() {
+      const el = $("live-presence");
+      if (!el) return;
+      const live = state.live;
+      const count = live.connected ? (live.presence.count || 0) : 0;
+      if (count < 2) { el.hidden = true; el.textContent = ""; return; }
+      const names = (live.presence.names || []).filter(n => n && n.trim());
+      el.hidden = false;
+      el.innerHTML = '<span class="dot" aria-hidden="true"></span><span></span>';
+      el.lastChild.textContent = `${count} here`;
+      const desc = names.length ? `${count} people here: ${names.join(", ")}` : `${count} people viewing this list`;
+      el.title = desc;
+      el.setAttribute("aria-label", desc);
     }
 
     // Opens a published list from the directory. Imports it as a local list so
@@ -5802,6 +5859,7 @@
       ws.onerror = () => { /* onclose follows */ };
       ws.onclose = () => {
         live.connected = false;
+        renderPresence();
         if (!live.closing && live.id === sharedId) liveScheduleReconnect(sharedId);
       };
     }
@@ -5814,6 +5872,8 @@
       if (live.ws) { try { live.ws.close(); } catch { /* already closed */ } }
       live.ws = null;
       live.id = null;
+      live.presence = { count: 0, names: [] };
+      renderPresence();
     }
 
     function liveScheduleReconnect(sharedId) {
@@ -5837,7 +5897,7 @@
       try { msg = JSON.parse(data); } catch { return; }
       const live = state.live;
       if (msg.t === "error") { liveDisconnect(); return; }
-      if (msg.t === "presence") { live.presence = { count: msg.count || 0, names: msg.names || [] }; return; }
+      if (msg.t === "presence") { live.presence = { count: msg.count || 0, names: msg.names || [] }; renderPresence(); return; }
       const list = activeList();
       if (!list || list.sharedId !== live.id) return;
 
