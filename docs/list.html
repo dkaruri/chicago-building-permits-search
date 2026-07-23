@@ -7265,6 +7265,8 @@
           dlg.close();
           await fetchThread(permit);
           pmAnnounce(editing ? "Walkthrough updated." : "Walkthrough posted.");
+          const posted = document.querySelector("#pm-thread .tp");
+          if (posted) { posted.setAttribute("tabindex", "-1"); posted.focus(); }
         } catch {
           const msg = dlg.querySelector("#wk-msg"); msg.hidden = false; msg.textContent = "Could not save \u2014 this needs the live site.";
           btn.disabled = false; btn.textContent = editing ? "Save walkthrough" : "Post walkthrough";
