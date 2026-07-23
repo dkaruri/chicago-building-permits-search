@@ -7,9 +7,10 @@
     "seed": "node seed-kv.js",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "test": "node --test \"test/*.test.mjs\""
   },
   "devDependencies": {
-    "wrangler": "^3"
+    "wrangler": "^4.112.0"
   }
 }

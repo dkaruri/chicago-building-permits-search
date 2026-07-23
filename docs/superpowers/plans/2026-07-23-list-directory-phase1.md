@@ -273,7 +273,7 @@ curl -s -H "Origin: https://dkaruri.github.io" \
   "https://chi-permits-api.divyam-c-karuri.workers.dev/api/lists/YnF7y4t" | head -c 300
 ```
 
-Expected: 100 permit numbers and the `5010 N Monticello` focal point. This runs against the *deployed* Worker, so it is a regression baseline, not a test of your change — record the output and re-run it after deploy.
+Expected: 99 permit numbers and the `5010 N Monticello` focal point. This runs against the *deployed* Worker, so it is a regression baseline, not a test of your change — record the output and re-run it after deploy.
 
 - [ ] **Step 7: Commit**
 
@@ -1443,10 +1443,10 @@ and after a successful response, persist `sharedId` so a second Share edits rath
 
 - [ ] **Step 3: Verify against a stub**
 
-Stub `GET **/api/lists/YnF7y4t` with the **real** payload shape — 100 permit numbers, the `5010 N Monticello` focal, and **no `meta` key**, exactly as the deployed v1 record returns. Load `list.html#s=YnF7y4t` with one pre-existing list in storage and assert:
+Stub `GET **/api/lists/YnF7y4t` with the **real** payload shape — 99 permit numbers (measured 2026-07-23), the `5010 N Monticello` focal, and **no `meta` key**, exactly as the deployed v1 record returns. Load `list.html#s=YnF7y4t` with one pre-existing list in storage and assert:
 
 1. The pre-existing list still exists and is unchanged — nothing was replaced.
-2. A second list exists with `sharedId === "YnF7y4t"` and 100 permits.
+2. A second list exists with `sharedId === "YnF7y4t"` and 99 permits.
 3. The details dialog is open, because the payload had no metadata.
 4. `location.hash` is empty.
 
@@ -1462,7 +1462,7 @@ curl -s -H "Origin: https://dkaruri.github.io" \
   | python -c "import json,sys; d=json.load(sys.stdin); print('permits', len(d['permits']), '| focal', d['focal']['label'], '| meta', d.get('meta'))"
 ```
 
-Expected before deploy: `permits 100 | focal 5010 N Monticello | meta None`
+Expected before deploy: `permits 99 | focal 5010 N Monticello | meta None`
 Expected after deploy: identical, with `meta` present only once the list has been saved through the new dialog.
 
 - [ ] **Step 5: Commit**
@@ -1515,7 +1515,7 @@ curl -s -H "Origin: https://dkaruri.github.io" \
   | python -c "import json,sys; d=json.load(sys.stdin); print(len(d['permits']), d['focal']['label'])"
 ```
 
-Expected: `100 5010 N Monticello`
+Expected: `99 5010 N Monticello`
 
 If this returns anything else, **stop and roll back** — `readList` is mishandling the v1 payload.
 
