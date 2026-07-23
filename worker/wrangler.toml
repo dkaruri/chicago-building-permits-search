@@ -10,6 +10,10 @@ binding = "CACHE"
 id = "ef1c7094f8ec473aa1d1a00a63a392b3"
 preview_id = "3c2c6bb057214491b8c30d7d0ff609de"
 
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "chi-permits-photos"
+
 [vars]
 SOCRATA_DOMAIN = "data.cityofchicago.org"
 DATASET_ID = "ydr8-5enu"
