@@ -6275,6 +6275,36 @@
 
     // Fill the Zone/TIF cells for the rendered rows (cached values show instantly;
     // "—" means resolved-but-none, "…" is the pre-resolution placeholder).
+    // ---- Public note counts on the saved-list chip (Phase 3) ----
+    function chipLabel(o) {
+      if (o.publicCount > 0) return String(o.publicCount);
+      if (o.hasPrivate) return "✎";
+      return "0";
+    }
+
+    async function fetchNoteCounts(permits) {
+      const ids = permits.filter(Boolean).slice(0, 220);
+      if (!ids.length) return;
+      try {
+        const res = await fetch(`${API_BASE}/api/notes/counts?p=${encodeURIComponent(ids.join(","))}`);
+        if (!res.ok) return;
+        state.noteCounts = (await res.json()).counts || {};
+        applyNoteCounts();
+      } catch { /* offline — chips keep their private-only state */ }
+    }
+
+    function applyNoteCounts() {
+      document.querySelectorAll(".notecount[data-permit]").forEach(el => {
+        const permit = el.getAttribute("data-permit");
+        const publicCount = Number((state.noteCounts || {})[permit]) || 0;
+        const hasPrivate = !!(state.userPermitNotes[permit]);
+        const label = chipLabel({ hasPrivate, publicCount });
+        el.textContent = publicCount > 0 ? "💬 " + label : label;
+        el.classList.toggle("zero", label === "0");
+        if (publicCount > 0) el.title = publicCount + " public note" + (publicCount === 1 ? "" : "s");
+      });
+    }
+
     function fillListGeoCells(rows) {
       for (const row of rows) {
         const sel = `[data-permit="${clean(row.permit_number)}"]`;
@@ -6314,6 +6344,7 @@
         emptyText: "No permits added yet."
       });
       fillListGeoCells(rows);
+      fetchNoteCounts(rows.filter(r => !r.is_custom).map(r => clean(r.permit_number)));
     }
 
     function specialtyText(row) {
@@ -6747,7 +6778,7 @@
               ${options.move ? "" : `<td data-label="Ward">${esc(row.ward)}</td>`}
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
               ${options.geo ? `<td data-label="Zone" class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</td><td data-label="TIF district" class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</td>` : ""}
-              ${options.notes ? (() => { const nt = state.userPermitNotes[clean(row.permit_number)] || ""; return `<td class="note-count-cell" data-label="Notes">${nt ? `<span class="notecount" title="You have a private note on this permit">✎ 1</span>` : `<span class="notecount zero">0</span>`}</td>`; })() : ""}
+              ${options.notes ? (() => { const pn = clean(row.permit_number); const nt = state.userPermitNotes[pn] || ""; const attr = row.is_custom ? "" : ` data-permit="${esc(pn)}"`; return `<td class="note-count-cell" data-label="Notes"><span class="notecount${nt ? "" : " zero"}"${attr}${nt ? ' title="You have a private note on this permit"' : ""}>${nt ? "✎" : "0"}</span></td>`; })() : ""}
               ${options.move ? `<td class="move-cell" data-label="Move"><div class="move-controls"><button class="icon-button" title="Move up" aria-label="Move ${esc(row.permit_number)} up" ${i === 0 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', -1)">&uarr;</button><button class="icon-button" title="Move down" aria-label="Move ${esc(row.permit_number)} down" ${i >= rows.length - 1 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', 1)">&darr;</button></div></td>` : ""}
             </tr>`).join("")}</tbody>
         </table>`;
