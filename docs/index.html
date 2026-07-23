@@ -2738,6 +2738,26 @@
     .pm-facts dd { margin: 0; font-size: 0.88rem; }
     .approx { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--warning); background: var(--warning-soft); padding: 1px 6px; border-radius: 5px; margin-left: 6px; cursor: help; }
     .pm-note { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 0.88rem; padding: 9px 11px; resize: vertical; }
+
+    #list-picker {
+      border: 1px solid var(--line-strong); border-radius: 12px; padding: 1rem;
+      background: var(--panel); color: var(--ink); max-width: 420px; width: calc(100vw - 2rem);
+      box-shadow: 0 12px 30px var(--shadow);
+    }
+    #list-picker::backdrop { background: rgba(6, 14, 26, 0.55); }
+    #list-picker h3 { margin: 0 0 .2rem; font-size: 1.05rem; }
+    .pickstack { display: grid; gap: .5rem; margin-top: .7rem; }
+    .pickrow {
+      display: flex; align-items: center; gap: .6rem; padding: .55rem .6rem;
+      border: 1px solid var(--line); border-radius: 8px; background: var(--surface-subtle);
+      cursor: pointer; font: inherit; font-size: .95rem; min-height: 44px; width: 100%;
+      color: var(--ink); text-align: left;
+    }
+    .pickrow:hover { border-color: var(--primary); }
+    .pickrow .cnt { margin-left: auto; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+    .pickrow.full .cnt { color: var(--warning); font-weight: 600; }
+    .pickrow.new { border-style: dashed; color: var(--primary); font-weight: 600; }
+    .pickfoot { display: flex; justify-content: flex-end; margin-top: .7rem; }
   </style>
 </head>
 <body class="directory-page">
@@ -4681,8 +4701,71 @@
       renderCurrentMode();
     }
 
+    // ---- Add-to-list picker ----
+    function listCapacity(list, incoming) {
+      const room = Math.max(0, userListLimit - ((list && list.permits ? list.permits.length : 0)));
+      const willAdd = Math.min(room, incoming);
+      return { room, fits: willAdd >= incoming, willAdd };
+    }
+
+    function makeLocalList(name) {
+      const id = `local_${Date.now().toString(36)}`;
+      state.lists[id] = {
+        name: String(name || "").trim().slice(0, 80) || "Untitled list",
+        permits: [], focal: null, sharedId: null,
+      };
+      saveUserLists();
+      return id;
+    }
+
+    // Native <dialog>: showModal() gives focus trap, Escape and backdrop for
+    // free, and "close" fires however it is dismissed — so the promise always
+    // settles and a cancelled add can never leave later adds hanging.
+    function pickList(count) {
+      return new Promise(resolve => {
+        const dlg = $("list-picker");
+        const heading = count === 1 ? "Add to which list?" : `Add ${fmt(count)} permits to which list?`;
+        const rows = Object.entries(state.lists).map(([id, list]) => {
+          const cap = listCapacity(list, count);
+          const note = cap.fits ? `${fmt(list.permits.length)}` : `\u26A0 room for ${fmt(cap.room)}`;
+          return `<button class="pickrow${cap.fits ? "" : " full"}" type="button" value="${esc(id)}"><span>${esc(list.name)}</span><span class="cnt">${note}</span></button>`;
+        }).join("");
+        dlg.innerHTML = `<h3 id="picker-title">${esc(heading)}</h3>
+          <div class="pickstack">${rows}<button class="pickrow new" type="button" value="__new">+ New list\u2026</button></div>
+          <div class="pickfoot"><button type="button" value="__cancel">Cancel</button></div>`;
+        dlg.setAttribute("aria-labelledby", "picker-title");
+
+        let picked = null;
+        dlg.querySelectorAll("button[value]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const v = btn.value;
+            if (v === "__new") {
+              const name = window.prompt("Name this list", "Untitled list");
+              if (name === null) return;
+              picked = makeLocalList(name);
+            } else if (v !== "__cancel") {
+              picked = v;
+            }
+            dlg.close();
+          });
+        });
+        dlg.addEventListener("close", () => { dlg.innerHTML = ""; resolve(picked); }, { once: true });
+        dlg.showModal();
+        const first = dlg.querySelector(".pickrow");
+        if (first) first.focus();
+      });
+    }
+
     async function addPermitsToUserList(rows, options = {}) {
       const skipModeRefresh = Boolean(options.skipModeRefresh);
+      // Every add asks which list (D7). options.listId skips the prompt.
+      let targetId = options.listId;
+      if (!targetId) {
+        targetId = await pickList(rows.length);
+        if (!targetId) return;
+      }
+      state.activeListId = targetId;
+      state.userPermitNumbers = [...((state.lists[targetId] || {}).permits || [])];
       for (const row of rows) {
         const pn = clean(row.permit_number);
         if (pn) state.userPermitMap.set(pn, row);
@@ -5678,5 +5761,6 @@
       <div id="permit-modal-body" class="permit-modal-body"></div>
     </div>
   </div>
+  <dialog id="list-picker" aria-modal="true"></dialog>
 </body>
 </html>
