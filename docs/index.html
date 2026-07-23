@@ -2718,9 +2718,10 @@
     }
     .pm-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px 14px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
     .pm-head .pm-title { flex: 1; min-width: 0; }
+    .pm-head button.primary { width: auto; flex: none; white-space: nowrap; }
     .pm-head .pm-title .k { font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
     .pm-head .pm-title .v { font-weight: 700; font-size: 1.02rem; }
-    .pm-close { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; font-size: 1.05rem; flex: none; }
+    .pm-close { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; font-size: 1.05rem; flex: none; }
     .pm-content { padding: 4px 18px 22px; }
     .pm-tagrow { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px 0 6px; }
     .pm-tag { font-size: 0.74rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--primary-soft); border: 1px solid var(--line); color: var(--primary); }
@@ -5334,7 +5335,7 @@
     // Keep Tab focus inside the open modal.
     function trapPermitModalFocus(e) {
       const nodes = [...$("permit-modal").querySelectorAll(
-        'button:not([disabled]), a[href], textarea, input, [tabindex]:not([tabindex="-1"])'
+        'button:not([disabled]), a[href], textarea:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
       )].filter(n => n.offsetParent !== null);
       if (!nodes.length) return;
       const first = nodes[0], last = nodes[nodes.length - 1];
