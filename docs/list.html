@@ -76,6 +76,9 @@
       --progress-glow: rgba(31, 79, 163, 0.35);
       --drag-ring: rgba(22, 122, 74, 0.18);
       --shadow: rgba(26, 43, 68, 0.12);
+      /* Tag colour slots — measured >=4.5:1 on --surface-subtle in this theme. */
+      --t0: #b3261e; --t1: #8f4700; --t2: #5c6300; --t3: #146c43; --t4: #0f6674;
+      --t5: #1f4fa3; --t6: #4338a8; --t7: #6b3fa0; --t8: #9c2c74; --t9: #45566c;
     }
 
     :root[data-theme="dark"] {
@@ -116,6 +119,9 @@
       --progress-glow: rgba(142, 184, 255, 0.35);
       --drag-ring: rgba(98, 217, 145, 0.24);
       --shadow: rgba(0, 0, 0, 0.32);
+      /* Tag colour slots — measured >=4.5:1 on --surface-subtle in this theme. */
+      --t0: #ff9d9b; --t1: #f0a95c; --t2: #c9d15a; --t3: #62d991; --t4: #6fd0e8;
+      --t5: #8eb8ff; --t6: #b0a8ff; --t7: #d3a0ee; --t8: #f39ac8; --t9: #b6c8dc;
     }
 
     * { box-sizing: border-box; }
@@ -2849,6 +2855,120 @@
     .pm-facts dd { margin: 0; font-size: 0.88rem; }
     .approx { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--warning); background: var(--warning-soft); padding: 1px 6px; border-radius: 5px; margin-left: 6px; cursor: help; }
     .pm-note { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 0.88rem; padding: 9px 11px; resize: vertical; }
+
+    /* ---- List directory ---- */
+    .tag {
+      display: inline-flex; align-items: center; gap: .35rem;
+      font-size: .76rem; font-weight: 600; padding: .2rem .55rem; border-radius: 999px;
+      border: 1px solid var(--tc); color: var(--tc); background: transparent; white-space: nowrap;
+    }
+    .tag .swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--tc); }
+    button.tag { cursor: pointer; font-family: inherit; min-height: 44px; padding: .4rem .75rem; }
+    button.tag[aria-pressed="true"] { background: var(--tc); color: var(--panel); }
+    button.tag[aria-pressed="true"] .swatch { display: none; }
+    button.tag[aria-pressed="true"]::before { content: "¹3"; font-size: .8em; }
+    .tagrow { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+    .tagrow.tight { gap: .35rem; }
+    .tagrow.tight .tag { min-height: auto; }
+
+    .dir-toolbar { display: flex; flex-wrap: wrap; gap: .6rem; align-items: flex-end; margin-bottom: .8rem; }
+    .dir-toolbar .grow { flex: 1 1 240px; }
+    .dir-toolbar label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin-bottom: .3rem; }
+    .dir-toolbar input, .dir-toolbar select {
+      font: inherit; font-size: 1rem; width: 100%; box-sizing: border-box; min-height: 44px;
+      background: var(--field); color: var(--ink); border: 1px solid var(--line);
+      border-radius: 8px; padding: .5rem .7rem;
+    }
+    .dir-sect { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; margin: 1.4rem 0 .7rem; }
+    .dir-sect h3 { font-size: .95rem; margin: 0; }
+    .dir-sect .count { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+    .dir-sect .rule { flex: 1 1 40px; height: 1px; background: var(--cell-line); }
+    .dir-cards {
+      display: grid; gap: .7rem; grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
+      list-style: none; padding: 0; margin: 0;
+    }
+    .dir-card {
+      position: relative; border: 1px solid var(--line); border-radius: 10px;
+      background: var(--surface-subtle); padding: .85rem;
+      display: flex; flex-direction: column; gap: .5rem;
+    }
+    .dir-card.mine { border-left: 3px solid var(--accent); }
+    .dir-card h4 { font-size: .98rem; margin: 0; }
+    .dir-card h4 a { text-decoration: none; color: var(--ink); }
+    .dir-card h4 a::after { content: ""; position: absolute; inset: 0; border-radius: 10px; }
+    .dir-card:has(a:hover) { border-color: var(--line-strong); }
+    .dir-card:has(a:focus-visible) { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+    .dir-card .desc {
+      color: var(--muted); font-size: .84rem; margin: 0;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .dir-card .meta {
+      display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: auto 0 0;
+      font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums;
+    }
+    .mine-flag {
+      margin: 0; font-size: .7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--accent);
+    }
+    .dir-pill {
+      display: inline-flex; align-items: center; gap: .25rem; font-size: .7rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .06em; padding: .12rem .45rem; border-radius: 4px;
+      background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);
+    }
+    .dir-pill.draft { background: var(--warning-soft); color: var(--warning); border-color: var(--warning); }
+    .dir-empty { color: var(--muted); font-size: .88rem; margin: .4rem 0; }
+
+    #list-picker {
+      border: 1px solid var(--line-strong); border-radius: 12px; padding: 1rem;
+      background: var(--panel); color: var(--ink); max-width: 420px; width: calc(100vw - 2rem);
+      box-shadow: 0 12px 30px var(--shadow);
+    }
+    #list-picker::backdrop { background: rgba(6, 14, 26, 0.55); }
+    #list-picker h3 { margin: 0 0 .2rem; font-size: 1.05rem; }
+    .pickstack { display: grid; gap: .5rem; margin-top: .7rem; }
+    .pickrow {
+      display: flex; align-items: center; gap: .6rem; padding: .55rem .6rem;
+      border: 1px solid var(--line); border-radius: 8px; background: var(--surface-subtle);
+      cursor: pointer; font: inherit; font-size: .95rem; min-height: 44px; width: 100%;
+      color: var(--ink); text-align: left;
+    }
+    .pickrow:hover { border-color: var(--primary); }
+    .pickrow .cnt { margin-left: auto; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+    .pickrow.full .cnt { color: var(--warning); font-weight: 600; }
+    .pickrow.new { border-style: dashed; color: var(--primary); font-weight: 600; }
+    .pickfoot { display: flex; justify-content: flex-end; margin-top: .7rem; }
+
+    #list-details {
+      border: 1px solid var(--line-strong); border-radius: 12px; padding: 1rem;
+      background: var(--panel); color: var(--ink); max-width: 520px; width: calc(100vw - 2rem);
+      max-height: calc(100vh - 3rem); overflow-y: auto; box-shadow: 0 12px 30px var(--shadow);
+    }
+    #list-details::backdrop { background: rgba(6, 14, 26, 0.55); }
+    #list-details h3 { margin: 0; font-size: 1.05rem; }
+    .dlg-sub { margin: .2rem 0 .9rem; font-size: .84rem; color: var(--muted); }
+    .dlg-field { margin-bottom: .8rem; }
+    .dlg-field label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin-bottom: .3rem; }
+    .dlg-field input, .dlg-field textarea {
+      font: inherit; font-size: 1rem; width: 100%; box-sizing: border-box; min-height: 44px;
+      background: var(--field); color: var(--ink); border: 1px solid var(--line);
+      border-radius: 8px; padding: .5rem .7rem;
+    }
+    .dlg-field textarea { min-height: 76px; resize: vertical; }
+    .dlg-hint { font-size: .78rem; color: var(--muted); margin: .3rem 0 0; }
+    .dlg-error { color: var(--danger); font-size: .85rem; font-weight: 600; margin: .3rem 0 .6rem; }
+    .dlg-foot { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .8rem; }
+    .slotrow { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .3rem; }
+    .slotbtn {
+      width: 44px; height: 44px; border-radius: 8px; cursor: pointer; padding: 0;
+      border: 1px solid var(--line); background: var(--panel);
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .slotbtn i { display: block; width: 22px; height: 22px; border-radius: 5px; background: var(--tc); }
+    .slotbtn[aria-pressed="true"] { border-color: var(--ink); border-width: 2px; }
+
+    .back-to-dir { font-size: .85rem; text-decoration: none; color: var(--primary); margin-right: .2rem; }
+    .back-to-dir:hover { text-decoration: underline; }
+    .list-details-btn { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; }
   </style>
 </head>
 <body class="list-page">
@@ -2873,11 +2993,31 @@
   <main id="main-content">
     <section id="status" class="status"></section>
 
+    <section id="directory-view" class="panel">
+      <div class="panel-head">
+        <h2 style="margin:0">Permit lists</h2>
+        <button type="button" class="primary" onclick="createListPrompt()">+ New list</button>
+      </div>
+      <div class="dir-toolbar">
+        <div class="grow">
+          <label for="dir-search">Search lists</label>
+          <input id="dir-search" type="search" placeholder="Title, author, or tag" oninput="onDirectorySearch(this.value)">
+        </div>
+      </div>
+      <div id="dir-tags" class="tagrow" role="group" aria-label="Filter by tag"></div>
+      <div id="dir-body"></div>
+    </section>
+
     <section id="user-list-panel" class="panel user-list-panel" ondragover="permitListDragOver(event)" ondragleave="permitListDragLeave(event)" ondrop="permitListDrop(event)">
       <div class="panel-head user-list-head">
         <div class="user-list-title-row">
-          <h2>My Permit List</h2>
+          <a href="#" class="back-to-dir" onclick="event.preventDefault();showDirectory()">&#8592; All lists</a>
+          <h2 id="user-list-title">My Permit List</h2>
           <span id="user-list-count" class="small"></span>
+          <button type="button" class="list-details-btn" onclick="openListDetails()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14.5 6.5l3 3"/></svg>
+            <span id="list-details-label">Edit details</span>
+          </button>
         </div>
         <div class="user-list-toolbar" role="group" aria-label="My Permit List actions">
           <div class="toolbar-primary">
@@ -3014,6 +3154,11 @@
       selectedPermitNumbers: new Set(),
       userPermitNumbers: [],
       userPermitMap: new Map(),
+      lists: {},
+      activeListId: "local_1",
+      view: "directory",
+      directory: { rows: [], cursor: null, q: "", tag: "", loading: false, error: "" },
+      tagRegistry: null,
       userListNote: "",
       userPermitNotes: {},
       focalPoint: null,
@@ -3054,6 +3199,8 @@
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
     const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const userListKey = "chi_permit_user_list";
+    // Legacy key above is left readable for one release as a rollback path.
+    const listsKey = "chi_permit_lists";
     const userNotesKey = "chi_permit_user_notes";
     const focalPointKey = "chi_permit_focal";
     const themeKey = "chi_permit_theme";
@@ -3161,13 +3308,29 @@
       }
       const permits = Array.isArray(data.permits) ? data.permits.map(clean).filter(Boolean) : [];
       if (!permits.length) { stripHash(); return; }
-      const existing = state.userPermitNumbers.length;
-      if (existing && !window.confirm(`Replace your saved list (${fmt(existing)} permits) with this shared list (${fmt(permits.length)} permits)?`)) {
-        stripHash();
-        return;
+      // With many lists there is nothing to overwrite: a shared link becomes a
+      // new list, so the destructive confirm() goes with the behaviour it guarded.
+      const existingId = Object.keys(state.lists).find(key => state.lists[key].sharedId === id);
+      if (existingId) {
+        state.activeListId = existingId;
+        state.lists[existingId].permits = permits;
+      } else {
+        const newId = `local_${Date.now().toString(36)}`;
+        state.lists[newId] = {
+          name: (data.meta && data.meta.title) || "Shared list",
+          permits,
+          focal: data.focal || null,
+          sharedId: id,
+          desc: (data.meta && data.meta.blurb) || "",
+          author: (data.meta && data.meta.author) || "",
+          tags: (data.meta && data.meta.tags) || [],
+        };
+        state.activeListId = newId;
       }
       state.userPermitNumbers = permits;
+      saveUserLists();
       saveUserListCookie();
+      state.view = "list";
       const f = data.focal;
       if (f && Number.isFinite(Number(f.lat)) && Number.isFinite(Number(f.lon))) {
         state.focalPoint = { address: f.label || "", label: f.label || "", latitude: Number(f.lat), longitude: Number(f.lon), resolved: true, permitNumber: null, matched: false };
@@ -3180,6 +3343,211 @@
       renderFocalStatus();
       await ensurePermitMap();
       stripHash();
+      // A payload with no metadata is pre-v2: prompt for title, author and tags.
+      // Saving rewrites the SAME KV key, so the shared URL never changes.
+      if (!data.meta || !data.meta.title) openListDetails(state.activeListId);
+    }
+
+
+    // ---- List directory ----
+    // Ten colour slots, each a light/dark pair defined as --t0..--t9. A tag
+    // stores the INDEX, never a hex, so it stays legible in both themes.
+    const TAG_SLOT_NAMES = ["red", "orange", "olive", "green", "teal", "blue", "indigo", "purple", "magenta", "slate"];
+
+    function tagChipHtml(name, slot) {
+      const s = Math.max(0, Math.min(9, Number(slot) || 0));
+      return `<span class="tag" style="--tc:var(--t${s})"><span class="swatch"></span>${esc(name)}</span>`;
+    }
+
+    function directorySections(localLists, remoteRows) {
+      const mineIds = new Set();
+      const mine = Object.entries(localLists).map(([id, list]) => {
+        if (list.sharedId) mineIds.add(list.sharedId);
+        return {
+          id,
+          name: list.name,
+          count: (list.permits || []).length,
+          sharedId: list.sharedId || null,
+          draft: !list.sharedId,
+        };
+      });
+      return { mine, published: remoteRows.filter(row => !mineIds.has(row.id)) };
+    }
+
+    async function fetchDirectory(append = false) {
+      state.directory.loading = true;
+      renderDirectory();
+      const params = new URLSearchParams();
+      if (state.directory.q) params.set("q", state.directory.q);
+      if (state.directory.tag) params.set("tag", state.directory.tag);
+      if (append && state.directory.cursor) params.set("cursor", state.directory.cursor);
+      try {
+        const res = await fetch(`${API_BASE}/api/lists?${params}`);
+        if (!res.ok) throw new Error("directory unavailable");
+        const data = await res.json();
+        // Never trust the shape: a malformed response must not blank the page.
+        const rows = Array.isArray(data && data.lists) ? data.lists : [];
+        state.directory.rows = append ? [...state.directory.rows, ...rows] : rows;
+        state.directory.cursor = (data && typeof data.cursor === "string") ? data.cursor : null;
+        state.directory.error = "";
+      } catch {
+        state.directory.error = "Published lists could not be loaded. Your own lists are unaffected.";
+        if (!append) state.directory.rows = [];
+        state.directory.cursor = null;
+      }
+      state.directory.loading = false;
+      renderDirectory();
+    }
+
+    function directoryCardHtml(entry, mine) {
+      const tags = Array.isArray(entry.tags) ? entry.tags : [];
+      const chips = tags.length
+        ? `<div class="tagrow tight">${tags.map(pair => tagChipHtml(pair[0], pair[1])).join("")}</div>`
+        : "";
+      const target = mine ? `showList('${esc(entry.id)}')` : `openSharedList('${esc(entry.id)}')`;
+      const bits = [];
+      if (mine) {
+        bits.push(entry.draft
+          ? `<span class="dir-pill draft">\u25F7 Draft</span>`
+          : `<span class="dir-pill">\u2714 Published</span>`);
+      }
+      bits.push(`${fmt(entry.count || 0)} permit${(entry.count || 0) === 1 ? "" : "s"}`);
+      if (entry.author) bits.push(esc(entry.author));
+      const label = esc(entry.name || entry.title || "Untitled list");
+      return `<li class="dir-card${mine ? " mine" : ""}">
+        ${mine ? `<p class="mine-flag">\u2605 Mine</p>` : ""}
+        <h4><a href="#" onclick="event.preventDefault();${target}">${label}</a></h4>
+        ${entry.blurb ? `<p class="desc">${esc(entry.blurb)}</p>` : ""}
+        ${chips}
+        <p class="meta">${bits.join(`<span aria-hidden="true">\u00B7</span>`)}</p>
+      </li>`;
+    }
+
+    function renderDirectory() {
+      const host = $("dir-body");
+      if (!host) return;
+      const { mine, published } = directorySections(state.lists, state.directory.rows);
+      const tagHost = $("dir-tags");
+      if (tagHost) {
+        const seen = new Map();
+        state.directory.rows.forEach(row => (row.tags || []).forEach(pair => {
+          if (!seen.has(pair[0])) seen.set(pair[0], pair[1]);
+        }));
+        tagHost.innerHTML = [...seen.entries()].slice(0, 20).map(([name, slot]) => {
+          const on = state.directory.tag === name;
+          const s = Math.max(0, Math.min(9, Number(slot) || 0));
+          return `<button class="tag" type="button" aria-pressed="${on}" style="--tc:var(--t${s})" onclick="onDirectoryTag('${esc(name)}')"><span class="swatch"></span>${esc(name)}</button>`;
+        }).join("");
+      }
+      const parts = [];
+      parts.push(`<div class="dir-sect"><h3 id="dir-mine-h">My lists</h3><span class="count">${fmt(mine.length)}</span><span class="rule"></span><span class="count">stored in this browser</span></div>`);
+      parts.push(mine.length
+        ? `<ul class="dir-cards" aria-labelledby="dir-mine-h">${mine.map(e => directoryCardHtml(e, true)).join("")}</ul>`
+        : `<p class="dir-empty">No lists yet. Add permits from Search or the Map, or create one here.</p>`);
+      parts.push(`<div class="dir-sect"><h3 id="dir-pub-h">Published to the site</h3><span class="count">${state.directory.loading ? "\u2026" : fmt(published.length)}</span><span class="rule"></span><span class="count">anyone can open or edit</span></div>`);
+      if (state.directory.error) {
+        parts.push(`<p class="dir-empty">${esc(state.directory.error)}</p>`);
+      } else if (state.directory.loading && !published.length) {
+        parts.push(`<p class="dir-empty">Loading published lists\u2026</p>`);
+      } else if (!published.length) {
+        parts.push(`<p class="dir-empty">Nothing published yet.</p>`);
+      } else {
+        parts.push(`<ul class="dir-cards" aria-labelledby="dir-pub-h">${published.map(e => directoryCardHtml(e, false)).join("")}</ul>`);
+      }
+      // Load more is driven by the cursor, NEVER by row count: a filtered page
+      // can return a handful of rows while hundreds of keys remain.
+      if (state.directory.cursor) {
+        parts.push(`<p style="margin-top:1rem"><button type="button" onclick="fetchDirectory(true)">Load more</button></p>`);
+      }
+      host.innerHTML = parts.join("");
+    }
+
+    let directorySearchTimer = null;
+    function onDirectorySearch(value) {
+      state.directory.q = String(value || "").trim();
+      clearTimeout(directorySearchTimer);
+      directorySearchTimer = setTimeout(() => fetchDirectory(false), 250);
+    }
+
+    function onDirectoryTag(name) {
+      state.directory.tag = state.directory.tag === name ? "" : name;
+      fetchDirectory(false);
+    }
+
+    function showDirectory() {
+      state.view = "directory";
+      const dir = $("directory-view");
+      const panel = $("user-list-panel");
+      if (dir) dir.hidden = false;
+      if (panel) panel.hidden = true;
+      renderDirectory();
+    }
+
+    async function showList(id) {
+      if (id && state.lists[id]) {
+        state.activeListId = id;
+        state.userPermitNumbers = [...state.lists[id].permits];
+        saveUserLists();
+      }
+      state.view = "list";
+      const dir = $("directory-view");
+      const panel = $("user-list-panel");
+      if (dir) dir.hidden = true;
+      if (panel) panel.hidden = false;
+      renderListHeading();
+      await ensurePermitMap();
+      await renderUserList();
+    }
+
+    function renderListHeading() {
+      const list = activeList();
+      const title = $("user-list-title");
+      if (title) title.textContent = (list && list.name) || "My Permit List";
+      const label = $("list-details-label");
+      if (label) label.textContent = list && list.sharedId ? "Edit details" : "Publish\u2026";
+    }
+
+    // Opens a published list from the directory. Imports it as a local list so
+    // it can be worked on, reusing whatever local copy already tracks that id.
+    async function openSharedList(shareId) {
+      let data;
+      try {
+        const res = await fetch(`${API_BASE}/api/lists/${encodeURIComponent(shareId)}`);
+        if (!res.ok) throw new Error("not found");
+        data = await res.json();
+      } catch {
+        state.directory.error = "That list could not be loaded. It may have expired.";
+        renderDirectory();
+        return;
+      }
+      const permits = Array.isArray(data.permits) ? data.permits.map(clean).filter(Boolean) : [];
+      let localId = Object.keys(state.lists).find(key => state.lists[key].sharedId === shareId);
+      if (localId) {
+        state.lists[localId].permits = permits;
+      } else {
+        localId = `local_${Date.now().toString(36)}`;
+        state.lists[localId] = {
+          name: (data.meta && data.meta.title) || "Shared list",
+          permits,
+          focal: data.focal || null,
+          sharedId: shareId,
+        };
+      }
+      state.activeListId = localId;
+      state.userPermitNumbers = permits;
+      saveUserLists();
+      await showList(localId);
+    }
+
+    function createListPrompt() {
+      const name = window.prompt("Name this list", "Untitled list");
+      if (name === null) return null;
+      const id = `local_${Date.now().toString(36)}`;
+      state.lists[id] = { name: String(name).trim().slice(0, 80) || "Untitled list", permits: [], focal: null, sharedId: null };
+      state.activeListId = id;
+      saveUserLists();
+      renderDirectory();
+      return id;
     }
 
     function dateTimeLabel(value) {
@@ -3359,6 +3727,12 @@
       renderStatus();
       initListMenus();
       await renderUserList();
+      // A #s= link lands directly in that list; otherwise the page opens to the
+      // directory. fetchDirectory is deliberately not awaited — the local lists
+      // render immediately and the published section fills in when it arrives.
+      renderListHeading();
+      if (state.view !== "list") showDirectory();
+      fetchDirectory(false);
       if (!document.body.classList.contains("list-page")) {
         await search();
       }
@@ -4361,30 +4735,69 @@
       document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
     }
 
-    function loadUserListCookie() {
+    // Pure so it can be unit-tested outside the browser. Returns the v2 store
+    // shape from whatever was found in localStorage, falling back to migrating
+    // the legacy pipe-joined chi_permit_user_list value.
+    function migrateUserLists(raw, legacy) {
+      const capped = value => Array.from(new Set(
+        String(value || "").split("|").map(v => v.trim()).filter(Boolean)
+      )).slice(0, userListLimit);
+      const fresh = () => ({
+        lastUsed: "local_1",
+        lists: { local_1: { name: "My Permit List", permits: capped(legacy), focal: null, sharedId: null } },
+      });
+      let data = null;
+      try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
+      if (!data || typeof data !== "object" || !data.lists || typeof data.lists !== "object") return fresh();
+      const ids = Object.keys(data.lists);
+      if (!ids.length) return fresh();
+      return {
+        lastUsed: data.lists[data.lastUsed] ? data.lastUsed : ids[0],
+        lists: data.lists,
+      };
+    }
+
+    function loadUserLists() {
       let raw = "";
+      let legacy = "";
       try {
+        raw = localStorage.getItem(listsKey) || "";
         const stored = localStorage.getItem(userListKey);
-        raw = stored == null ? readCookie(userListKey) : stored;
+        legacy = stored == null ? readCookie(userListKey) : stored;
       } catch (error) {
-        raw = readCookie(userListKey);
+        legacy = readCookie(userListKey);
       }
-      state.userPermitNumbers = raw
-        .split("|")
-        .map(value => value.trim())
-        .filter(Boolean)
-        .slice(0, userListLimit);
+      const migrated = migrateUserLists(raw, legacy);
+      state.lists = migrated.lists;
+      state.activeListId = migrated.lastUsed;
+      if (!raw) saveUserLists();
+    }
+
+    function saveUserLists() {
+      try {
+        localStorage.setItem(listsKey, JSON.stringify({ lastUsed: state.activeListId, lists: state.lists }));
+      } catch (error) {
+        /* storage full or blocked - the in-memory lists still work this session */
+      }
+    }
+
+    function activeList() {
+      return state.lists[state.activeListId] || null;
+    }
+
+    // Kept under the old names so the ~30 existing call sites are untouched.
+    // They now read and write the active list rather than a single global one.
+    function loadUserListCookie() {
+      loadUserLists();
+      const list = activeList();
+      state.userPermitNumbers = list ? [...list.permits] : [];
     }
 
     function saveUserListCookie() {
       state.userPermitNumbers = Array.from(new Set(state.userPermitNumbers)).slice(0, userListLimit);
-      const value = state.userPermitNumbers.join("|");
-      try {
-        localStorage.setItem(userListKey, value);
-        deleteCookie(userListKey);
-      } catch (error) {
-        writeCookie(userListKey, value);
-      }
+      const list = activeList();
+      if (list) list.permits = [...state.userPermitNumbers];
+      saveUserLists();
     }
 
     function loadUserNotes() {
@@ -5183,8 +5596,218 @@
       renderCurrentMode();
     }
 
+    // ---- Publish / edit list details ----
+    // MUST stay byte-identical to normalizeTag() in worker/src/tags.js. If the
+    // two diverge, a tag typed here forks from the one the registry stored and
+    // its colour silently stops resolving.
+    function normalizeTag(name) {
+      return String(name ?? "")
+        .toLowerCase()
+        .replace(/[^a-z0-9 \-_]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 24);
+    }
+
+    function parseTagInput(text, registry, newSlot = 0) {
+      const seen = new Set();
+      const out = [];
+      for (const part of String(text || "").split(",")) {
+        const name = normalizeTag(part);
+        if (!name || seen.has(name)) continue;
+        seen.add(name);
+        const slot = Number.isInteger(registry[name]) ? registry[name] : newSlot;
+        out.push([name, Math.max(0, Math.min(9, slot))]);
+        if (out.length >= 8) break;
+      }
+      return out;
+    }
+
+    async function loadTagRegistry() {
+      if (state.tagRegistry) return state.tagRegistry;
+      try {
+        const res = await fetch(`${API_BASE}/api/tags`);
+        state.tagRegistry = res.ok ? (await res.json()).tags || {} : {};
+      } catch {
+        state.tagRegistry = {};
+      }
+      return state.tagRegistry;
+    }
+
+    async function openListDetails(id) {
+      const list = state.lists[id || state.activeListId];
+      if (!list) return;
+      const registry = await loadTagRegistry();
+      const dlg = $("list-details");
+      const tagText = (list.tags || []).map(pair => pair[0]).join(", ");
+      const swatches = Array.from({ length: 10 }, (_, i) =>
+        `<button type="button" class="slotbtn" data-slot="${i}" aria-pressed="${i === 0}" aria-label="Colour ${i + 1} of 10" style="--tc:var(--t${i})"><i></i></button>`).join("");
+      dlg.innerHTML = `<h3 id="details-title">List details</h3>
+        <p class="dlg-sub">Published lists appear in the public directory and anyone can edit them.</p>
+        <div class="dlg-field"><label for="ld-title">Title</label>
+          <input id="ld-title" maxlength="80" value="${esc(list.name || "")}"></div>
+        <div class="dlg-field"><label for="ld-desc">Description</label>
+          <textarea id="ld-desc" rows="3">${esc(list.desc || "")}</textarea></div>
+        <div class="dlg-field"><label for="ld-author">Author</label>
+          <input id="ld-author" maxlength="40" value="${esc(list.author || localStorage.getItem("chi_permit_author") || "")}">
+          <p class="dlg-hint">Shown publicly. Not verified \u2014 anyone can type any name.</p></div>
+        <div class="dlg-field"><label for="ld-tags">Tags</label>
+          <input id="ld-tags" value="${esc(tagText)}" placeholder="roofing, north side">
+          <p class="dlg-hint">Separate with commas. Up to 8.</p>
+          <div id="ld-newtag" hidden><p class="dlg-hint" id="ld-newtag-label">New tag colour:</p>
+            <div class="slotrow" role="group" aria-labelledby="ld-newtag-label">${swatches}</div></div></div>
+        <p class="dlg-error" id="ld-error" role="alert" hidden></p>
+        <div class="dlg-foot">
+          <button type="button" id="ld-cancel">Cancel</button>
+          <button type="button" class="primary" id="ld-save">${list.sharedId ? "Save changes" : "Publish to directory"}</button>
+        </div>`;
+      dlg.setAttribute("aria-labelledby", "details-title");
+
+      let newSlot = 0;
+      const slotRow = dlg.querySelector(".slotrow");
+      slotRow.querySelectorAll(".slotbtn").forEach(btn => btn.addEventListener("click", () => {
+        newSlot = Number(btn.dataset.slot);
+        slotRow.querySelectorAll(".slotbtn").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+      }));
+
+      // The colour picker only appears for a tag the registry has never seen.
+      const tagInput = dlg.querySelector("#ld-tags");
+      const refreshNewTag = () => {
+        const unknown = parseTagInput(tagInput.value, registry, newSlot).filter(pair => !Number.isInteger(registry[pair[0]]));
+        const box = dlg.querySelector("#ld-newtag");
+        box.hidden = unknown.length === 0;
+        if (unknown.length) {
+          dlg.querySelector("#ld-newtag-label").textContent = `New tag colour for ${unknown.map(u => u[0]).join(", ")}:`;
+        }
+      };
+      tagInput.addEventListener("input", refreshNewTag);
+      refreshNewTag();
+
+      dlg.querySelector("#ld-cancel").addEventListener("click", () => dlg.close());
+      dlg.querySelector("#ld-save").addEventListener("click", async () => {
+        const btn = dlg.querySelector("#ld-save");
+        const err = dlg.querySelector("#ld-error");
+        const title = dlg.querySelector("#ld-title").value.trim().slice(0, 80);
+        if (!title) { err.hidden = false; err.textContent = "Give the list a title before publishing."; dlg.querySelector("#ld-title").focus(); return; }
+        const tags = parseTagInput(tagInput.value, registry, newSlot);
+        const payload = {
+          title,
+          desc: dlg.querySelector("#ld-desc").value.trim().slice(0, 2000),
+          author: dlg.querySelector("#ld-author").value.trim().slice(0, 40),
+          tags,
+          permits: state.userPermitNumbers,
+          focal: focalShareData(),
+        };
+        btn.disabled = true;
+        btn.textContent = "Saving\u2026";
+        try {
+          const published = list.sharedId;
+          const res = await fetch(`${API_BASE}/api/lists${published ? "/" + encodeURIComponent(published) : ""}`, {
+            method: published ? "PUT" : "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error("save failed");
+          const body = await res.json();
+          if (!published && body.id) list.sharedId = body.id;
+          // Register any brand-new tag colours so everyone sees the same slot.
+          for (const [name, slot] of tags) {
+            if (Number.isInteger(registry[name])) continue;
+            registry[name] = slot;
+            fetch(`${API_BASE}/api/tags`, {
+              method: "PUT", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name, slot }),
+            }).catch(() => {});
+          }
+          list.name = title;
+          list.desc = payload.desc;
+          list.author = payload.author;
+          list.tags = tags;
+          saveUserLists();
+          try { localStorage.setItem("chi_permit_author", payload.author); } catch { /* storage blocked */ }
+          dlg.close();
+          renderListHeading();
+          // KV list metadata is eventually consistent and can lag a write by up
+          // to a minute, so go to the list itself rather than back to a
+          // directory that might not show what was just published.
+          await showList(state.activeListId);
+        } catch {
+          err.hidden = false;
+          err.textContent = "Could not save. This needs the live site \u2014 try again on the published page.";
+          btn.disabled = false;
+          btn.textContent = published ? "Save changes" : "Publish to directory";
+        }
+      });
+
+      dlg.showModal();
+      dlg.querySelector("#ld-title").focus();
+    }
+
+    // ---- Add-to-list picker ----
+    function listCapacity(list, incoming) {
+      const room = Math.max(0, userListLimit - ((list && list.permits ? list.permits.length : 0)));
+      const willAdd = Math.min(room, incoming);
+      return { room, fits: willAdd >= incoming, willAdd };
+    }
+
+    function makeLocalList(name) {
+      const id = `local_${Date.now().toString(36)}`;
+      state.lists[id] = {
+        name: String(name || "").trim().slice(0, 80) || "Untitled list",
+        permits: [], focal: null, sharedId: null,
+      };
+      saveUserLists();
+      return id;
+    }
+
+    // Native <dialog>: showModal() gives focus trap, Escape and backdrop for
+    // free, and "close" fires however it is dismissed — so the promise always
+    // settles and a cancelled add can never leave later adds hanging.
+    function pickList(count) {
+      return new Promise(resolve => {
+        const dlg = $("list-picker");
+        const heading = count === 1 ? "Add to which list?" : `Add ${fmt(count)} permits to which list?`;
+        const rows = Object.entries(state.lists).map(([id, list]) => {
+          const cap = listCapacity(list, count);
+          const note = cap.fits ? `${fmt(list.permits.length)}` : `\u26A0 room for ${fmt(cap.room)}`;
+          return `<button class="pickrow${cap.fits ? "" : " full"}" type="button" value="${esc(id)}"><span>${esc(list.name)}</span><span class="cnt">${note}</span></button>`;
+        }).join("");
+        dlg.innerHTML = `<h3 id="picker-title">${esc(heading)}</h3>
+          <div class="pickstack">${rows}<button class="pickrow new" type="button" value="__new">+ New list\u2026</button></div>
+          <div class="pickfoot"><button type="button" value="__cancel">Cancel</button></div>`;
+        dlg.setAttribute("aria-labelledby", "picker-title");
+
+        let picked = null;
+        dlg.querySelectorAll("button[value]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const v = btn.value;
+            if (v === "__new") {
+              const name = window.prompt("Name this list", "Untitled list");
+              if (name === null) return;
+              picked = makeLocalList(name);
+            } else if (v !== "__cancel") {
+              picked = v;
+            }
+            dlg.close();
+          });
+        });
+        dlg.addEventListener("close", () => { dlg.innerHTML = ""; resolve(picked); }, { once: true });
+        dlg.showModal();
+        const first = dlg.querySelector(".pickrow");
+        if (first) first.focus();
+      });
+    }
+
     async function addPermitsToUserList(rows, options = {}) {
       const skipModeRefresh = Boolean(options.skipModeRefresh);
+      // Every add asks which list (D7). options.listId skips the prompt.
+      let targetId = options.listId;
+      if (!targetId) {
+        targetId = await pickList(rows.length);
+        if (!targetId) return;
+      }
+      state.activeListId = targetId;
+      state.userPermitNumbers = [...((state.lists[targetId] || {}).permits || [])];
       for (const row of rows) {
         const pn = clean(row.permit_number);
         if (pn) state.userPermitMap.set(pn, row);
@@ -6236,5 +6859,7 @@
       <div id="permit-modal-body" class="permit-modal-body"></div>
     </div>
   </div>
+  <dialog id="list-picker" aria-modal="true"></dialog>
+  <dialog id="list-details" aria-modal="true"></dialog>
 </body>
 </html>

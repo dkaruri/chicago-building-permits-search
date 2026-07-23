@@ -2,6 +2,7 @@ import { handlePermits } from "./permits.js";
 import { handleProfiles, handleContactDetail } from "./profiles.js";
 import { handleStats } from "./stats.js";
 import { handleLists } from "./lists.js";
+import { handleTags } from "./tags.js";
 
 const ROUTES = [
   { pattern: /^\/api\/permits/, handler: handlePermits },
@@ -9,12 +10,13 @@ const ROUTES = [
   { pattern: /^\/api\/contact\//, handler: handleContactDetail },
   { pattern: /^\/api\/stats/, handler: handleStats },
   { pattern: /^\/api\/lists/, handler: handleLists },
+  { pattern: /^\/api\/tags/, handler: handleTags },
 ];
 
 function corsHeaders(env) {
   return {
     "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN || "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
 }
@@ -53,8 +55,12 @@ export default {
           "GET /api/profiles?category=general_contractor|open_tech",
           "GET /api/contact/:name",
           "GET /api/stats",
-          "POST /api/lists  (body: {permits, focal}) -> {id}",
-          "GET /api/lists/:id -> {permits, focal}",
+          "GET /api/lists?q=&tag=&cursor= -> {lists, cursor}",
+          "POST /api/lists  (body: {permits, focal, title, author, desc, tags}) -> {id}",
+          "GET /api/lists/:id -> {permits, focal, desc, custom, ticks, meta}",
+          "PUT /api/lists/:id  (body: any subset) -> {id, rev}",
+          "GET /api/tags -> {tags}",
+          "PUT /api/tags  (body: {name, slot})",
         ],
       },
       200,

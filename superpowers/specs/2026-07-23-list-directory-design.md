@@ -339,7 +339,7 @@ field so it actually gets filled. Thumbnails are buttons, named
 
 ### 10.1 Migration of `YnF7y4t`
 
-The live link currently returns `{permits:[100 ids], focal:{…, "5010 N Monticello"}}` and
+The live link currently returns `{permits:[99 ids], focal:{…, "5010 N Monticello"}}` and
 no metadata. Handling:
 
 - `GET /api/lists/:id` keeps reading v1 payloads; a missing `v` implies 1.
