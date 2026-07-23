@@ -2808,7 +2808,14 @@
       }
     }
 
-    body.modal-open { overflow: hidden; }
+    /* The page-load `pageIn` animation uses fill-mode `both`, so body keeps a
+       transform after it finishes — and a transformed ancestor becomes the
+       containing block for position:fixed children. That sized .permit-modal to
+       the whole document instead of the viewport, centering the card far below
+       the fold (mobile saved lists are long): backdrop visible, card off-screen.
+       Dropping the finished animation while the modal is open restores the
+       viewport as the containing block. */
+    body.modal-open { overflow: hidden; animation: none; }
     .permit-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
     .permit-modal[hidden] { display: none; }
     .permit-modal-backdrop { position: absolute; inset: 0; background: rgba(16,26,40,0.55); }

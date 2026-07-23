@@ -2698,7 +2698,13 @@
     .pm-contractors .cdoes .dk { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
     .pm-contractors .cmeta-line { font-size: 0.79rem; color: var(--muted); margin-top: 4px; }
 
-    body.modal-open { overflow: hidden; }
+    /* The page-load `pageIn` animation uses fill-mode `both`, so body keeps a
+       transform after it finishes — and a transformed ancestor becomes the
+       containing block for position:fixed children. That sized .permit-modal to
+       the whole document instead of the viewport, centering the card far below
+       the fold. Dropping the finished animation while the modal is open
+       restores the viewport as the containing block. */
+    body.modal-open { overflow: hidden; animation: none; }
     .permit-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
     .permit-modal[hidden] { display: none; }
     .permit-modal-backdrop { position: absolute; inset: 0; background: rgba(16,26,40,0.55); }
