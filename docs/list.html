@@ -3480,9 +3480,16 @@
       const list = activeList();
       if (!list) return;
       const name = list.name || "this list";
-      const warn = `Delete "${name}"? This removes the whole list from this browser.` +
-        (list.sharedId ? " Anyone you shared the link with keeps their copy." : "");
+      const warn = list.sharedId
+        ? `Delete "${name}"? This removes it from this browser and from the public directory. It stays recoverable for 30 days, then the site purges it.`
+        : `Delete "${name}"? This removes the whole list from this browser.`;
       if (!window.confirm(warn)) return;
+      if (list.sharedId) {
+        // Soft-delete the published copy so it leaves the site-wide directory.
+        try {
+          await fetch(`${API_BASE}/api/lists/${encodeURIComponent(list.sharedId)}`, { method: "DELETE" });
+        } catch { /* offline — the local copy is still removed below */ }
+      }
       delete state.lists[state.activeListId];
       const ids = Object.keys(state.lists);
       state.activeListId = ids[0] || "local_1";

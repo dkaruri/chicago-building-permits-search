@@ -63,6 +63,7 @@ export default {
           "POST /api/lists  (body: {permits, focal, title, author, desc, tags}) -> {id}",
           "GET /api/lists/:id -> {permits, focal, desc, custom, ticks, meta}",
           "PUT /api/lists/:id  (body: any subset) -> {id, rev}",
+          "DELETE /api/lists/:id -> soft-delete (30-day trash)",
           "GET /api/tags -> {tags}",
           "PUT /api/tags  (body: {name, slot})",
           "GET·POST /api/notes/:permit ; PUT·DELETE /api/notes/:permit/:id",

@@ -422,3 +422,39 @@ test("sanitizeCustom treats an explicit null coordinate as no location", () => {
   assert.equal(out[0].lat, null);
   assert.equal(out[0].lon, null);
 });
+
+test("DELETE soft-deletes: list gone from get and directory, trash key holds it", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env, post({ permits: ["100234"], title: "Doomed" }))).json();
+  const url = new URL(`https://w/api/lists/${id}`);
+  const del = await handleLists(url, env, new Request(url, { method: "DELETE" }));
+  assert.equal(del.status, 200);
+  assert.equal((await del.json()).purgesInDays, 30);
+  // live key gone
+  assert.equal(env.CACHE.map.has("list:" + id), false);
+  // GET the id -> 404
+  const got = await handleLists(url, env, get(id));
+  assert.equal(got.status, 404);
+  // directory no longer lists it
+  const dir = await handleLists(new URL("https://w/api/lists"), env, new Request("https://w/api/lists"));
+  assert.equal((await dir.json()).lists.length, 0);
+  // trash copy retained with a TTL and trashedAt
+  assert.ok(env.CACHE.map.has("trash:" + id), "trash copy kept");
+  assert.ok(env.CACHE.meta.get("trash:" + id).trashedAt > 0);
+});
+
+test("DELETE on an unknown id is 404", async () => {
+  const url = new URL("https://w/api/lists/ZzZz999");
+  const res = await handleLists(url, ENV(), new Request(url, { method: "DELETE" }));
+  assert.equal(res.status, 404);
+});
+
+test("the trash key carries a 30-day TTL", async () => {
+  const env = ENV();
+  let ttl;
+  const realPut = env.CACHE.put.bind(env.CACHE);
+  env.CACHE.put = async (k, v, opts) => { if (k.startsWith("trash:")) ttl = opts && opts.expirationTtl; return realPut(k, v, opts); };
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env, post({ permits: ["100234"], title: "T" }))).json();
+  await handleLists(new URL(`https://w/api/lists/${id}`), env, new Request(`https://w/api/lists/${id}`, { method: "DELETE" }));
+  assert.equal(ttl, 2592000);
+});
