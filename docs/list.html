@@ -3034,6 +3034,35 @@
     .tp-act button.del { color: var(--danger); }
     .tp-count { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .2rem; }
     .tp-empty { color: var(--muted); font-size: .85rem; }
+
+    #walkthrough {
+      border: 1px solid var(--line-strong); border-radius: 12px; padding: 1rem;
+      background: var(--panel); color: var(--ink); max-width: 520px; width: calc(100vw - 2rem);
+      max-height: calc(100vh - 3rem); overflow-y: auto; box-shadow: 0 12px 30px var(--shadow);
+    }
+    #walkthrough::backdrop { background: rgba(6, 14, 26, 0.55); }
+    #walkthrough h3 { margin: 0; font-size: 1.05rem; }
+    #walkthrough .dlg-sub { margin: .2rem 0 .9rem; font-size: .84rem; color: var(--muted); }
+    #walkthrough .dlg-field { margin-bottom: .8rem; }
+    #walkthrough .dlg-field label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin-bottom: .3rem; }
+    #walkthrough .dlg-field input, #walkthrough .dlg-field select {
+      font: inherit; font-size: 1rem; width: 100%; box-sizing: border-box; min-height: 44px;
+      background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem;
+    }
+    #walkthrough .dlg-row { display: flex; gap: .6rem; flex-wrap: wrap; }
+    #walkthrough .dlg-row .dlg-field { flex: 1 1 140px; }
+    #walkthrough .dlg-error { color: var(--danger); font-size: .85rem; font-weight: 600; margin: .3rem 0 .6rem; }
+    #walkthrough .dlg-foot { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .5rem; }
+    .wk-fieldset { border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; margin: 0 0 .7rem; }
+    .wk-fieldset legend { font-size: .82rem; font-weight: 700; padding: 0 .3rem; }
+    .wk-choices { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .3rem; }
+    .wk-choice { display: inline-flex; align-items: center; gap: .4rem; cursor: pointer; border: 1px solid var(--line); border-radius: 8px; padding: .4rem .7rem; min-height: 44px; font-size: .86rem; background: var(--surface-subtle); }
+    .wk-choice:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); font-weight: 600; }
+    .wk-branch { border-left: 3px solid var(--primary); background: var(--surface-subtle); border-radius: 0 8px 8px 0; padding: .7rem .8rem; margin-bottom: .7rem; }
+    .wk-branchlab { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--primary); margin: 0 0 .5rem; }
+    .pm-reported { margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .5rem; }
+    .rep-sub { display: inline-flex; align-items: center; gap: .35rem; font-size: .85rem; }
+    .rep-badge { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--warning); border: 1px dashed var(--warning); border-radius: 3px; padding: 0 .2rem; }
   </style>
 </head>
 <body class="list-page">
@@ -7078,6 +7107,141 @@
       } catch { pmAnnounce("Could not update right now."); }
     }
 
+    // ---- Site walkthrough (Phase 3) ----
+    function walkFieldsToPayload(f) {
+      const out = { kind: "walk", job: f.job === "new" ? "new" : "remodel", onsite: ["none", "gc", "sub"].includes(f.onsite) ? f.onsite : "none" };
+      if (out.onsite !== "none") {
+        const jobs = parseInt(f.jobs, 10);
+        out.party = { name: (f.name || "").trim(), phone: (f.phone || "").trim(), covers: (f.covers || "").trim(),
+          jobs: Number.isInteger(jobs) ? jobs : null, estimate: f.estimate || "unknown" };
+      }
+      if (out.onsite === "sub" && (f.gcName || "").trim()) {
+        out.gc = { name: f.gcName.trim(), phone: (f.gcPhone || "").trim() };
+      }
+      return out;
+    }
+
+    function reportedSubsFor(permit) {
+      const t = state.threads && state.threads[permit];
+      if (!t || !t.posts) return [];
+      const existing = String((state.userPermitMap.get(clean(permit)) || {}).open_subs || "").toUpperCase();
+      const seen = new Set();
+      const out = [];
+      t.posts.forEach(post => {
+        if (post.kind !== "walk" || post.onsite !== "sub" || !post.party || !post.party.name) return;
+        const name = post.party.name.trim();
+        const up = name.toUpperCase();
+        if (!up || seen.has(up) || existing.includes(up)) return;
+        seen.add(up);
+        out.push(name);
+      });
+      return out;
+    }
+
+    function fillReportedSubs(permit) {
+      const host = document.getElementById("pm-reported");
+      if (!host) return;
+      const reported = reportedSubsFor(permit);
+      host.innerHTML = reported.length
+        ? reported.map(n => `<span class="rep-sub">${esc(n)} <span class="rep-badge">reported on site</span></span>`).join("")
+        : "";
+    }
+
+    function openWalkthrough(encodedPermit, editId) {
+      const permit = decodeURIComponent(encodedPermit);
+      const dlg = document.getElementById("walkthrough");
+      const t = state.threads && state.threads[permit];
+      const editing = editId && t ? t.posts.find(p => p.id === editId) : null;
+      const e = editing || {};
+      const party = e.party || {};
+      const gc = e.gc || {};
+      const sel = (a, b) => a === b ? " checked" : "";
+      const opt = (v, cur, label) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`;
+      dlg.innerHTML = `<h3 id="wk-title">Site walkthrough</h3>
+        <p class="dlg-sub">${esc(permit)}</p>
+        <fieldset class="wk-fieldset"><legend>What kind of job is it?</legend>
+          <div class="wk-choices">
+            <label class="wk-choice"><input type="radio" name="wk-job" value="new"${sel("new", e.job)}> New build</label>
+            <label class="wk-choice"><input type="radio" name="wk-job" value="remodel"${sel("remodel", e.job || "remodel")}> Remodel</label>
+          </div></fieldset>
+        <fieldset class="wk-fieldset"><legend>Who was on site?</legend>
+          <div class="wk-choices">
+            <label class="wk-choice"><input type="radio" name="wk-onsite" value="none"${sel("none", e.onsite || "none")}> Nobody</label>
+            <label class="wk-choice"><input type="radio" name="wk-onsite" value="gc"${sel("gc", e.onsite)}> General contractor</label>
+            <label class="wk-choice"><input type="radio" name="wk-onsite" value="sub"${sel("sub", e.onsite)}> Open sub</label>
+          </div></fieldset>
+        <div id="wk-contact" class="wk-branch" hidden>
+          <div class="dlg-field"><label for="wk-name" id="wk-name-label">Company</label><input id="wk-name" maxlength="120" value="${esc(party.name || "")}"></div>
+          <div class="dlg-field"><label for="wk-phone">Contact number</label><input id="wk-phone" type="tel" inputmode="tel" maxlength="24" value="${esc(party.phone || "")}"></div>
+          <div class="dlg-field"><label for="wk-covers">What work do they cover?</label><input id="wk-covers" maxlength="120" value="${esc(party.covers || "")}"></div>
+          <div class="dlg-row">
+            <div class="dlg-field"><label for="wk-jobs">Jobs at a time</label><input id="wk-jobs" type="number" inputmode="numeric" min="1" value="${party.jobs != null ? party.jobs : ""}"></div>
+            <div class="dlg-field"><label for="wk-est">Estimate turnaround</label><select id="wk-est">
+              ${opt("same-day", party.estimate, "Same day")}${opt("1-3d", party.estimate, "1\u20133 days")}${opt("week", party.estimate, "About a week")}${opt("longer", party.estimate, "Longer")}${opt("unknown", party.estimate || "unknown", "Didn't say")}
+            </select></div>
+          </div>
+        </div>
+        <div id="wk-gc" class="wk-branch" hidden>
+          <p class="wk-branchlab">Their general contractor</p>
+          <div class="dlg-field"><label for="wk-gcname">GC company</label><input id="wk-gcname" maxlength="120" value="${esc(gc.name || "")}"></div>
+          <div class="dlg-field"><label for="wk-gcphone">GC contact number</label><input id="wk-gcphone" type="tel" inputmode="tel" maxlength="24" value="${esc(gc.phone || "")}"></div>
+        </div>
+        <p class="dlg-error" id="wk-msg" role="alert" hidden></p>
+        <div class="dlg-foot">
+          <button type="button" id="wk-cancel">Cancel</button>
+          <button type="button" class="primary" id="wk-save">${editing ? "Save walkthrough" : "Post walkthrough"}</button>
+        </div>`;
+      dlg.setAttribute("aria-labelledby", "wk-title");
+
+      const contact = dlg.querySelector("#wk-contact");
+      const gcBlock = dlg.querySelector("#wk-gc");
+      const nameLabel = dlg.querySelector("#wk-name-label");
+      const sync = focusReveal => {
+        const onsite = dlg.querySelector('input[name="wk-onsite"]:checked').value;
+        contact.hidden = onsite === "none";
+        gcBlock.hidden = onsite !== "sub";
+        nameLabel.textContent = onsite === "sub" ? "Sub company" : "GC company";
+        if (focusReveal && !contact.hidden) { contact.scrollIntoView({ block: "nearest" }); dlg.querySelector("#wk-name").focus(); }
+      };
+      dlg.querySelectorAll('input[name="wk-onsite"]').forEach(r => r.addEventListener("change", () => sync(true)));
+      sync(false);
+
+      dlg.querySelector("#wk-cancel").addEventListener("click", () => dlg.close());
+      dlg.querySelector("#wk-save").addEventListener("click", async () => {
+        const val = id => (dlg.querySelector(id) || {}).value;
+        const payload = walkFieldsToPayload({
+          job: dlg.querySelector('input[name="wk-job"]:checked').value,
+          onsite: dlg.querySelector('input[name="wk-onsite"]:checked').value,
+          name: val("#wk-name"), phone: val("#wk-phone"), covers: val("#wk-covers"), jobs: val("#wk-jobs"), estimate: val("#wk-est"),
+          gcName: val("#wk-gcname"), gcPhone: val("#wk-gcphone"),
+        });
+        if (payload.onsite !== "none" && !(payload.party.name || "").trim()) {
+          const msg = dlg.querySelector("#wk-msg"); msg.hidden = false; msg.textContent = "Name the company on site, or choose Nobody."; return;
+        }
+        if (!(localStorage.getItem("chi_permit_author") || "").trim()) {
+          const nm = window.prompt("Post publicly as (leave blank for anonymous):", "");
+          if (nm === null) return;
+          try { localStorage.setItem("chi_permit_author", nm.trim()); } catch { /* storage blocked */ }
+        }
+        payload.author = (localStorage.getItem("chi_permit_author") || "").trim();
+        const btn = dlg.querySelector("#wk-save"); btn.disabled = true; btn.textContent = "Saving\u2026";
+        try {
+          const url = editing
+            ? `${API_BASE}/api/notes/${encodeURIComponent(permit)}/${encodeURIComponent(editId)}`
+            : `${API_BASE}/api/notes/${encodeURIComponent(permit)}`;
+          const res = await fetch(url, { method: editing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+          if (!res.ok) throw new Error("save failed");
+          dlg.close();
+          await fetchThread(permit);
+          pmAnnounce(editing ? "Walkthrough updated." : "Walkthrough posted.");
+        } catch {
+          const msg = dlg.querySelector("#wk-msg"); msg.hidden = false; msg.textContent = "Could not save \u2014 this needs the live site.";
+          btn.disabled = false; btn.textContent = editing ? "Save walkthrough" : "Post walkthrough";
+        }
+      });
+      dlg.showModal();
+    }
+
     function pmFacts(pairs) {
       return `<dl class="pm-facts">${pairs.map(([k, v, extra]) =>
         `<dt>${esc(k)}</dt><dd>${v ? esc(v) : "—"}${extra || ""}</dd>`).join("")}</dl>`;
@@ -7123,7 +7287,7 @@
             ["Total fee", money(row.total_fee)],
           ])}</section>`,
         () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div></section>`,
-        () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div></section>`,
+        () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div><div class="pm-reported" id="pm-reported"></div></section>`,
         () => `<section class="pm-block"><h3>Notes</h3>
             <div class="pm-note-draft">
               <label class="pm-draft-label" for="pm-note-draft">My note <span class="pm-lock">\ud83d\udd12 private to this browser</span></label>
@@ -7232,5 +7396,6 @@
   <dialog id="list-picker" aria-modal="true"></dialog>
   <dialog id="list-details" aria-modal="true"></dialog>
   <dialog id="add-address" aria-modal="true"></dialog>
+  <dialog id="walkthrough" aria-modal="true"></dialog>
 </body>
 </html>
