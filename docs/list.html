@@ -3055,9 +3055,19 @@
     #walkthrough .dlg-foot { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .5rem; }
     .wk-fieldset { border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; margin: 0 0 .7rem; }
     .wk-fieldset legend { font-size: .82rem; font-weight: 700; padding: 0 .3rem; }
-    .wk-choices { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .3rem; }
-    .wk-choice { display: inline-flex; align-items: center; gap: .4rem; cursor: pointer; border: 1px solid var(--line); border-radius: 8px; padding: .4rem .7rem; min-height: 44px; font-size: .86rem; background: var(--surface-subtle); }
-    .wk-choice:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); font-weight: 600; }
+    .wk-choices { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .4rem; }
+    .wk-choice {
+      display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+      flex: 1 1 8rem; min-width: 8rem; box-sizing: border-box;
+      cursor: pointer; border: 1px solid var(--line); border-radius: 10px;
+      padding: .5rem .8rem; min-height: 46px; font-size: .9rem; line-height: 1.2;
+      text-align: center; background: var(--surface-subtle); user-select: none;
+      transition: border-color .16s ease, background-color .16s ease;
+    }
+    .wk-choice input { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--primary); }
+    .wk-choice:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); font-weight: 700; box-shadow: inset 0 0 0 1px var(--primary); }
+    .wk-choice:focus-within { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+    @media (max-width: 640px) { .wk-choice { flex: 1 1 100%; min-width: 0; justify-content: flex-start; } }
     .wk-branch { border-left: 3px solid var(--primary); background: var(--surface-subtle); border-radius: 0 8px 8px 0; padding: .7rem .8rem; margin-bottom: .7rem; }
     .wk-branchlab { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--primary); margin: 0 0 .5rem; }
     .pm-reported { margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .5rem; }
@@ -3083,6 +3093,42 @@
     .tp-gallery { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .45rem; }
     .tp-shot { display: block; border-radius: 6px; overflow: hidden; border: 1px solid var(--line-strong); }
     .tp-shot img { display: block; width: 96px; height: 72px; object-fit: cover; }
+
+    /* Dialogs animate open like the permit detail overlay (permitRise). */
+    @media (prefers-reduced-motion: no-preference) {
+      dialog[open] { animation: dialogRise 0.22s ease-out; }
+      dialog[open]::backdrop { animation: dialogFade 0.22s ease-out; }
+      @keyframes dialogRise { from { opacity: 0; transform: translateY(14px); } }
+      @keyframes dialogFade { from { opacity: 0; } }
+    }
+
+    /* Directory heading: New list sits under the title, compact. */
+    .dir-head { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
+    .dir-new { min-height: 34px; padding: .3rem .75rem; font-size: .82rem; font-weight: 700; border-radius: 8px; }
+
+    /* Focal Set/Clear: compact controls beside the input, not full-size buttons. */
+    .focal-controls input { flex: 1 1 220px; }
+    .focal-controls button { flex: 0 0 auto; min-height: 34px; padding: .3rem .8rem; font-size: .85rem; }
+
+    @media (max-width: 640px) {
+      /* Keep touch targets full-size on mobile even where desktop is compact. */
+      .dir-new, .focal-controls button { min-height: 44px; }
+
+      /* Visited checkbox: move it directly under the permit + type, checkbox on
+         the left with an inline label, instead of a lone labelled row on top. */
+      body.list-page .saved-permits-table tr { display: flex; flex-direction: column; }
+      body.list-page .saved-permits-table td { order: 3; }
+      body.list-page .saved-permits-table td[data-label="Permit"] { order: 1; }
+      body.list-page .saved-permits-table td.tick-cell { order: 2; }
+      body.list-page .saved-permits-table td.tick-cell {
+        display: flex; align-items: center; gap: 8px; padding: 6px 0;
+      }
+      body.list-page .saved-permits-table td.tick-cell::before {
+        order: 2; margin: 0; align-self: center;
+        text-transform: none; letter-spacing: 0; font-weight: 600;
+        font-size: 0.86rem; color: var(--ink);
+      }
+    }
   </style>
 </head>
 <body class="list-page">
@@ -3108,9 +3154,9 @@
     <section id="status" class="status"></section>
 
     <section id="directory-view" class="panel">
-      <div class="panel-head">
+      <div class="dir-head">
         <h2 style="margin:0">Permit lists</h2>
-        <button type="button" class="primary" onclick="createListPrompt()">+ New list</button>
+        <button type="button" class="primary dir-new" onclick="createListPrompt()">+ New list</button>
       </div>
       <div class="dir-toolbar">
         <div class="grow">
@@ -3144,13 +3190,6 @@
               <span class="material-symbols-outlined" aria-hidden="true">csv</span>Export CSV
             </button>
             <button data-list-action onclick="openAddAddress()">+ Add address</button>
-            <details class="action-menu" data-list-menu>
-              <summary aria-haspopup="true">More</summary>
-              <div class="action-menu-panel" role="menu" aria-label="More list tools">
-                <button role="menuitem" data-list-action onclick="openGoogleMapsRoute()">Open in Google Maps</button>
-                <button role="menuitem" data-list-action onclick="showGoogleRouteChunks()">Google route chunks</button>
-              </div>
-            </details>
           </div>
           <div class="toolbar-manage">
             <button id="user-list-toggle" aria-expanded="true" onclick="toggleUserList()">Hide list</button>
