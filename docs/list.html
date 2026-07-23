@@ -3310,6 +3310,32 @@
       return { mine, published: remoteRows.filter(row => !mineIds.has(row.id)) };
     }
 
+    // A just-deleted published list lingers in GET /api/lists until KV's list()
+    // index catches up (eventual consistency, up to ~60s). Track deleted ids
+    // locally and filter them out so deletion is immediate; persist briefly so a
+    // reload inside the lag window does not flash the list back.
+    const deletedIdsKey = "chi_permit_deleted";
+    const DELETED_TTL_MS = 300000; // 5 minutes — covers the KV catch-up window
+
+    function loadDeletedIds() {
+      let map = {};
+      try { map = JSON.parse(localStorage.getItem(deletedIdsKey) || "{}") || {}; } catch { map = {}; }
+      const now = Date.now();
+      let changed = false;
+      for (const id of Object.keys(map)) {
+        if (!(Number(map[id]) > now - DELETED_TTL_MS)) { delete map[id]; changed = true; }
+      }
+      if (changed) { try { localStorage.setItem(deletedIdsKey, JSON.stringify(map)); } catch { /* blocked */ } }
+      return map;
+    }
+
+    function markDeletedId(id) {
+      if (!id) return;
+      const map = loadDeletedIds();
+      map[id] = Date.now();
+      try { localStorage.setItem(deletedIdsKey, JSON.stringify(map)); } catch { /* blocked */ }
+    }
+
     async function fetchDirectory(append = false) {
       state.directory.loading = true;
       renderDirectory();
@@ -3322,7 +3348,8 @@
         if (!res.ok) throw new Error("directory unavailable");
         const data = await res.json();
         // Never trust the shape: a malformed response must not blank the page.
-        const rows = Array.isArray(data && data.lists) ? data.lists : [];
+        const hidden = loadDeletedIds();
+        const rows = (Array.isArray(data && data.lists) ? data.lists : []).filter(r => !hidden[r && r.id]);
         state.directory.rows = append ? [...state.directory.rows, ...rows] : rows;
         state.directory.cursor = (data && typeof data.cursor === "string") ? data.cursor : null;
         state.directory.error = "";
@@ -3490,6 +3517,7 @@
       if (!window.confirm(warn)) return;
       if (list.sharedId) {
         // Soft-delete the published copy so it leaves the site-wide directory.
+        markDeletedId(list.sharedId);
         try {
           await fetch(`${API_BASE}/api/lists/${encodeURIComponent(list.sharedId)}`, { method: "DELETE" });
         } catch { /* offline — the local copy is still removed below */ }
