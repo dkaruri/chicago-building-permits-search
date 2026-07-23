@@ -2985,6 +2985,34 @@
       border-radius: 999px; padding: .05rem .45rem; font-variant-numeric: tabular-nums;
     }
     .notecount.zero { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+    .tick-cell { white-space: nowrap; }
+    .tick { width: 22px; height: 22px; accent-color: var(--accent); cursor: pointer; margin: .5rem; }
+    /* State is dimming + strike-through as well as the box, so it never rests
+       on colour alone. */
+    tbody tr.is-done td:not(.tick-cell) { opacity: .62; }
+    tbody tr.is-done td[data-label="Address"] strong,
+    tbody tr.is-done td[data-label="Address"] .address-open { text-decoration: line-through; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; overflow: hidden;
+      clip: rect(0 0 0 0); white-space: nowrap;
+    }
+
+    #add-address {
+      border: 1px solid var(--line-strong); border-radius: 12px; padding: 1rem;
+      background: var(--panel); color: var(--ink); max-width: 480px; width: calc(100vw - 2rem);
+      max-height: calc(100vh - 3rem); overflow-y: auto; box-shadow: 0 12px 30px var(--shadow);
+    }
+    #add-address::backdrop { background: rgba(6, 14, 26, 0.55); }
+    #add-address h3 { margin: 0; font-size: 1.05rem; }
+    .dlg-row { display: flex; gap: .6rem; flex-wrap: wrap; }
+    .dlg-row .dlg-field { flex: 1 1 140px; }
+    .added {
+      display: inline-block; font-size: .68rem; font-weight: 700; letter-spacing: .04em;
+      color: var(--t6); border: 1px dashed var(--t6); border-radius: 3px;
+      padding: 0 .25rem; margin-left: .35rem; white-space: nowrap;
+    }
+    .added.warn { color: var(--warning); border-color: var(--warning); }
   </style>
 </head>
 <body class="list-page">
@@ -3045,6 +3073,7 @@
             <button data-list-action onclick="downloadUserListCsv()">
               <span class="material-symbols-outlined" aria-hidden="true">csv</span>Export CSV
             </button>
+            <button data-list-action onclick="openAddAddress()">+ Add address</button>
             <details class="action-menu" data-list-menu>
               <summary aria-haspopup="true">More</summary>
               <div class="action-menu-panel" role="menu" aria-label="More list tools">
@@ -3338,6 +3367,7 @@
           permits,
           focal: data.focal || null,
           sharedId: id,
+          ticks: data.ticks || {},
           desc: (data.meta && data.meta.blurb) || "",
           author: (data.meta && data.meta.author) || "",
           tags: (data.meta && data.meta.tags) || [],
@@ -3541,6 +3571,7 @@
       let localId = Object.keys(state.lists).find(key => state.lists[key].sharedId === shareId);
       if (localId) {
         state.lists[localId].permits = permits;
+        state.lists[localId].ticks = data.ticks || {};
       } else {
         localId = `local_${Date.now().toString(36)}`;
         state.lists[localId] = {
@@ -3548,6 +3579,7 @@
           permits,
           focal: data.focal || null,
           sharedId: shareId,
+          ticks: data.ticks || {},
         };
       }
       state.activeListId = localId;
@@ -4943,7 +4975,9 @@
     }
 
     function userListRows() {
-      return state.userPermitNumbers.map(number => state.userPermitMap.get(number)).filter(Boolean);
+      const permits = state.userPermitNumbers.map(number => state.userPermitMap.get(number)).filter(Boolean);
+      const list = activeList();
+      return mergeCustomStops(permits, list && list.custom);
     }
 
     // ---- Focal point (static route start address) ----
@@ -5252,7 +5286,7 @@
         }
         await resolveGeoForRows(rows);
         const headers = [
-          "order", "permit_number", "status", "issued", "address", "ward", "zone", "tif_district", "permit_type",
+          "order", "source", "permit_number", "status", "issued", "address", "ward", "zone", "tif_district", "permit_type",
           "work_type", "reported_cost", "processing_time", "latitude", "longitude",
           "general_contractors", "open_subs", "permit_note", "list_note", "work_description"
         ];
@@ -5261,6 +5295,7 @@
         let ordinal = 0;
         const body = exportRows.map(row => [
           row.focal ? "Start" : (ordinal += 1),
+          row.focal ? "start" : (row.is_custom ? "manual" : "permit"),
           row.permit_number,
           row.permit_status,
           row.issue_date,
@@ -5351,7 +5386,7 @@
           const totalDistance = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.distance || 0), 0);
           const totalDuration = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.duration || 0), 0);
           const skipped = rows.length - routablePermits.length;
-          state.userRouteSummary = `Current route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} saved permits missing coordinates)` : ""}.`;
+          state.userRouteSummary = `Current route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} stop${skipped === 1 ? "" : "s"} without a location left out)` : ""}.`;
           announceListAction("Driving distances calculated.");
           await renderUserList();
         } catch (error) {
@@ -5459,9 +5494,12 @@
           // can block the thread for ~1s on a full 100-stop list).
           await new Promise(resolve => setTimeout(resolve, 0));
           const ordered = greedyRouteOrder(routable, matrix);
-          const orderedPermits = ordered.filter(row => !row.focal);
-          const missing = rows.filter(row => !hasCoordinates(row)).map(row => clean(row.permit_number));
-          state.userPermitNumbers = [...orderedPermits.map(row => clean(row.permit_number)), ...missing];
+          // Custom stops are NOT permit numbers — excluded here or the rebuild
+          // would push empty strings into state.userPermitNumbers. Their order
+          // is held by their own pos field instead.
+          const orderedPermits = ordered.filter(row => !row.focal && !row.is_custom);
+          const missing = rows.filter(row => !hasCoordinates(row) && !row.is_custom).map(row => clean(row.permit_number));
+          state.userPermitNumbers = [...orderedPermits.map(row => clean(row.permit_number)), ...missing].filter(Boolean);
           saveUserListCookie();
           setRouteProgress(2, 3, "measuring route legs…");
           state.userRouteLegs = await fetchRouteLegs(ordered);
@@ -5469,7 +5507,7 @@
           const totalDuration = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.duration || 0), 0);
           const skipped = rows.length - routablePermits.length;
           clearRouteProgress();
-          state.userRouteSummary = `Sorted route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} saved permits missing coordinates)` : ""}.`;
+          state.userRouteSummary = `Sorted route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} stop${skipped === 1 ? "" : "s"} without a location left out)` : ""}.`;
           announceListAction("List sorted by estimated driving time.");
           await renderUserList();
         } catch (error) {
@@ -5686,6 +5724,197 @@
 
       dlg.showModal();
       dlg.querySelector("#ld-title").focus();
+    }
+
+    // ---- Hand-typed custom stops ----
+    function customUse(key) {
+      const map = {
+        residential: { key: "residential", label: "Residential", glyph: "\u25E7" },
+        commercial: { key: "commercial", label: "Commercial", glyph: "\u25A4" },
+        mixed: { key: "mixed", label: "Mixed use", glyph: "\u25EB" },
+      };
+      return map[key] || { key: "unclear", label: "Unclear", glyph: "\u2014" };
+    }
+
+    function customToRow(c) {
+      // Number(null) is 0, which is finite — so a null coordinate would read as
+      // 0,0 in the Gulf of Guinea rather than "no location". Check for null first.
+      const hasGeo = c.lat != null && c.lon != null
+        && Number.isFinite(Number(c.lat)) && Number.isFinite(Number(c.lon));
+      return {
+        // Never fabricate a permit number. An empty string is honest; a
+        // placeholder could be mistaken for real city data.
+        permit_number: "",
+        custom_id: c.id,
+        is_custom: true,
+        no_geo: !hasGeo,
+        address: c.addr,
+        work_description: c.work || "",
+        work_type: c.work || "",
+        permit_type: "",
+        permit_status: "",
+        issue_date: "",
+        reported_cost: "",
+        ward: "",
+        general_contractors: c.gc || "",
+        open_subs: "",
+        latitude: hasGeo ? Number(c.lat) : null,
+        longitude: hasGeo ? Number(c.lon) : null,
+        _use: c.use || "unclear",
+      };
+    }
+
+    function mergeCustomStops(permitRows, custom) {
+      const out = [...permitRows];
+      const sorted = [...(custom || [])].sort((a, b) => (Number(a.pos) || 0) - (Number(b.pos) || 0));
+      sorted.forEach(c => {
+        const at = Math.max(0, Math.min(out.length, (Number(c.pos) || out.length + 1) - 1));
+        out.splice(at, 0, customToRow(c));
+      });
+      return out;
+    }
+
+    function openAddAddress() {
+      const list = activeList();
+      if (!list) return;
+      const dlg = $("add-address");
+      const total = (list.permits || []).length + ((list.custom || []).length) + 1;
+      dlg.innerHTML = `<h3 id="add-addr-title">Add address</h3>
+        <p class="dlg-sub">A stop the city permit data does not have.</p>
+        <div class="dlg-field"><label for="ca-addr">Address</label>
+          <input id="ca-addr" placeholder="1234 W Example Ave" maxlength="120"></div>
+        <div class="dlg-row">
+          <div class="dlg-field"><label for="ca-pos">Position in list</label>
+            <input id="ca-pos" type="number" inputmode="numeric" min="1" max="${total}" value="${total}"></div>
+          <div class="dlg-field"><label for="ca-use">Use</label>
+            <select id="ca-use">
+              <option value="residential">Residential</option>
+              <option value="commercial">Commercial</option>
+              <option value="mixed">Mixed use</option>
+              <option value="unclear" selected>Unclear</option>
+            </select></div>
+        </div>
+        <div class="dlg-field"><label for="ca-work">Work description</label>
+          <input id="ca-work" placeholder="What is happening at this address" maxlength="200"></div>
+        <div class="dlg-field"><label for="ca-gc">General contractor <span style="font-weight:400">(optional)</span></label>
+          <input id="ca-gc" placeholder="Company name if you saw a sign or truck" maxlength="120"></div>
+        <p class="dlg-error" id="ca-msg" role="alert" hidden></p>
+        <div class="dlg-foot">
+          <button type="button" id="ca-cancel">Cancel</button>
+          <button type="button" class="primary" id="ca-save">Add to list</button>
+        </div>`;
+      dlg.setAttribute("aria-labelledby", "add-addr-title");
+      dlg.querySelector("#ca-cancel").addEventListener("click", () => dlg.close());
+      dlg.querySelector("#ca-save").addEventListener("click", () => addCustomStop(dlg));
+      dlg.showModal();
+      dlg.querySelector("#ca-addr").focus();
+    }
+
+    async function addCustomStop(dlg) {
+      const btn = dlg.querySelector("#ca-save");
+      const msg = dlg.querySelector("#ca-msg");
+      const addr = dlg.querySelector("#ca-addr").value.trim();
+      if (!addr) {
+        msg.hidden = false;
+        msg.textContent = "Type an address first.";
+        dlg.querySelector("#ca-addr").focus();
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = "Adding\u2026";
+      // Geocode so the stop can join the route. A failure is not fatal — the
+      // stop is still added, flagged, and left out of drive-time sorting.
+      let coords = null;
+      try {
+        coords = await geocodeMapSearch(addr);
+      } catch {
+        coords = null;
+      }
+      const list = activeList();
+      list.custom = list.custom || [];
+      const stop = {
+        id: `c_${Date.now().toString(36)}`,
+        pos: Math.max(1, Number(dlg.querySelector("#ca-pos").value) || 1),
+        addr,
+        lat: coords ? Number(coords.lat) : null,
+        lon: coords ? Number(coords.lon) : null,
+        use: dlg.querySelector("#ca-use").value,
+        work: dlg.querySelector("#ca-work").value.trim(),
+        gc: dlg.querySelector("#ca-gc").value.trim(),
+      };
+      list.custom.push(stop);
+      saveUserLists();
+      dlg.close();
+      await renderUserList();
+      announceListAction(coords
+        ? `Added ${addr} at position ${stop.pos}.`
+        : `Added ${addr}, but it could not be placed on the map \u2014 it will sit out of drive-time sorting.`);
+    }
+
+    function removeCustomStop(encodedId) {
+      const id = decodeURIComponent(encodedId);
+      const list = activeList();
+      if (!list || !list.custom) return;
+      list.custom = list.custom.filter(c => c.id !== id);
+      saveUserLists();
+      renderUserList();
+    }
+
+    // ---- Visited checkbox (shared on the list) ----
+    // Ticking rapidly down a list would otherwise fire one PUT per tap. Queue
+    // them, keep only the last state per key, and flush once.
+    function coalesceTicks(queue) {
+      const seen = new Map();
+      for (const [key, on] of queue) seen.set(key, on);
+      return [...seen.entries()].map(([key, on]) => [key, on]);
+    }
+
+    let tickQueue = [];
+    let tickTimer = null;
+
+    function queueTickSync() {
+      const list = activeList();
+      if (!list || !list.sharedId) { tickQueue = []; return; }
+      clearTimeout(tickTimer);
+      tickTimer = setTimeout(async () => {
+        const batch = coalesceTicks(tickQueue);
+        tickQueue = [];
+        for (const [key, on] of batch) {
+          try {
+            await fetch(`${API_BASE}/api/lists/${encodeURIComponent(list.sharedId)}/ticks`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ key, on }),
+            });
+          } catch {
+            // Offline or Worker unreachable. The tick is already stored
+            // locally and resyncs next time this list is opened.
+          }
+        }
+      }, 800);
+    }
+
+    function toggleTick(encodedKey, on) {
+      const key = decodeURIComponent(encodedKey);
+      const list = activeList();
+      if (!list) return;
+      list.ticks = list.ticks || {};
+      if (on) list.ticks[key] = 1; else delete list.ticks[key];
+      saveUserLists();
+      const row = document.querySelector(`tr[data-tick-row="${CSS.escape(key)}"]`);
+      if (row) row.classList.toggle("is-done", !!on);
+      tickQueue.push([key, !!on]);
+      queueTickSync();
+    }
+
+    function tickKeyFor(row) {
+      return row && row.is_custom ? row.custom_id : clean(row && row.permit_number);
+    }
+
+    function isTicked(row) {
+      const list = activeList();
+      const key = tickKeyFor(row);
+      return !!(list && list.ticks && key && list.ticks[key]);
     }
 
     // ---- Add-to-list picker ----
@@ -6017,8 +6246,9 @@
       await ensurePermitMap();
       $("user-list-note").value = state.userListNote;
       renderRouteSummary();
-      const rows = state.userPermitNumbers.map(number => state.userPermitMap.get(number)).filter(Boolean);
-      $("user-list-count").textContent = rows.length ? `${fmt(rows.length)} saved` : "";
+      const rows = userListRows();
+      const permitCount = rows.filter(row => !row.is_custom).length;
+      $("user-list-count").textContent = permitCount ? `${fmt(permitCount)} saved` : "";
       if (!rows.length) {
         $("user-list").innerHTML = `<div class="empty">No permits added yet.</div>`;
         return;
@@ -6438,15 +6668,18 @@
       const removeHead = options.remove ? "<th class=\"select-cell\" aria-label=\"Remove permits\"></th>" : "";
       const notesHead = options.notes ? "<th>Notes</th>" : "";
       const useHead = options.move ? "<th>Use</th>" : "";
+      const tickHead = options.move ? `<th class="tick-cell"><span aria-hidden="true">\u2713</span><span class="sr-only">Visited</span></th>` : "";
       const geoHead = options.geo ? "<th>Zone</th><th>TIF district</th>" : "";
       const moveHead = options.move ? "<th class=\"move-cell\" aria-label=\"Move permits\"></th>" : "";
       const head = (label, key) => options.sortable === false ? esc(label) : sortHeader(label, key);
       const tableClass = options.select ? "results-table permits-table" : options.notes ? "saved-permits-table" : "";
       return `
         <table class="${tableClass}">
-          <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th>${options.move ? "" : `<th>${head("Ward", "ward")}</th>`}${useHead}<th>${head("Cost", "cost")}</th>${geoHead}${notesHead}${moveHead}</tr></thead>
+          <thead><tr>${tickHead}${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th>${options.move ? "" : `<th>${head("Ward", "ward")}</th>`}${useHead}<th>${head("Cost", "cost")}</th>${geoHead}${notesHead}${moveHead}</tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr
+              ${options.move ? `data-tick-row="${esc(tickKeyFor(row))}"` : ""}
+              class="${options.move && isTicked(row) ? "is-done" : ""}"
               draggable="${options.select || options.reorder ? "true" : "false"}"
               ondragstart="permitDragStart(event, '${enc(row.permit_number)}')"
               ondragend="permitDragEnd()"
@@ -6455,11 +6688,12 @@
             >
               ${options.remove ? `<td class="select-cell" data-label="Remove"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell" data-label="Select" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
+              ${options.move ? (() => { const tk = tickKeyFor(row); return `<td class="tick-cell" data-label="Visited"><input type="checkbox" class="tick" ${isTicked(row) ? "checked" : ""} aria-label="Mark ${esc(row.address || row.permit_number || "this stop")} visited" onclick="event.stopPropagation()" onchange="toggleTick('${enc(tk)}', this.checked)"></td>`; })() : ""}
               <td data-label="Permit">${options.move ? `<span class="list-ordinal" aria-label="Stop ${i + 1}">${i + 1}</span>` : ""}<strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
               <td data-label="Status">${esc(row.permit_status)}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
-              <td data-label="Address">${options.move && clean(row.address) ? (() => { const u = mapsUrls(row.address); return `<span class="maps-picker"><button type="button" class="address-open" aria-haspopup="true" aria-expanded="false" aria-controls="maps-menu-${i}" onclick="event.stopPropagation(); toggleMapsMenu(this)">${esc(row.address)}<span class="chev" aria-hidden="true">▾</span></button><span class="maps-menu" id="maps-menu-${i}" role="menu"><span class="maps-menu-label">Open in</span><a role="menuitem" href="${esc(u.apple)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Apple Maps</a><a role="menuitem" href="${esc(u.google)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Google Maps</a><a role="menuitem" href="${esc(u.waze)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Waze</a></span></span>`; })() : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
-              ${options.move ? (() => { const pu = permitUse(row); return `<td data-label="Use"><span class="use use-${pu.key}">${pu.glyph} ${esc(pu.label)}</span>${pu.key === "unclear" ? "" : `<span class="approx" title="Inferred from the work description \u2014 the permits dataset has no occupancy field">approx</span>`}</td>`; })() : ""}
+              <td data-label="Address">${options.move && clean(row.address) ? (() => { const u = mapsUrls(row.address); return `<span class="maps-picker"><button type="button" class="address-open" aria-haspopup="true" aria-expanded="false" aria-controls="maps-menu-${i}" onclick="event.stopPropagation(); toggleMapsMenu(this)">${esc(row.address)}<span class="chev" aria-hidden="true">▾</span></button><span class="maps-menu" id="maps-menu-${i}" role="menu"><span class="maps-menu-label">Open in</span><a role="menuitem" href="${esc(u.apple)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Apple Maps</a><a role="menuitem" href="${esc(u.google)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Google Maps</a><a role="menuitem" href="${esc(u.waze)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Waze</a></span></span>`; })() : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span>${row.is_custom ? (row.no_geo ? `<span class="added warn" title="Could not be placed on the map">\u26A0 No location</span>` : `<span class="added" title="Typed by hand, not matched to a city permit">\u270E Added by hand</span>`) : ""}</td>
+              ${options.move ? (() => { const pu = row.is_custom ? customUse(row._use) : permitUse(row); return `<td data-label="Use"><span class="use use-${pu.key}">${pu.glyph} ${esc(pu.label)}</span>${pu.key === "unclear" ? "" : `<span class="approx" title="Inferred from the work description \u2014 the permits dataset has no occupancy field">approx</span>`}</td>`; })() : ""}
               ${options.move ? "" : `<td data-label="Ward">${esc(row.ward)}</td>`}
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
               ${options.geo ? `<td data-label="Zone" class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</td><td data-label="TIF district" class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</td>` : ""}
@@ -6826,5 +7060,6 @@
   </div>
   <dialog id="list-picker" aria-modal="true"></dialog>
   <dialog id="list-details" aria-modal="true"></dialog>
+  <dialog id="add-address" aria-modal="true"></dialog>
 </body>
 </html>
