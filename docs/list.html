@@ -2965,6 +2965,10 @@
     }
     .slotbtn i { display: block; width: 22px; height: 22px; border-radius: 5px; background: var(--tc); }
     .slotbtn[aria-pressed="true"] { border-color: var(--ink); border-width: 2px; }
+
+    .back-to-dir { font-size: .85rem; text-decoration: none; color: var(--primary); margin-right: .2rem; }
+    .back-to-dir:hover { text-decoration: underline; }
+    .list-details-btn { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; }
   </style>
 </head>
 <body class="list-page">
@@ -3007,8 +3011,13 @@
     <section id="user-list-panel" class="panel user-list-panel" ondragover="permitListDragOver(event)" ondragleave="permitListDragLeave(event)" ondrop="permitListDrop(event)">
       <div class="panel-head user-list-head">
         <div class="user-list-title-row">
-          <h2>My Permit List</h2>
+          <a href="#" class="back-to-dir" onclick="event.preventDefault();showDirectory()">&#8592; All lists</a>
+          <h2 id="user-list-title">My Permit List</h2>
           <span id="user-list-count" class="small"></span>
+          <button type="button" class="list-details-btn" onclick="openListDetails()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14.5 6.5l3 3"/></svg>
+            <span id="list-details-label">Edit details</span>
+          </button>
         </div>
         <div class="user-list-toolbar" role="group" aria-label="My Permit List actions">
           <div class="toolbar-primary">
@@ -3485,8 +3494,17 @@
       const panel = $("user-list-panel");
       if (dir) dir.hidden = true;
       if (panel) panel.hidden = false;
+      renderListHeading();
       await ensurePermitMap();
       await renderUserList();
+    }
+
+    function renderListHeading() {
+      const list = activeList();
+      const title = $("user-list-title");
+      if (title) title.textContent = (list && list.name) || "My Permit List";
+      const label = $("list-details-label");
+      if (label) label.textContent = list && list.sharedId ? "Edit details" : "Publish\u2026";
     }
 
     // Opens a published list from the directory. Imports it as a local list so
@@ -3712,6 +3730,7 @@
       // A #s= link lands directly in that list; otherwise the page opens to the
       // directory. fetchDirectory is deliberately not awaited — the local lists
       // render immediately and the published section fills in when it arrives.
+      renderListHeading();
       if (state.view !== "list") showDirectory();
       fetchDirectory(false);
       if (!document.body.classList.contains("list-page")) {
@@ -5707,6 +5726,7 @@
           saveUserLists();
           try { localStorage.setItem("chi_permit_author", payload.author); } catch { /* storage blocked */ }
           dlg.close();
+          renderListHeading();
           // KV list metadata is eventually consistent and can lag a write by up
           // to a minute, so go to the list itself rather than back to a
           // directory that might not show what was just published.
