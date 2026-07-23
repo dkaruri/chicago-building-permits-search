@@ -101,3 +101,23 @@ static site.
 - Tests should pass before landing; one PR/commit per change where practical.
 - Check `git status` before assuming HEAD reflects deployed behavior — this
   repo frequently carries uncommitted work in progress.
+- **UI/UX Pro Max on every new UI feature (standing instruction, 2026-07-23).**
+  Any change that adds or reworks user-facing UI on `docs/*.html` must invoke the
+  `ui-ux-pro-max` skill and verify the result against its checklist BEFORE landing:
+  ≥44px touch targets on mobile, visible labels/aria-labels on every control,
+  focus states, 4.5:1 contrast in BOTH light and dark, no meaning by colour alone,
+  no sub-16px inputs (iOS zoom), and reduced-motion respected. Verify headless at
+  desktop AND an iPhone 13 viewport (assert geometry, not just DOM presence — see
+  the headless recipe). The repo's a11y sweep pattern (unnamed buttons, unlabeled
+  inputs, missing alt, sub-44px targets across each overlay) lives in the session
+  scratchpad `audit.mjs`; re-run it against new surfaces.
+- **Editing `docs/*.html`: never via a bash heredoc.** Heredocs silently embed
+  invisible control bytes (0x08 backspace, lone surrogates) that break regexes and
+  strings without showing in diffs — this bit the project three times. Use the Edit
+  tool, or a Python script that reads bytes and asserts
+  `count(b"\x08")==0 and count(b"\x00")==0` before writing. Match literal `\uXXXX`
+  source text with a RAW python string; write astral emoji as `\U0001F4AC`, never
+  `💬` (a lone surrogate throws on `.encode("utf-8")`).
+- **Overlay code is byte-identical across `list.html` and `index.html`** by design;
+  change both and verify the shared block matches. Stage `list.html` with
+  `git -c core.autocrlf=false add` (its blob is CRLF; index/map are LF).
