@@ -4742,6 +4742,7 @@
       const list = activeList();
       if (list) list.permits = [...state.userPermitNumbers];
       saveUserLists();
+      if (list) sendListOp({ f: "p", v: list.permits });
     }
 
     function loadUserNotes() {
@@ -4934,6 +4935,8 @@
         }
       }
       saveFocalPoint();
+      { const _l = activeList(); if (_l) _l.focal = focalShareData(); }
+      sendListOp({ f: "f", v: focalShareData() });
       renderFocalStatus();
       clearUserRoute("Starting location changed. Recalculate driving distances when ready.");
     }
@@ -4941,6 +4944,8 @@
     function clearFocalPoint() {
       state.focalPoint = null;
       saveFocalPoint();
+      { const _l = activeList(); if (_l) _l.focal = null; }
+      sendListOp({ f: "f", v: null });
       const input = $("focal-input");
       if (input) input.value = "";
       renderFocalStatus();
@@ -5499,6 +5504,7 @@
           list.author = payload.author;
           list.tags = tags;
           saveUserLists();
+          sendListOp({ f: "meta", v: { title: list.name, desc: list.desc || "", author: list.author || "", tags: list.tags || [] } });
           try { localStorage.setItem("chi_permit_author", payload.author); } catch { /* storage blocked */ }
           dlg.close();
           renderListHeading();
@@ -5636,6 +5642,7 @@
       };
       list.custom.push(stop);
       saveUserLists();
+      sendListOp({ f: "custom", v: list.custom || [] });
       dlg.close();
       await renderUserList();
       announceListAction(coords
@@ -5649,6 +5656,7 @@
       if (!list || !list.custom) return;
       list.custom = list.custom.filter(c => c.id !== id);
       saveUserLists();
+      sendListOp({ f: "custom", v: list.custom || [] });
       renderUserList();
     }
 
@@ -5695,8 +5703,12 @@
       saveUserLists();
       const row = document.querySelector(`tr[data-tick-row="${CSS.escape(key)}"]`);
       if (row) row.classList.toggle("is-done", !!on);
-      tickQueue.push([key, !!on]);
-      queueTickSync();
+      if (state.live.connected && activeList() && activeList().sharedId === state.live.id) {
+        sendListOp({ f: "tick", k: key, v: on ? 1 : 0 });
+      } else {
+        tickQueue.push([key, !!on]);
+        queueTickSync();
+      }
     }
 
     function tickKeyFor(row) {
@@ -5731,6 +5743,14 @@
         }
       }
       return list;
+    }
+
+    function sendListOp(op) {
+      const live = state.live;
+      if (live.applying || !live.connected || !live.ws) return;
+      const list = activeList();
+      if (!list || !list.sharedId || list.sharedId !== live.id) return;
+      try { live.ws.send(JSON.stringify({ t: "patch", ops: [op] })); } catch { /* closing */ }
     }
 
     const WS_BASE = API_BASE.replace(/^http/, "ws");
