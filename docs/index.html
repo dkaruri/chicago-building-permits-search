@@ -5306,7 +5306,7 @@
         history.pushState({ permitModal: true }, "");
         _permitModalHistory = true;
         // Focus first focusable control (or the card) for keyboard users.
-        const focusable = body.querySelector("button, a[href], textarea, input, [tabindex]");
+        const focusable = body.querySelector('button:not([disabled]), a[href], textarea:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
         (focusable || modal.querySelector(".permit-modal-card")).focus?.();
       }
       if (opts.onOpen) opts.onOpen(body);

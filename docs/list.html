@@ -3266,7 +3266,7 @@
         history.pushState({ permitModal: true }, "");
         _permitModalHistory = true;
         // Focus first focusable control (or the card) for keyboard users.
-        const focusable = body.querySelector("button, a[href], textarea, input, [tabindex]");
+        const focusable = body.querySelector('button:not([disabled]), a[href], textarea:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
         (focusable || modal.querySelector(".permit-modal-card")).focus?.();
       }
       if (opts.onOpen) opts.onOpen(body);
@@ -5957,7 +5957,7 @@
 
     // Contractor (GC / open sub) lines for a permit's Details dropdown. Names come
     // from the permit; open-jobs + phone are filled on demand when the dropdown
-    // opens (see fillContractorInfo) — the role maps to the profile category.
+    // opens (see fillPermitContractors) — the role maps to the profile category.
     function contractorLinesHtml(value, role) {
       const names = clean(value).split("|").map(x => x.trim()).filter(Boolean);
       if (!names.length) return `<div class="pc-empty">None listed</div>`;
@@ -5971,7 +5971,7 @@
     // match (first non-"NA"); many contractors have none. Cached per name+role.
     // Returns null when the Worker is unreachable (e.g. local preview) or no match.
     async function fetchContractorInfo(name, role) {
-      const key = role + " " + name.toLowerCase();
+      const key = role + " " + name.toLowerCase();
       if (contractorInfoCache.has(key)) return contractorInfoCache.get(key);
       let info = null;
       try {
@@ -5988,27 +5988,9 @@
       return info;
     }
 
-    async function fillContractorInfo(container) {
-      const lines = [...container.querySelectorAll(".contractor-line:not([data-filled])")];
-      await Promise.all(lines.map(async line => {
-        line.setAttribute("data-filled", "1");
-        const meta = line.querySelector(".ci-meta");
-        const info = await fetchContractorInfo(line.getAttribute("data-contractor"), line.getAttribute("data-role"));
-        if (!info) { meta.textContent = ""; return; }
-        const bits = [];
-        if (info.open_jobs != null) bits.push(esc(`${fmt(info.open_jobs)} open jobs`));
-        if (info.phone) {
-          const tel = info.phone.replace(/[^\d+]/g, "");
-          bits.push(`<a href="tel:${esc(tel)}" onclick="event.stopPropagation()">${esc(info.phone)}</a>`);
-        }
-        meta.innerHTML = bits.length ? " · " + bits.join(" · ") : "";
-      }));
-    }
-
     // Fill License type / Class / Does / open-jobs / phone into each contractor
-    // line inside a permit-detail overlay body (Task 4). Distinct from
-    // fillContractorInfo (index.html-style Details dropdown) — this one also
-    // renders license type/class chips and the top-3 "Does" work types.
+    // line inside a permit-detail overlay body (Task 4) — renders license
+    // type/class chips and the top-3 "Does" work types.
     async function fillPermitContractors(body) {
       const lines = [...body.querySelectorAll(".contractor-line:not([data-filled])")];
       await Promise.all(lines.map(async line => {
