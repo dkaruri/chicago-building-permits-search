@@ -12,6 +12,7 @@ const MAX_BLURB = 160;
 const MAX_DESC = 2000;
 const MAX_TAGS = 8;
 const MAX_TAG_LEN = 24;
+const PAGE_SIZE = 200;
 
 function resp(obj, status) {
   return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
@@ -34,6 +35,14 @@ export async function handleLists(url, env, request) {
     await env.CACHE.put("list:" + id, JSON.stringify(value), { expirationTtl: LIST_TTL, metadata });
     return resp({ id }, 200);
   }
+  if (request.method === "GET" && isCollection) {
+    const cursor = url.searchParams.get("cursor") || undefined;
+    const listed = await env.CACHE.list({ prefix: "list:", limit: PAGE_SIZE, cursor });
+    const rows = filterEntries(listed.keys, url.searchParams.get("q"), url.searchParams.get("tag"))
+      .map(entry => ({ id: entry.name.slice(5), ...(entry.metadata || {}) }))
+      .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0));
+    return resp({ lists: rows, cursor: listed.list_complete ? null : listed.cursor }, 200);
+  }
   if (request.method === "GET" && !isCollection) {
     const id = url.pathname.replace(/^\/api\/lists\//, "");
     if (!ID_RE.test(id)) return resp({ error: "not found" }, 404);
@@ -50,6 +59,23 @@ export async function handleLists(url, env, request) {
     }, 200);
   }
   return resp({ error: "method not allowed" }, 405);
+}
+
+// KV.list() cannot filter by metadata, so a page is fetched first and filtered
+// after. A 200-key page can therefore yield fewer than 200 rows while a cursor
+// still remains — the client must key "load more" off the cursor, never a count.
+export function filterEntries(entries, q, tag) {
+  const needle = String(q || "").trim().toLowerCase();
+  const wanted = String(tag || "").trim().toLowerCase();
+  return entries.filter(entry => {
+    const m = entry.metadata;
+    if (!m) return !needle && !wanted;
+    const tags = Array.isArray(m.tags) ? m.tags.map(t => String(t[0]).toLowerCase()) : [];
+    if (wanted && !tags.includes(wanted)) return false;
+    if (!needle) return true;
+    const hay = [m.title, m.author, m.blurb, ...tags].join(" ").toLowerCase();
+    return hay.includes(needle);
+  });
 }
 
 export function makeShareId(len = 7) {

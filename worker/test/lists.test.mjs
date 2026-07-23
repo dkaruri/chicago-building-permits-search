@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert";
-import { makeShareId, sanitizePermits, sanitizeFocal, sanitizeMeta, buildListMeta, readList } from "../src/lists.js";
+import { makeShareId, sanitizePermits, sanitizeFocal, sanitizeMeta, buildListMeta, readList, filterEntries } from "../src/lists.js";
 
 test("makeShareId is 7 base62 chars and varies", () => {
   const a = makeShareId();
@@ -154,4 +154,91 @@ test("buildListMeta counts custom stops toward count", () => {
     1
   );
   assert.equal(meta.count, 2);
+});
+
+const ENTRIES = [
+  { name: "list:aaa", metadata: { title: "North Side Roof Runs", author: "Divyam", blurb: "Albany Park", tags: [["roofing", 0]], count: 100 } },
+  { name: "list:bbb", metadata: { title: "Logan Square tuckpointing", author: "M. Reyes", blurb: "masonry", tags: [["masonry", 9]], count: 62 } },
+  { name: "list:ccc", metadata: { title: "Stalled jobs", author: "anonymous", blurb: "watchlist", tags: [], count: 23 } },
+];
+
+test("filterEntries matches title, author, blurb case-insensitively", () => {
+  assert.deepEqual(filterEntries(ENTRIES, "roof", "").map(e => e.name), ["list:aaa"]);
+  assert.deepEqual(filterEntries(ENTRIES, "REYES", "").map(e => e.name), ["list:bbb"]);
+  assert.deepEqual(filterEntries(ENTRIES, "watchlist", "").map(e => e.name), ["list:ccc"]);
+});
+
+test("filterEntries matches tag names", () => {
+  assert.deepEqual(filterEntries(ENTRIES, "masonry", "").map(e => e.name), ["list:bbb"]);
+});
+
+test("filterEntries tag filter is exact, not substring", () => {
+  assert.deepEqual(filterEntries(ENTRIES, "", "roofing").map(e => e.name), ["list:aaa"]);
+  assert.deepEqual(filterEntries(ENTRIES, "", "roof"), []);
+});
+
+test("filterEntries combines q and tag with AND", () => {
+  assert.deepEqual(filterEntries(ENTRIES, "roof", "masonry"), []);
+  assert.deepEqual(filterEntries(ENTRIES, "north", "roofing").map(e => e.name), ["list:aaa"]);
+});
+
+test("filterEntries with no filters returns everything", () => {
+  assert.equal(filterEntries(ENTRIES, "", "").length, 3);
+});
+
+test("filterEntries tolerates entries with no metadata", () => {
+  assert.deepEqual(filterEntries([{ name: "list:zzz" }], "roof", ""), []);
+  assert.equal(filterEntries([{ name: "list:zzz" }], "", "").length, 1);
+});
+
+test("GET /api/lists pages with a cursor and filters the page", async () => {
+  const env = ENV();
+  for (let i = 0; i < 3; i++) {
+    await handleLists(new URL("https://w/api/lists"), env,
+      post({ permits: ["10000" + i], title: i === 1 ? "Roofing run" : "Other " + i, tags: [["roofing", 0]] }));
+  }
+  const all = await handleLists(new URL("https://w/api/lists"), env, new Request("https://w/api/lists"));
+  const body = await all.json();
+  assert.equal(body.lists.length, 3);
+  assert.equal(body.cursor, null, "a complete page must report no cursor");
+  assert.ok(body.lists.every(row => /^[0-9A-Za-z]{7}$/.test(row.id)), "rows expose a bare id");
+
+  const filtered = await handleLists(new URL("https://w/api/lists?q=roofing+run"), env,
+    new Request("https://w/api/lists?q=roofing+run"));
+  assert.equal((await filtered.json()).lists.length, 1);
+});
+
+test("GET /api/lists returns a cursor when more than one page remains", async () => {
+  const env = ENV();
+  for (let i = 0; i < 250; i++) {
+    await env.CACHE.put("list:" + String(i).padStart(4, "0"), JSON.stringify({ v: 2, p: ["1"] }),
+      { metadata: { title: "L" + i, publishedAt: i } });
+  }
+  const first = await handleLists(new URL("https://w/api/lists"), env, new Request("https://w/api/lists"));
+  const page1 = await first.json();
+  assert.equal(page1.lists.length, 200);
+  assert.ok(page1.cursor, "an incomplete page must return a cursor");
+
+  const next = new URL(`https://w/api/lists?cursor=${page1.cursor}`);
+  const second = await handleLists(next, env, new Request(next));
+  const page2 = await second.json();
+  assert.equal(page2.lists.length, 50);
+  assert.equal(page2.cursor, null);
+
+  const ids = new Set([...page1.lists, ...page2.lists].map(r => r.id));
+  assert.equal(ids.size, 250, "pages must not overlap or drop rows");
+});
+
+test("a filtered page can be short while a cursor still remains", async () => {
+  const env = ENV();
+  for (let i = 0; i < 250; i++) {
+    await env.CACHE.put("list:" + String(i).padStart(4, "0"), JSON.stringify({ v: 2, p: ["1"] }),
+      { metadata: { title: i === 5 ? "needle" : "L" + i, tags: [] } });
+  }
+  const url = new URL("https://w/api/lists?q=needle");
+  const res = await handleLists(url, env, new Request(url));
+  const body = await res.json();
+  // Exactly the trap the client must not fall into: 1 row back, but more pages exist.
+  assert.equal(body.lists.length, 1);
+  assert.ok(body.cursor, "cursor must survive filtering");
 });
