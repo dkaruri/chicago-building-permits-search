@@ -16,6 +16,12 @@ const MAX_TAGS = 8;
 const MAX_TAG_LEN = 24;
 const PAGE_SIZE = 200;
 
+const MAX_CUSTOM = 60;
+const MAX_ADDR = 120;
+const MAX_WORK = 200;
+const CUSTOM_ID_RE = /^c_[A-Za-z0-9]{1,14}$/;
+const USES = new Set(["residential", "commercial", "mixed", "unclear"]);
+
 function resp(obj, status) {
   return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
 }
@@ -32,7 +38,7 @@ export async function handleLists(url, env, request) {
     const focal = sanitizeFocal(body && body.focal);
     const id = makeShareId();
     const now = Math.floor(Date.now() / 1000);
-    const value = { v: 2, p: permits, f: focal, desc: String(body.desc ?? "").slice(0, MAX_DESC), custom: [], ticks: {} };
+    const value = { v: 2, p: permits, f: focal, desc: String(body.desc ?? "").slice(0, MAX_DESC), custom: sanitizeCustom(body.custom), ticks: {} };
     const metadata = buildListMeta(value, body, now);
     await env.CACHE.put("list:" + id, JSON.stringify(value), { expirationTtl: LIST_TTL, metadata });
     return resp({ id }, 200);
@@ -60,6 +66,26 @@ export async function handleLists(url, env, request) {
       meta: metadata || null,
     }, 200);
   }
+  // More specific than the generic PUT below, so it must be tested first.
+  const tickMatch = url.pathname.match(/^\/api\/lists\/([A-Za-z0-9]{1,16})\/ticks\/?$/);
+  if (request.method === "PUT" && tickMatch) {
+    const id = tickMatch[1];
+    let body;
+    try { body = JSON.parse(await request.text()); } catch { return resp({ error: "bad json" }, 400); }
+    const current = await env.CACHE.getWithMetadata("list:" + id);
+    const existing = readList(current.value);
+    if (!existing) return resp({ error: "not found" }, 404);
+    const valid = new Set([...existing.p, ...existing.custom.map(c => c.id)]);
+    const key = String((body && body.key) || "");
+    if (!valid.has(key)) return resp({ error: "unknown key" }, 400);
+    const ticks = { ...existing.ticks };
+    if (body.on) ticks[key] = 1; else delete ticks[key];
+    // Deliberately no revision: a checkbox tap is not an edit worth versioning,
+    // and ticking through a 99-stop list would evict all 20 stored revisions.
+    await env.CACHE.put("list:" + id, JSON.stringify({ ...existing, ticks }),
+      { expirationTtl: LIST_TTL, metadata: current.metadata });
+    return resp({ ok: true }, 200);
+  }
   if (request.method === "PUT" && !isCollection) {
     const id = url.pathname.replace(/^\/api\/lists\//, "");
     if (!ID_RE.test(id)) return resp({ error: "not found" }, 404);
@@ -86,7 +112,7 @@ export async function handleLists(url, env, request) {
       p: permits,
       f: body.focal === undefined ? existing.f : sanitizeFocal(body.focal),
       desc: body.desc === undefined ? existing.desc : String(body.desc).slice(0, MAX_DESC),
-      custom: existing.custom,
+      custom: body.custom === undefined ? existing.custom : sanitizeCustom(body.custom),
       ticks: existing.ticks,
     };
     const metadata = {
@@ -115,6 +141,49 @@ export function filterEntries(entries, q, tag) {
     const hay = [m.title, m.author, m.blurb, ...tags].join(" ").toLowerCase();
     return hay.includes(needle);
   });
+}
+
+
+// Custom stops carry user-typed text, so they get their own validation rather
+// than being squeezed through the permit-number regex.
+export function sanitizeCustom(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const id = String(item.id ?? "");
+    if (!CUSTOM_ID_RE.test(id)) continue;
+    const addr = String(item.addr ?? "").trim().slice(0, MAX_ADDR);
+    if (!addr) continue;
+    // Number(null) is 0 and finite, so a null coordinate would be stored as
+    // 0,0 rather than "no location". Treat null/undefined as absent.
+    const lat = item.lat == null ? NaN : Number(item.lat);
+    const lon = item.lon == null ? NaN : Number(item.lon);
+    const use = String(item.use ?? "").toLowerCase();
+    out.push({
+      id,
+      pos: Number.isInteger(Number(item.pos)) ? Number(item.pos) : 0,
+      addr,
+      // A stop that would not geocode is kept, with null coords, and sits out
+      // of routing rather than being silently dropped.
+      lat: Number.isFinite(lat) ? lat : null,
+      lon: Number.isFinite(lon) ? lon : null,
+      use: USES.has(use) ? use : "unclear",
+      work: String(item.work ?? "").slice(0, MAX_WORK),
+      gc: String(item.gc ?? "").slice(0, MAX_ADDR),
+    });
+    if (out.length >= MAX_CUSTOM) break;
+  }
+  return out;
+}
+
+export function sanitizeTicks(value, validKeys) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (validKeys.has(k) && v) out[k] = 1;
+  }
+  return out;
 }
 
 export function makeShareId(len = 7) {

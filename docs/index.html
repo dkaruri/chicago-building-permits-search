@@ -2737,7 +2737,7 @@
     .pm-facts dt { color: var(--muted); font-size: 0.8rem; margin: 0; }
     .pm-facts dd { margin: 0; font-size: 0.88rem; }
     .approx { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--warning); background: var(--warning-soft); padding: 1px 6px; border-radius: 5px; margin-left: 6px; cursor: help; }
-    .pm-note { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 0.88rem; padding: 9px 11px; resize: vertical; }
+    .pm-note { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 1rem; padding: 9px 11px; resize: vertical; }
 
     #list-picker {
       border: 1px solid var(--line-strong); border-radius: 12px; padding: 1rem;
@@ -2758,6 +2758,56 @@
     .pickrow.full .cnt { color: var(--warning); font-weight: 600; }
     .pickrow.new { border-style: dashed; color: var(--primary); font-weight: 600; }
     .pickfoot { display: flex; justify-content: flex-end; margin-top: .7rem; }
+
+    .pm-note-draft { border: 1px solid var(--line); border-radius: 8px; padding: .6rem; background: var(--surface-subtle); margin-bottom: .8rem; }
+    .pm-draft-label { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); margin-bottom: .35rem; }
+    .pm-lock { font-weight: 600; }
+    .pm-post-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+    .pm-post-btns { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .pm-thread { display: grid; gap: .6rem; }
+    .tp { border: 1px solid var(--cell-line); border-left: 3px solid var(--t7); border-radius: 0 8px 8px 0; padding: .55rem .7rem; background: var(--surface-subtle); }
+    .tp-head { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; font-size: .78rem; color: var(--muted); margin-bottom: .25rem; }
+    .tp-who { font-weight: 700; color: var(--ink); font-size: .84rem; }
+    .tp-kind { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border: 1px solid var(--t7); color: var(--t7); border-radius: 3px; padding: 0 .25rem; }
+    .tp-text { font-size: .88rem; }
+    .tp-kv { display: grid; grid-template-columns: auto 1fr; gap: .2rem .7rem; font-size: .85rem; margin: 0; }
+    .tp-kv dt { color: var(--muted); }
+    .tp-kv dd { margin: 0; }
+    .tp-act { display: flex; gap: .5rem; margin-top: .35rem; }
+    .tp-act button { font: inherit; font-size: .78rem; font-weight: 600; background: none; border: 1px solid transparent; padding: .3rem .5rem; border-radius: 6px; color: var(--muted); cursor: pointer; min-height: 40px; }
+    .tp-act button:hover { border-color: var(--line); }
+    .tp-act button.del { color: var(--danger); }
+    .tp-count { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .2rem; }
+    .tp-empty { color: var(--muted); font-size: .85rem; }
+
+    #walkthrough {
+      border: 1px solid var(--line-strong); border-radius: 12px; padding: 1rem;
+      background: var(--panel); color: var(--ink); max-width: 520px; width: calc(100vw - 2rem);
+      max-height: calc(100vh - 3rem); overflow-y: auto; box-shadow: 0 12px 30px var(--shadow);
+    }
+    #walkthrough::backdrop { background: rgba(6, 14, 26, 0.55); }
+    #walkthrough h3 { margin: 0; font-size: 1.05rem; }
+    #walkthrough .dlg-sub { margin: .2rem 0 .9rem; font-size: .84rem; color: var(--muted); }
+    #walkthrough .dlg-field { margin-bottom: .8rem; }
+    #walkthrough .dlg-field label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin-bottom: .3rem; }
+    #walkthrough .dlg-field input, #walkthrough .dlg-field select {
+      font: inherit; font-size: 1rem; width: 100%; box-sizing: border-box; min-height: 44px;
+      background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem;
+    }
+    #walkthrough .dlg-row { display: flex; gap: .6rem; flex-wrap: wrap; }
+    #walkthrough .dlg-row .dlg-field { flex: 1 1 140px; }
+    #walkthrough .dlg-error { color: var(--danger); font-size: .85rem; font-weight: 600; margin: .3rem 0 .6rem; }
+    #walkthrough .dlg-foot { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .5rem; }
+    .wk-fieldset { border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; margin: 0 0 .7rem; }
+    .wk-fieldset legend { font-size: .82rem; font-weight: 700; padding: 0 .3rem; }
+    .wk-choices { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .3rem; }
+    .wk-choice { display: inline-flex; align-items: center; gap: .4rem; cursor: pointer; border: 1px solid var(--line); border-radius: 8px; padding: .4rem .7rem; min-height: 44px; font-size: .86rem; background: var(--surface-subtle); }
+    .wk-choice:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); font-weight: 600; }
+    .wk-branch { border-left: 3px solid var(--primary); background: var(--surface-subtle); border-radius: 0 8px 8px 0; padding: .7rem .8rem; margin-bottom: .7rem; }
+    .wk-branchlab { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--primary); margin: 0 0 .5rem; }
+    .pm-reported { margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .5rem; }
+    .rep-sub { display: inline-flex; align-items: center; gap: .35rem; font-size: .85rem; }
+    .rep-badge { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--warning); border: 1px dashed var(--warning); border-radius: 3px; padding: 0 .2rem; }
   </style>
 </head>
 <body class="directory-page">
@@ -5526,6 +5576,24 @@
       await Promise.all(rows.flatMap(row => [ensurePermitZone(row), ensurePermitTif(row)]));
     }
 
+    // The permits dataset has NO occupancy field, so this is a heuristic over
+    // permit_type + work_description, exactly like parseBuildingType. Every
+    // inferred result is rendered with an "approx" badge, and anything the text
+    // does not support reads "Unclear" rather than being guessed at.
+    function permitUse(row) {
+      const s = `${(row && row.permit_type) || ""} ${(row && row.work_description) || ""}`.toUpperCase();
+      if (/\b(WRECK\w*|DEMOLITION)\b/.test(s) && !/\bRESIDENTIAL\b/.test(s)) return { key: "unclear", label: "Unclear", glyph: "\u2014" };
+      const RES = /\b\d{1,3}[- ]?UNITS?\b|\bSINGLE[- ]?FAMILY\b|\b(TWO|THREE|FOUR|SIX)[- ]?FLAT\b|\b\d{1,2}[- ]?FLAT\b|\bTOWN\s?HO(ME|USE)\b|\bCONDO(MINIUM)?\b|\bAPARTMENT\b|\bMULTI[- ]?FAMILY\b|\bDWELLING\b|\bRESIDENTIAL\b/;
+      const COM = /\bCOMMERCIAL\b|\bRESTAURANT\b|\bRETAIL\b|\bOFFICE\b|\bSTOREFRONT\b|\bTENANT\b|\bWAREHOUSE\b|\bHOTEL\b/;
+      if (/\bMIXED[- ]?USE\b/.test(s)) return { key: "mixed", label: "Mixed use", glyph: "\u25EB" };
+      const res = RES.test(s);
+      const com = COM.test(s);
+      if (res && com) return { key: "mixed", label: "Mixed use", glyph: "\u25EB" };
+      if (res) return { key: "residential", label: "Residential", glyph: "\u25E7" };
+      if (com) return { key: "commercial", label: "Commercial", glyph: "\u25A4" };
+      return { key: "unclear", label: "Unclear", glyph: "\u2014" };
+    }
+
     function parseBuildingType(desc) {
       const s = (desc || "").toUpperCase();
       const num = s.match(/\b(\d{1,3})[- ]?UNITS?\b/);
@@ -5615,6 +5683,282 @@
     }
 
     // One fact row list; missing values render as an em-dash.
+    // ---- Public note thread (Phase 3) ----
+    const ESTIMATE_LABELS = { "same-day": "Same day", "1-3d": "1\u20133 days", "week": "About a week", "longer": "Longer", "unknown": "Didn't say" };
+    const JOB_LABELS = { "new": "New build", "remodel": "Remodel" };
+    let currentThreadPermit = "";
+
+    // Both pages need this; index.html has no announceListAction. Self-contained
+    // aria-live region so the shared thread code is identical on both.
+    function pmAnnounce(msg) {
+      let el = document.getElementById("pm-live");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "pm-live";
+        el.setAttribute("aria-live", "polite");
+        el.style.cssText = "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;";
+        document.body.appendChild(el);
+      }
+      el.textContent = msg;
+    }
+
+    function dateStampLabel(ts) {
+      const d = new Date(Number(ts) * 1000);
+      if (!Number.isFinite(d.getTime())) return "";
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    }
+
+    function threadPostHtml(post) {
+      const when = dateStampLabel(post.ts) + (post.editedTs ? " \u00b7 edited" : "");
+      const head = `<p class="tp-head"><span class="tp-who">${esc(post.author || "anonymous")}</span><time>${esc(when)}</time>` +
+        `<span class="tp-kind">${post.kind === "walk" ? "Walkthrough" : post.kind === "photo" ? "Photo" : "Note"}</span></p>`;
+      const acts = `<p class="tp-act">` +
+        `<button type="button" onclick="editNotePost('${esc(currentThreadPermit)}','${esc(post.id)}')">Edit</button>` +
+        `<button type="button" class="del" onclick="deleteNotePost('${esc(currentThreadPermit)}','${esc(post.id)}')">Delete</button></p>`;
+      if (post.kind === "walk") {
+        const p = post.party;
+        const rows = [
+          ["Job", esc(JOB_LABELS[post.job] || "\u2014")],
+          ["On site", post.onsite === "sub" ? "Open sub" : post.onsite === "gc" ? "General contractor" : "Nobody"],
+        ];
+        if (p) {
+          if (p.name) rows.push(["Company", esc(p.name)]);
+          if (p.phone) rows.push(["Phone", `<a href="tel:${esc(p.phone)}">${esc(p.phone)}</a>`]);
+          if (p.covers) rows.push(["Covers", esc(p.covers)]);
+          const cap = [p.jobs ? `${p.jobs} jobs at a time` : "", ESTIMATE_LABELS[p.estimate] ? `estimates ${ESTIMATE_LABELS[p.estimate]}` : ""].filter(Boolean).join(" \u00b7 ");
+          if (cap) rows.push(["Capacity", esc(cap)]);
+        }
+        if (post.gc && post.gc.name) rows.push(["Their GC", esc(post.gc.name) + (post.gc.phone ? ` \u00b7 <a href="tel:${esc(post.gc.phone)}">${esc(post.gc.phone)}</a>` : "")]);
+        return `<article class="tp walk">${head}<dl class="tp-kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl>${acts}</article>`;
+      }
+      const photo = post.kind === "photo" ? `<p class="tp-photo-note">\ud83d\udcf7 photo</p>` : "";
+      return `<article class="tp">${head}<p class="tp-text">${esc(post.text || "")}</p>${photo}${acts}</article>`;
+    }
+
+    async function fetchThread(permit) {
+      state.threads = state.threads || {};
+      state.threads[permit] = { loading: true, posts: [], error: "" };
+      renderThread(permit);
+      try {
+        const res = await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}`);
+        if (!res.ok) throw new Error("thread unavailable");
+        const data = await res.json();
+        state.threads[permit] = { loading: false, posts: Array.isArray(data.notes) ? data.notes : [], error: "" };
+      } catch {
+        state.threads[permit] = { loading: false, posts: [], error: "Public notes could not be loaded." };
+      }
+      renderThread(permit);
+      if (typeof fillReportedSubs === "function") fillReportedSubs(permit);
+    }
+
+    function renderThread(permit) {
+      currentThreadPermit = permit;
+      const host = document.getElementById("pm-thread");
+      if (!host) return;
+      const t = (state.threads && state.threads[permit]) || { loading: true, posts: [] };
+      if (t.loading) { host.innerHTML = `<p class="tp-empty">Loading public notes\u2026</p>`; return; }
+      if (t.error) { host.innerHTML = `<p class="tp-empty">${esc(t.error)}</p>`; return; }
+      host.innerHTML = t.posts.length
+        ? `<h4 class="tp-count">Public notes \u00b7 ${t.posts.length}</h4>${t.posts.map(threadPostHtml).join("")}`
+        : `<p class="tp-empty">No public notes yet. Post one above.</p>`;
+    }
+
+    async function postNoteText(permit) {
+      const box = document.getElementById("pm-note-draft");
+      const text = (box && box.value || "").trim();
+      if (!text) { pmAnnounce("Type a note before posting."); return; }
+      const author = (localStorage.getItem("chi_permit_author") || "").trim();
+      const btn = document.getElementById("pm-post-btn");
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind: "text", author, text }),
+        });
+        if (!res.ok) throw new Error("post failed");
+        await fetchThread(permit);
+        pmAnnounce("Note posted.");
+        const first = document.querySelector("#pm-thread .tp");
+        if (first) { first.setAttribute("tabindex", "-1"); first.focus(); }
+      } catch {
+        pmAnnounce("Could not post \u2014 this needs the live site.");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function postNoteFromDraft(encodedPermit) {
+      const permit = decodeURIComponent(encodedPermit);
+      if (!(localStorage.getItem("chi_permit_author") || "").trim()) {
+        const name = window.prompt("Post publicly as (leave blank for anonymous):", "");
+        if (name === null) return;
+        try { localStorage.setItem("chi_permit_author", name.trim()); } catch { /* storage blocked */ }
+      }
+      await postNoteText(permit);
+    }
+
+    async function deleteNotePost(permit, id) {
+      if (!window.confirm("Delete this public note?")) return;
+      try {
+        await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}/${encodeURIComponent(id)}`, { method: "DELETE" });
+        await fetchThread(permit);
+        pmAnnounce("Note deleted.");
+      } catch { pmAnnounce("Could not delete right now."); }
+    }
+
+    async function editNotePost(permit, id) {
+      const t = state.threads && state.threads[permit];
+      const post = t && t.posts.find(p => p.id === id);
+      if (!post) return;
+      if (post.kind === "walk") { if (typeof openWalkthrough === "function") openWalkthrough(permit, id); return; }
+      const next = window.prompt("Edit note", post.text || "");
+      if (next === null) return;
+      try {
+        await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}/${encodeURIComponent(id)}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: next }),
+        });
+        await fetchThread(permit);
+        pmAnnounce("Note updated.");
+      } catch { pmAnnounce("Could not update right now."); }
+    }
+
+    // ---- Site walkthrough (Phase 3) ----
+    function walkFieldsToPayload(f) {
+      const out = { kind: "walk", job: f.job === "new" ? "new" : "remodel", onsite: ["none", "gc", "sub"].includes(f.onsite) ? f.onsite : "none" };
+      if (out.onsite !== "none") {
+        const jobs = parseInt(f.jobs, 10);
+        out.party = { name: (f.name || "").trim(), phone: (f.phone || "").trim(), covers: (f.covers || "").trim(),
+          jobs: Number.isInteger(jobs) ? jobs : null, estimate: f.estimate || "unknown" };
+      }
+      if (out.onsite === "sub" && (f.gcName || "").trim()) {
+        out.gc = { name: f.gcName.trim(), phone: (f.gcPhone || "").trim() };
+      }
+      return out;
+    }
+
+    function reportedSubsFor(permit) {
+      const t = state.threads && state.threads[permit];
+      if (!t || !t.posts) return [];
+      const existing = String((state.userPermitMap.get(clean(permit)) || {}).open_subs || "").toUpperCase();
+      const seen = new Set();
+      const out = [];
+      t.posts.forEach(post => {
+        if (post.kind !== "walk" || post.onsite !== "sub" || !post.party || !post.party.name) return;
+        const name = post.party.name.trim();
+        const up = name.toUpperCase();
+        if (!up || seen.has(up) || existing.includes(up)) return;
+        seen.add(up);
+        out.push(name);
+      });
+      return out;
+    }
+
+    function fillReportedSubs(permit) {
+      const host = document.getElementById("pm-reported");
+      if (!host) return;
+      const reported = reportedSubsFor(permit);
+      host.innerHTML = reported.length
+        ? reported.map(n => `<span class="rep-sub">${esc(n)} <span class="rep-badge">reported on site</span></span>`).join("")
+        : "";
+    }
+
+    function openWalkthrough(encodedPermit, editId) {
+      const permit = decodeURIComponent(encodedPermit);
+      const dlg = document.getElementById("walkthrough");
+      const t = state.threads && state.threads[permit];
+      const editing = editId && t ? t.posts.find(p => p.id === editId) : null;
+      const e = editing || {};
+      const party = e.party || {};
+      const gc = e.gc || {};
+      const sel = (a, b) => a === b ? " checked" : "";
+      const opt = (v, cur, label) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`;
+      dlg.innerHTML = `<h3 id="wk-title">Site walkthrough</h3>
+        <p class="dlg-sub">${esc(permit)}</p>
+        <fieldset class="wk-fieldset"><legend>What kind of job is it?</legend>
+          <div class="wk-choices">
+            <label class="wk-choice"><input type="radio" name="wk-job" value="new"${sel("new", e.job)}> New build</label>
+            <label class="wk-choice"><input type="radio" name="wk-job" value="remodel"${sel("remodel", e.job || "remodel")}> Remodel</label>
+          </div></fieldset>
+        <fieldset class="wk-fieldset"><legend>Who was on site?</legend>
+          <div class="wk-choices">
+            <label class="wk-choice"><input type="radio" name="wk-onsite" value="none"${sel("none", e.onsite || "none")}> Nobody</label>
+            <label class="wk-choice"><input type="radio" name="wk-onsite" value="gc"${sel("gc", e.onsite)}> General contractor</label>
+            <label class="wk-choice"><input type="radio" name="wk-onsite" value="sub"${sel("sub", e.onsite)}> Open sub</label>
+          </div></fieldset>
+        <div id="wk-contact" class="wk-branch" hidden>
+          <div class="dlg-field"><label for="wk-name" id="wk-name-label">Company</label><input id="wk-name" maxlength="120" value="${esc(party.name || "")}"></div>
+          <div class="dlg-field"><label for="wk-phone">Contact number</label><input id="wk-phone" type="tel" inputmode="tel" maxlength="24" value="${esc(party.phone || "")}"></div>
+          <div class="dlg-field"><label for="wk-covers">What work do they cover?</label><input id="wk-covers" maxlength="120" value="${esc(party.covers || "")}"></div>
+          <div class="dlg-row">
+            <div class="dlg-field"><label for="wk-jobs">Jobs at a time</label><input id="wk-jobs" type="number" inputmode="numeric" min="1" value="${party.jobs != null ? party.jobs : ""}"></div>
+            <div class="dlg-field"><label for="wk-est">Estimate turnaround</label><select id="wk-est">
+              ${opt("same-day", party.estimate, "Same day")}${opt("1-3d", party.estimate, "1\u20133 days")}${opt("week", party.estimate, "About a week")}${opt("longer", party.estimate, "Longer")}${opt("unknown", party.estimate || "unknown", "Didn't say")}
+            </select></div>
+          </div>
+        </div>
+        <div id="wk-gc" class="wk-branch" hidden>
+          <p class="wk-branchlab">Their general contractor</p>
+          <div class="dlg-field"><label for="wk-gcname">GC company</label><input id="wk-gcname" maxlength="120" value="${esc(gc.name || "")}"></div>
+          <div class="dlg-field"><label for="wk-gcphone">GC contact number</label><input id="wk-gcphone" type="tel" inputmode="tel" maxlength="24" value="${esc(gc.phone || "")}"></div>
+        </div>
+        <p class="dlg-error" id="wk-msg" role="alert" hidden></p>
+        <div class="dlg-foot">
+          <button type="button" id="wk-cancel">Cancel</button>
+          <button type="button" class="primary" id="wk-save">${editing ? "Save walkthrough" : "Post walkthrough"}</button>
+        </div>`;
+      dlg.setAttribute("aria-labelledby", "wk-title");
+
+      const contact = dlg.querySelector("#wk-contact");
+      const gcBlock = dlg.querySelector("#wk-gc");
+      const nameLabel = dlg.querySelector("#wk-name-label");
+      const sync = focusReveal => {
+        const onsite = dlg.querySelector('input[name="wk-onsite"]:checked').value;
+        contact.hidden = onsite === "none";
+        gcBlock.hidden = onsite !== "sub";
+        nameLabel.textContent = onsite === "sub" ? "Sub company" : "GC company";
+        if (focusReveal && !contact.hidden) { contact.scrollIntoView({ block: "nearest" }); dlg.querySelector("#wk-name").focus(); }
+      };
+      dlg.querySelectorAll('input[name="wk-onsite"]').forEach(r => r.addEventListener("change", () => sync(true)));
+      sync(false);
+
+      dlg.querySelector("#wk-cancel").addEventListener("click", () => dlg.close());
+      dlg.querySelector("#wk-save").addEventListener("click", async () => {
+        const val = id => (dlg.querySelector(id) || {}).value;
+        const payload = walkFieldsToPayload({
+          job: dlg.querySelector('input[name="wk-job"]:checked').value,
+          onsite: dlg.querySelector('input[name="wk-onsite"]:checked').value,
+          name: val("#wk-name"), phone: val("#wk-phone"), covers: val("#wk-covers"), jobs: val("#wk-jobs"), estimate: val("#wk-est"),
+          gcName: val("#wk-gcname"), gcPhone: val("#wk-gcphone"),
+        });
+        if (payload.onsite !== "none" && !(payload.party.name || "").trim()) {
+          const msg = dlg.querySelector("#wk-msg"); msg.hidden = false; msg.textContent = "Name the company on site, or choose Nobody."; return;
+        }
+        if (!(localStorage.getItem("chi_permit_author") || "").trim()) {
+          const nm = window.prompt("Post publicly as (leave blank for anonymous):", "");
+          if (nm === null) return;
+          try { localStorage.setItem("chi_permit_author", nm.trim()); } catch { /* storage blocked */ }
+        }
+        payload.author = (localStorage.getItem("chi_permit_author") || "").trim();
+        const btn = dlg.querySelector("#wk-save"); btn.disabled = true; btn.textContent = "Saving\u2026";
+        try {
+          const url = editing
+            ? `${API_BASE}/api/notes/${encodeURIComponent(permit)}/${encodeURIComponent(editId)}`
+            : `${API_BASE}/api/notes/${encodeURIComponent(permit)}`;
+          const res = await fetch(url, { method: editing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+          if (!res.ok) throw new Error("save failed");
+          dlg.close();
+          await fetchThread(permit);
+          pmAnnounce(editing ? "Walkthrough updated." : "Walkthrough posted.");
+          const posted = document.querySelector("#pm-thread .tp");
+          if (posted) { posted.setAttribute("tabindex", "-1"); posted.focus(); }
+        } catch {
+          const msg = dlg.querySelector("#wk-msg"); msg.hidden = false; msg.textContent = "Could not save \u2014 this needs the live site.";
+          btn.disabled = false; btn.textContent = editing ? "Save walkthrough" : "Post walkthrough";
+        }
+      });
+      dlg.showModal();
+    }
+
     function pmFacts(pairs) {
       return `<dl class="pm-facts">${pairs.map(([k, v, extra]) =>
         `<dt>${esc(k)}</dt><dd>${v ? esc(v) : "—"}${extra || ""}</dd>`).join("")}</dl>`;
@@ -5660,10 +6004,21 @@
             ["Total fee", money(row.total_fee)],
           ])}</section>`,
         () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div></section>`,
-        () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div></section>`,
+        () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div><div class="pm-reported" id="pm-reported"></div></section>`,
         () => `<section class="pm-block"><h3>Notes</h3>
-            <textarea class="pm-note" placeholder="Add a note about this permit…" aria-label="Note for permit ${esc(row.permit_number)}"
-              oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[num] || "")}</textarea>
+            <div class="pm-note-draft">
+              <label class="pm-draft-label" for="pm-note-draft">My note <span class="pm-lock">\ud83d\udd12 private to this browser</span></label>
+              <textarea id="pm-note-draft" class="pm-note" placeholder="Private note, saved as you type\u2026" aria-label="Private note for permit ${esc(row.permit_number)}"
+                oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[num] || "")}</textarea>
+              <div class="pm-post-row">
+                <span class="small">Posting as <strong>${esc((typeof localStorage !== "undefined" && localStorage.getItem("chi_permit_author")) || "anonymous")}</strong></span>
+                <span class="pm-post-btns">
+                  <button type="button" onclick="openWalkthrough('${enc(row.permit_number)}')">Log walkthrough</button>
+                  <button type="button" class="primary" id="pm-post-btn" onclick="postNoteFromDraft('${enc(row.permit_number)}')">Post to permit</button>
+                </span>
+              </div>
+            </div>
+            <div id="pm-thread" class="pm-thread"></div>
           </section>`,
         () => `</div>`, // close .pm-content
       ];
@@ -5690,7 +6045,7 @@
     // Public entry point for opening a permit's detail overlay.
     function openPermitDetail(row) {
       state.activeDetail = { type: "permit", row };
-      openPermitModal(permitDetailHtml(row), { onOpen: body => { fillPermitContractors(body); fillPermitGeo(body, row); } });
+      openPermitModal(permitDetailHtml(row), { onOpen: body => { fillPermitContractors(body); fillPermitGeo(body, row); const pn = clean(row.permit_number); if (pn) fetchThread(pn); } });
     }
 
     function openPermitDetailFromEncoded(encoded) {
@@ -5762,5 +6117,6 @@
     </div>
   </div>
   <dialog id="list-picker" aria-modal="true"></dialog>
+  <dialog id="walkthrough" aria-modal="true"></dialog>
 </body>
 </html>

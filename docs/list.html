@@ -22,7 +22,7 @@
   <meta name="twitter:description" content="Review, reorder, route, annotate, and export saved Chicago building permits.">
   <meta name="twitter:image" content="https://dkaruri.github.io/chicago-building-permits-search/assets/search-directory-preview.png">
   <meta name="twitter:image:alt" content="Chicago Building Permits Search preview card by Divyam Karuri">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=database_search,list,map_search,moon_stars,policy,sunny" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_photo_alternate,csv,database_search,edit,list,map_search,moon_stars,photo,policy,route,share,sunny" rel="stylesheet">
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
@@ -1763,11 +1763,6 @@
       margin: 8px 0 10px;
     }
 
-    .permit-note {
-      min-width: 240px;
-      min-height: 58px;
-      font-size: 0.82rem;
-    }
 
     .route-leg {
       color: var(--steel);
@@ -1938,10 +1933,6 @@
       .user-list-panel table td.select-cell::before,
       .user-list-panel table td.move-cell::before {
         display: none;
-      }
-      .permit-note {
-        min-width: 0;
-        width: 100%;
       }
       .pager-controls {
         width: 100%;
@@ -2776,10 +2767,6 @@
         justify-content: flex-start;
       }
 
-      body.list-page .permit-note {
-        min-height: 56px;
-        font-size: 1rem;
-      }
 
       body.list-page .move-controls {
         display: inline-flex;
@@ -2854,7 +2841,7 @@
     .pm-facts dt { color: var(--muted); font-size: 0.8rem; margin: 0; }
     .pm-facts dd { margin: 0; font-size: 0.88rem; }
     .approx { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--warning); background: var(--warning-soft); padding: 1px 6px; border-radius: 5px; margin-left: 6px; cursor: help; }
-    .pm-note { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 0.88rem; padding: 9px 11px; resize: vertical; }
+    .pm-note { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 1rem; padding: 9px 11px; resize: vertical; }
 
     /* ---- List directory ---- */
     .tag {
@@ -2969,6 +2956,113 @@
     .back-to-dir { font-size: .85rem; text-decoration: none; color: var(--primary); margin-right: .2rem; }
     .back-to-dir:hover { text-decoration: underline; }
     .list-details-btn { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; }
+
+    .material-symbols-outlined {
+      font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+      font-size: 20px; line-height: 1;
+    }
+    .toolbar-primary button { display: inline-flex; align-items: center; gap: .4rem; }
+
+    .use {
+      display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap;
+      font-size: .78rem; font-weight: 600; padding: .1rem .4rem;
+      border-radius: 4px; border: 1px solid currentColor;
+    }
+    .use-residential { color: var(--t3); }
+    .use-commercial  { color: var(--t5); }
+    .use-mixed       { color: var(--t7); }
+    .use-unclear     { color: var(--muted); font-weight: 500; }
+    .approx {
+      font-size: .66rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+      color: var(--muted); border: 1px dashed var(--line-strong); border-radius: 3px;
+      padding: 0 .2rem; margin-left: .25rem; white-space: nowrap;
+    }
+
+    .note-count-cell { white-space: nowrap; }
+    .notecount {
+      display: inline-flex; align-items: center; gap: .25rem; font-size: .78rem; font-weight: 600;
+      color: var(--t7); background: transparent; border: 1px solid var(--t7);
+      border-radius: 999px; padding: .05rem .45rem; font-variant-numeric: tabular-nums;
+    }
+    .notecount.zero { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+    .tick-cell { white-space: nowrap; }
+    .tick { width: 22px; height: 22px; accent-color: var(--accent); cursor: pointer; margin: .5rem; }
+    /* State is dimming + strike-through as well as the box, so it never rests
+       on colour alone. */
+    tbody tr.is-done td:not(.tick-cell) { opacity: .62; }
+    tbody tr.is-done td[data-label="Address"] strong,
+    tbody tr.is-done td[data-label="Address"] .address-open { text-decoration: line-through; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; overflow: hidden;
+      clip: rect(0 0 0 0); white-space: nowrap;
+    }
+
+    #add-address {
+      border: 1px solid var(--line-strong); border-radius: 12px; padding: 1rem;
+      background: var(--panel); color: var(--ink); max-width: 480px; width: calc(100vw - 2rem);
+      max-height: calc(100vh - 3rem); overflow-y: auto; box-shadow: 0 12px 30px var(--shadow);
+    }
+    #add-address::backdrop { background: rgba(6, 14, 26, 0.55); }
+    #add-address h3 { margin: 0; font-size: 1.05rem; }
+    .dlg-row { display: flex; gap: .6rem; flex-wrap: wrap; }
+    .dlg-row .dlg-field { flex: 1 1 140px; }
+    .added {
+      display: inline-block; font-size: .68rem; font-weight: 700; letter-spacing: .04em;
+      color: var(--t6); border: 1px dashed var(--t6); border-radius: 3px;
+      padding: 0 .25rem; margin-left: .35rem; white-space: nowrap;
+    }
+    .added.warn { color: var(--warning); border-color: var(--warning); }
+
+    .pm-note-draft { border: 1px solid var(--line); border-radius: 8px; padding: .6rem; background: var(--surface-subtle); margin-bottom: .8rem; }
+    .pm-draft-label { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); margin-bottom: .35rem; }
+    .pm-lock { font-weight: 600; }
+    .pm-post-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+    .pm-post-btns { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .pm-thread { display: grid; gap: .6rem; }
+    .tp { border: 1px solid var(--cell-line); border-left: 3px solid var(--t7); border-radius: 0 8px 8px 0; padding: .55rem .7rem; background: var(--surface-subtle); }
+    .tp-head { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; font-size: .78rem; color: var(--muted); margin-bottom: .25rem; }
+    .tp-who { font-weight: 700; color: var(--ink); font-size: .84rem; }
+    .tp-kind { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border: 1px solid var(--t7); color: var(--t7); border-radius: 3px; padding: 0 .25rem; }
+    .tp-text { font-size: .88rem; }
+    .tp-kv { display: grid; grid-template-columns: auto 1fr; gap: .2rem .7rem; font-size: .85rem; margin: 0; }
+    .tp-kv dt { color: var(--muted); }
+    .tp-kv dd { margin: 0; }
+    .tp-act { display: flex; gap: .5rem; margin-top: .35rem; }
+    .tp-act button { font: inherit; font-size: .78rem; font-weight: 600; background: none; border: 1px solid transparent; padding: .3rem .5rem; border-radius: 6px; color: var(--muted); cursor: pointer; min-height: 40px; }
+    .tp-act button:hover { border-color: var(--line); }
+    .tp-act button.del { color: var(--danger); }
+    .tp-count { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .2rem; }
+    .tp-empty { color: var(--muted); font-size: .85rem; }
+
+    #walkthrough {
+      border: 1px solid var(--line-strong); border-radius: 12px; padding: 1rem;
+      background: var(--panel); color: var(--ink); max-width: 520px; width: calc(100vw - 2rem);
+      max-height: calc(100vh - 3rem); overflow-y: auto; box-shadow: 0 12px 30px var(--shadow);
+    }
+    #walkthrough::backdrop { background: rgba(6, 14, 26, 0.55); }
+    #walkthrough h3 { margin: 0; font-size: 1.05rem; }
+    #walkthrough .dlg-sub { margin: .2rem 0 .9rem; font-size: .84rem; color: var(--muted); }
+    #walkthrough .dlg-field { margin-bottom: .8rem; }
+    #walkthrough .dlg-field label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin-bottom: .3rem; }
+    #walkthrough .dlg-field input, #walkthrough .dlg-field select {
+      font: inherit; font-size: 1rem; width: 100%; box-sizing: border-box; min-height: 44px;
+      background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem;
+    }
+    #walkthrough .dlg-row { display: flex; gap: .6rem; flex-wrap: wrap; }
+    #walkthrough .dlg-row .dlg-field { flex: 1 1 140px; }
+    #walkthrough .dlg-error { color: var(--danger); font-size: .85rem; font-weight: 600; margin: .3rem 0 .6rem; }
+    #walkthrough .dlg-foot { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .5rem; }
+    .wk-fieldset { border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; margin: 0 0 .7rem; }
+    .wk-fieldset legend { font-size: .82rem; font-weight: 700; padding: 0 .3rem; }
+    .wk-choices { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .3rem; }
+    .wk-choice { display: inline-flex; align-items: center; gap: .4rem; cursor: pointer; border: 1px solid var(--line); border-radius: 8px; padding: .4rem .7rem; min-height: 44px; font-size: .86rem; background: var(--surface-subtle); }
+    .wk-choice:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); font-weight: 600; }
+    .wk-branch { border-left: 3px solid var(--primary); background: var(--surface-subtle); border-radius: 0 8px 8px 0; padding: .7rem .8rem; margin-bottom: .7rem; }
+    .wk-branchlab { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--primary); margin: 0 0 .5rem; }
+    .pm-reported { margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .5rem; }
+    .rep-sub { display: inline-flex; align-items: center; gap: .35rem; font-size: .85rem; }
+    .rep-badge { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--warning); border: 1px dashed var(--warning); border-radius: 3px; padding: 0 .2rem; }
   </style>
 </head>
 <body class="list-page">
@@ -3014,25 +3108,27 @@
           <a href="#" class="back-to-dir" onclick="event.preventDefault();showDirectory()">&#8592; All lists</a>
           <h2 id="user-list-title">My Permit List</h2>
           <span id="user-list-count" class="small"></span>
-          <button type="button" class="list-details-btn" onclick="openListDetails()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14.5 6.5l3 3"/></svg>
-            <span id="list-details-label">Edit details</span>
-          </button>
         </div>
         <div class="user-list-toolbar" role="group" aria-label="My Permit List actions">
           <div class="toolbar-primary">
-            <button class="primary" data-list-action onclick="calculateUserListRoute()">Estimate distances</button>
-            <button data-list-action onclick="openGoogleMapsRoute()">Open in Google Maps</button>
+            <button data-list-action onclick="openListDetails()">
+              <span class="material-symbols-outlined" aria-hidden="true">edit</span><span id="list-details-label">Edit details</span>
+            </button>
+            <button class="primary" data-list-action onclick="optimizeUserListRoute()">
+              <span class="material-symbols-outlined" aria-hidden="true">route</span>Optimize route
+            </button>
+            <button data-list-action onclick="shareUserList()">
+              <span class="material-symbols-outlined" aria-hidden="true">share</span>Share
+            </button>
+            <button data-list-action onclick="downloadUserListCsv()">
+              <span class="material-symbols-outlined" aria-hidden="true">csv</span>Export CSV
+            </button>
+            <button data-list-action onclick="openAddAddress()">+ Add address</button>
             <details class="action-menu" data-list-menu>
               <summary aria-haspopup="true">More</summary>
               <div class="action-menu-panel" role="menu" aria-label="More list tools">
-                <button role="menuitem" data-list-action onclick="shareUserList()">Share list<span class="menu-hint">Copy a short link</span></button>
-                <div class="action-menu-sep" role="separator"></div>
-                <button role="menuitem" data-list-action onclick="optimizeUserListRoute()">Sort by drive time</button>
+                <button role="menuitem" data-list-action onclick="openGoogleMapsRoute()">Open in Google Maps</button>
                 <button role="menuitem" data-list-action onclick="showGoogleRouteChunks()">Google route chunks</button>
-                <div class="action-menu-sep" role="separator"></div>
-                <button role="menuitem" data-list-action onclick="downloadUserListKml()">Export KML<span class="menu-hint">Google Earth / My Maps</span></button>
-                <button role="menuitem" data-list-action onclick="downloadUserListCsv()">Export CSV<span class="menu-hint">Spreadsheet</span></button>
               </div>
             </details>
           </div>
@@ -3064,7 +3160,7 @@
           for drive-time sorting. Results are estimates from OpenStreetMap-based routing and are not traffic-aware.
           Google Maps route export uses
           <a href="https://developers.google.com/maps/documentation/urls/get-started#directions-action" target="_blank" rel="noopener">Google Maps URLs</a>;
-          the mobile route link opens the first five mapped stops. Google route chunks create sequential Google Maps links for every mapped stop, while KML and CSV include every saved permit with details.
+          the mobile route link opens the first five mapped stops. Google route chunks create sequential Google Maps links for every mapped stop, while CSV includes every saved permit with details.
         </p>
       </details>
       <label class="list-note">List note
@@ -3321,6 +3417,7 @@
           permits,
           focal: data.focal || null,
           sharedId: id,
+          ticks: data.ticks || {},
           desc: (data.meta && data.meta.blurb) || "",
           author: (data.meta && data.meta.author) || "",
           tags: (data.meta && data.meta.tags) || [],
@@ -3524,6 +3621,7 @@
       let localId = Object.keys(state.lists).find(key => state.lists[key].sharedId === shareId);
       if (localId) {
         state.lists[localId].permits = permits;
+        state.lists[localId].ticks = data.ticks || {};
       } else {
         localId = `local_${Date.now().toString(36)}`;
         state.lists[localId] = {
@@ -3531,6 +3629,7 @@
           permits,
           focal: data.focal || null,
           sharedId: shareId,
+          ticks: data.ticks || {},
         };
       }
       state.activeListId = localId;
@@ -4926,7 +5025,9 @@
     }
 
     function userListRows() {
-      return state.userPermitNumbers.map(number => state.userPermitMap.get(number)).filter(Boolean);
+      const permits = state.userPermitNumbers.map(number => state.userPermitMap.get(number)).filter(Boolean);
+      const list = activeList();
+      return mergeCustomStops(permits, list && list.custom);
     }
 
     // ---- Focal point (static route start address) ----
@@ -5099,20 +5200,6 @@
         .join("");
     }
 
-    // Concise KML bubble: address first (bold, copy-ready for map-app search),
-    // then just permit number, work type, and any note. Keeps pins navigable
-    // instead of dumping every field — the CSV export carries the full detail.
-    function kmlPlacemarkDescription(row) {
-      if (row.focal) return `<b>${esc(row.address)}</b><br/>Starting location`;
-      const lines = [`<b>${esc(row.address || "Address unavailable")}</b>`];
-      const number = clean(row.permit_number);
-      if (number) lines.push(`Permit ${esc(number)}`);
-      const type = clean(row.work_type || row.permit_type);
-      if (type) lines.push(esc(type));
-      const note = clean(state.userPermitNotes[number]);
-      if (note) lines.push(`Note: ${esc(note)}`);
-      return lines.join("<br/>");
-    }
 
     function xmlText(value) {
       return esc(value);
@@ -5189,7 +5276,7 @@
         const url = googleMapsDirectionsUrl(routeRows);
         const skipped = rows.length - routeRows.length;
         state.userRouteSummary = skipped
-          ? `Opened Google Maps for the first ${fmt(routeRows.length)} mapped stops. Download KML or CSV for all ${fmt(rows.length)} mapped permits.`
+          ? `Opened Google Maps for the first ${fmt(routeRows.length)} mapped stops. Download CSV for all ${fmt(rows.length)} mapped permits.`
           : `Opened Google Maps for ${fmt(routeRows.length)} mapped stops.`;
         renderRouteSummary();
         announceListAction("Google Maps route opened in a new tab.");
@@ -5238,64 +5325,6 @@
       });
     }
 
-    async function downloadUserListKml() {
-      await withListAction("Preparing KML export...", async () => {
-        await ensurePermitMap();
-        const permitRows = mapExportRows();
-        if (!permitRows.length) {
-          clearUserRoute("At least one saved permit needs mapped coordinates to download a map file.");
-          return;
-        }
-        await resolveGeoForRows(permitRows);
-        // Prepend the starting location (when set) as the route's first stop.
-        const rows = withFocalOrigin(permitRows);
-        // Cycle a palette of distinct colors so adjacent pins never blend. KML
-        // color is aabbggr; tint the shared white pushpin. Google's canonical
-        // icon hrefs are honored by Google Earth / My Maps.
-        const pinColors = ["e6194b", "3cb44b", "4363d8", "f58231", "911eb4", "42d4f4", "f032e6", "bfef45", "fabed4", "469990"];
-        const toKmlColor = hex => `ff${hex.slice(4, 6)}${hex.slice(2, 4)}${hex.slice(0, 2)}`;
-        const pinHref = "http://maps.google.com/mapfiles/kml/pushpin/wht-pushpin.png";
-        const pinStyles = pinColors.map((hex, i) => `
-    <Style id="pin${i}"><IconStyle><color>${toKmlColor(hex)}</color><scale>1.1</scale><Icon><href>${pinHref}</href></Icon></IconStyle><LabelStyle><scale>0.8</scale></LabelStyle></Style>`).join("");
-        const extraStyles = `
-    <Style id="startPin"><IconStyle><color>ff2fce54</color><scale>1.3</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/go.png</href></Icon></IconStyle><LabelStyle><scale>0.9</scale></LabelStyle></Style>
-    <Style id="routeLine"><LineStyle><color>80646464</color><width>3</width></LineStyle></Style>`;
-        let ordinal = 0;
-        const placemarks = rows.map(row => {
-          const label = clean(row.address) || `Permit ${clean(row.permit_number)}` || "Saved permit";
-          const name = row.focal ? `Start · ${label}` : `${(ordinal += 1)}. ${label}`;
-          const styleUrl = row.focal ? "#startPin" : `#pin${(ordinal - 1) % pinColors.length}`;
-          return `
-          <Placemark>
-            <name>${xmlText(name)}</name>
-            <styleUrl>${styleUrl}</styleUrl>
-            <description><![CDATA[${cdata(kmlPlacemarkDescription(row))}]]></description>
-            <Point><coordinates>${Number(row.longitude)},${Number(row.latitude)},0</coordinates></Point>
-          </Placemark>`;
-        }).join("");
-        const line = rows.length > 1 ? `
-          <Placemark>
-            <name>Route order</name>
-            <styleUrl>#routeLine</styleUrl>
-            <LineString>
-              <tessellate>1</tessellate>
-              <coordinates>${rows.map(row => `${Number(row.longitude)},${Number(row.latitude)},0`).join(" ")}</coordinates>
-            </LineString>
-          </Placemark>` : "";
-        const kml = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-  <Document>
-    <name>Chicago Permit List</name>
-    <description>${xmlText(state.userListNote || "Saved Chicago building permits")}</description>${pinStyles}${extraStyles}
-    ${placemarks}
-    ${line}
-  </Document>
-</kml>`;
-        downloadBlob(userListFilename("kml"), kml, "application/vnd.google-earth.kml+xml;charset=utf-8");
-        clearUserRoute(`Downloaded KML with ${fmt(permitRows.length)} mapped permits and their permit details.`);
-        announceListAction("KML export downloaded.");
-      });
-    }
 
     async function downloadUserListCsv() {
       await withListAction("Preparing CSV export...", async () => {
@@ -5307,7 +5336,7 @@
         }
         await resolveGeoForRows(rows);
         const headers = [
-          "order", "permit_number", "status", "issued", "address", "ward", "zone", "tif_district", "permit_type",
+          "order", "source", "permit_number", "status", "issued", "address", "ward", "zone", "tif_district", "permit_type",
           "work_type", "reported_cost", "processing_time", "latitude", "longitude",
           "general_contractors", "open_subs", "permit_note", "list_note", "work_description"
         ];
@@ -5316,6 +5345,7 @@
         let ordinal = 0;
         const body = exportRows.map(row => [
           row.focal ? "Start" : (ordinal += 1),
+          row.focal ? "start" : (row.is_custom ? "manual" : "permit"),
           row.permit_number,
           row.permit_status,
           row.issue_date,
@@ -5406,7 +5436,7 @@
           const totalDistance = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.distance || 0), 0);
           const totalDuration = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.duration || 0), 0);
           const skipped = rows.length - routablePermits.length;
-          state.userRouteSummary = `Current route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} saved permits missing coordinates)` : ""}.`;
+          state.userRouteSummary = `Current route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} stop${skipped === 1 ? "" : "s"} without a location left out)` : ""}.`;
           announceListAction("Driving distances calculated.");
           await renderUserList();
         } catch (error) {
@@ -5514,9 +5544,12 @@
           // can block the thread for ~1s on a full 100-stop list).
           await new Promise(resolve => setTimeout(resolve, 0));
           const ordered = greedyRouteOrder(routable, matrix);
-          const orderedPermits = ordered.filter(row => !row.focal);
-          const missing = rows.filter(row => !hasCoordinates(row)).map(row => clean(row.permit_number));
-          state.userPermitNumbers = [...orderedPermits.map(row => clean(row.permit_number)), ...missing];
+          // Custom stops are NOT permit numbers — excluded here or the rebuild
+          // would push empty strings into state.userPermitNumbers. Their order
+          // is held by their own pos field instead.
+          const orderedPermits = ordered.filter(row => !row.focal && !row.is_custom);
+          const missing = rows.filter(row => !hasCoordinates(row) && !row.is_custom).map(row => clean(row.permit_number));
+          state.userPermitNumbers = [...orderedPermits.map(row => clean(row.permit_number)), ...missing].filter(Boolean);
           saveUserListCookie();
           setRouteProgress(2, 3, "measuring route legs…");
           state.userRouteLegs = await fetchRouteLegs(ordered);
@@ -5524,7 +5557,7 @@
           const totalDuration = state.userRouteLegs.reduce((sum, leg) => sum + Number(leg.duration || 0), 0);
           const skipped = rows.length - routablePermits.length;
           clearRouteProgress();
-          state.userRouteSummary = `Sorted route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} saved permits missing coordinates)` : ""}.`;
+          state.userRouteSummary = `Sorted route: ${milesLabel(totalDistance)} / ${minutesLabel(totalDuration)}${skipped ? ` (${fmt(skipped)} stop${skipped === 1 ? "" : "s"} without a location left out)` : ""}.`;
           announceListAction("List sorted by estimated driving time.");
           await renderUserList();
         } catch (error) {
@@ -5741,6 +5774,197 @@
 
       dlg.showModal();
       dlg.querySelector("#ld-title").focus();
+    }
+
+    // ---- Hand-typed custom stops ----
+    function customUse(key) {
+      const map = {
+        residential: { key: "residential", label: "Residential", glyph: "\u25E7" },
+        commercial: { key: "commercial", label: "Commercial", glyph: "\u25A4" },
+        mixed: { key: "mixed", label: "Mixed use", glyph: "\u25EB" },
+      };
+      return map[key] || { key: "unclear", label: "Unclear", glyph: "\u2014" };
+    }
+
+    function customToRow(c) {
+      // Number(null) is 0, which is finite — so a null coordinate would read as
+      // 0,0 in the Gulf of Guinea rather than "no location". Check for null first.
+      const hasGeo = c.lat != null && c.lon != null
+        && Number.isFinite(Number(c.lat)) && Number.isFinite(Number(c.lon));
+      return {
+        // Never fabricate a permit number. An empty string is honest; a
+        // placeholder could be mistaken for real city data.
+        permit_number: "",
+        custom_id: c.id,
+        is_custom: true,
+        no_geo: !hasGeo,
+        address: c.addr,
+        work_description: c.work || "",
+        work_type: c.work || "",
+        permit_type: "",
+        permit_status: "",
+        issue_date: "",
+        reported_cost: "",
+        ward: "",
+        general_contractors: c.gc || "",
+        open_subs: "",
+        latitude: hasGeo ? Number(c.lat) : null,
+        longitude: hasGeo ? Number(c.lon) : null,
+        _use: c.use || "unclear",
+      };
+    }
+
+    function mergeCustomStops(permitRows, custom) {
+      const out = [...permitRows];
+      const sorted = [...(custom || [])].sort((a, b) => (Number(a.pos) || 0) - (Number(b.pos) || 0));
+      sorted.forEach(c => {
+        const at = Math.max(0, Math.min(out.length, (Number(c.pos) || out.length + 1) - 1));
+        out.splice(at, 0, customToRow(c));
+      });
+      return out;
+    }
+
+    function openAddAddress() {
+      const list = activeList();
+      if (!list) return;
+      const dlg = $("add-address");
+      const total = (list.permits || []).length + ((list.custom || []).length) + 1;
+      dlg.innerHTML = `<h3 id="add-addr-title">Add address</h3>
+        <p class="dlg-sub">A stop the city permit data does not have.</p>
+        <div class="dlg-field"><label for="ca-addr">Address</label>
+          <input id="ca-addr" placeholder="1234 W Example Ave" maxlength="120"></div>
+        <div class="dlg-row">
+          <div class="dlg-field"><label for="ca-pos">Position in list</label>
+            <input id="ca-pos" type="number" inputmode="numeric" min="1" max="${total}" value="${total}"></div>
+          <div class="dlg-field"><label for="ca-use">Use</label>
+            <select id="ca-use">
+              <option value="residential">Residential</option>
+              <option value="commercial">Commercial</option>
+              <option value="mixed">Mixed use</option>
+              <option value="unclear" selected>Unclear</option>
+            </select></div>
+        </div>
+        <div class="dlg-field"><label for="ca-work">Work description</label>
+          <input id="ca-work" placeholder="What is happening at this address" maxlength="200"></div>
+        <div class="dlg-field"><label for="ca-gc">General contractor <span style="font-weight:400">(optional)</span></label>
+          <input id="ca-gc" placeholder="Company name if you saw a sign or truck" maxlength="120"></div>
+        <p class="dlg-error" id="ca-msg" role="alert" hidden></p>
+        <div class="dlg-foot">
+          <button type="button" id="ca-cancel">Cancel</button>
+          <button type="button" class="primary" id="ca-save">Add to list</button>
+        </div>`;
+      dlg.setAttribute("aria-labelledby", "add-addr-title");
+      dlg.querySelector("#ca-cancel").addEventListener("click", () => dlg.close());
+      dlg.querySelector("#ca-save").addEventListener("click", () => addCustomStop(dlg));
+      dlg.showModal();
+      dlg.querySelector("#ca-addr").focus();
+    }
+
+    async function addCustomStop(dlg) {
+      const btn = dlg.querySelector("#ca-save");
+      const msg = dlg.querySelector("#ca-msg");
+      const addr = dlg.querySelector("#ca-addr").value.trim();
+      if (!addr) {
+        msg.hidden = false;
+        msg.textContent = "Type an address first.";
+        dlg.querySelector("#ca-addr").focus();
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = "Adding\u2026";
+      // Geocode so the stop can join the route. A failure is not fatal — the
+      // stop is still added, flagged, and left out of drive-time sorting.
+      let coords = null;
+      try {
+        coords = await geocodeMapSearch(addr);
+      } catch {
+        coords = null;
+      }
+      const list = activeList();
+      list.custom = list.custom || [];
+      const stop = {
+        id: `c_${Date.now().toString(36)}`,
+        pos: Math.max(1, Number(dlg.querySelector("#ca-pos").value) || 1),
+        addr,
+        lat: coords ? Number(coords.lat) : null,
+        lon: coords ? Number(coords.lon) : null,
+        use: dlg.querySelector("#ca-use").value,
+        work: dlg.querySelector("#ca-work").value.trim(),
+        gc: dlg.querySelector("#ca-gc").value.trim(),
+      };
+      list.custom.push(stop);
+      saveUserLists();
+      dlg.close();
+      await renderUserList();
+      announceListAction(coords
+        ? `Added ${addr} at position ${stop.pos}.`
+        : `Added ${addr}, but it could not be placed on the map \u2014 it will sit out of drive-time sorting.`);
+    }
+
+    function removeCustomStop(encodedId) {
+      const id = decodeURIComponent(encodedId);
+      const list = activeList();
+      if (!list || !list.custom) return;
+      list.custom = list.custom.filter(c => c.id !== id);
+      saveUserLists();
+      renderUserList();
+    }
+
+    // ---- Visited checkbox (shared on the list) ----
+    // Ticking rapidly down a list would otherwise fire one PUT per tap. Queue
+    // them, keep only the last state per key, and flush once.
+    function coalesceTicks(queue) {
+      const seen = new Map();
+      for (const [key, on] of queue) seen.set(key, on);
+      return [...seen.entries()].map(([key, on]) => [key, on]);
+    }
+
+    let tickQueue = [];
+    let tickTimer = null;
+
+    function queueTickSync() {
+      const list = activeList();
+      if (!list || !list.sharedId) { tickQueue = []; return; }
+      clearTimeout(tickTimer);
+      tickTimer = setTimeout(async () => {
+        const batch = coalesceTicks(tickQueue);
+        tickQueue = [];
+        for (const [key, on] of batch) {
+          try {
+            await fetch(`${API_BASE}/api/lists/${encodeURIComponent(list.sharedId)}/ticks`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ key, on }),
+            });
+          } catch {
+            // Offline or Worker unreachable. The tick is already stored
+            // locally and resyncs next time this list is opened.
+          }
+        }
+      }, 800);
+    }
+
+    function toggleTick(encodedKey, on) {
+      const key = decodeURIComponent(encodedKey);
+      const list = activeList();
+      if (!list) return;
+      list.ticks = list.ticks || {};
+      if (on) list.ticks[key] = 1; else delete list.ticks[key];
+      saveUserLists();
+      const row = document.querySelector(`tr[data-tick-row="${CSS.escape(key)}"]`);
+      if (row) row.classList.toggle("is-done", !!on);
+      tickQueue.push([key, !!on]);
+      queueTickSync();
+    }
+
+    function tickKeyFor(row) {
+      return row && row.is_custom ? row.custom_id : clean(row && row.permit_number);
+    }
+
+    function isTicked(row) {
+      const list = activeList();
+      const key = tickKeyFor(row);
+      return !!(list && list.ticks && key && list.ticks[key]);
     }
 
     // ---- Add-to-list picker ----
@@ -6051,6 +6275,36 @@
 
     // Fill the Zone/TIF cells for the rendered rows (cached values show instantly;
     // "—" means resolved-but-none, "…" is the pre-resolution placeholder).
+    // ---- Public note counts on the saved-list chip (Phase 3) ----
+    function chipLabel(o) {
+      if (o.publicCount > 0) return String(o.publicCount);
+      if (o.hasPrivate) return "✎";
+      return "0";
+    }
+
+    async function fetchNoteCounts(permits) {
+      const ids = permits.filter(Boolean).slice(0, 220);
+      if (!ids.length) return;
+      try {
+        const res = await fetch(`${API_BASE}/api/notes/counts?p=${encodeURIComponent(ids.join(","))}`);
+        if (!res.ok) return;
+        state.noteCounts = (await res.json()).counts || {};
+        applyNoteCounts();
+      } catch { /* offline — chips keep their private-only state */ }
+    }
+
+    function applyNoteCounts() {
+      document.querySelectorAll(".notecount[data-permit]").forEach(el => {
+        const permit = el.getAttribute("data-permit");
+        const publicCount = Number((state.noteCounts || {})[permit]) || 0;
+        const hasPrivate = !!(state.userPermitNotes[permit]);
+        const label = chipLabel({ hasPrivate, publicCount });
+        el.textContent = publicCount > 0 ? "💬 " + label : label;
+        el.classList.toggle("zero", label === "0");
+        if (publicCount > 0) el.title = publicCount + " public note" + (publicCount === 1 ? "" : "s");
+      });
+    }
+
     function fillListGeoCells(rows) {
       for (const row of rows) {
         const sel = `[data-permit="${clean(row.permit_number)}"]`;
@@ -6072,8 +6326,9 @@
       await ensurePermitMap();
       $("user-list-note").value = state.userListNote;
       renderRouteSummary();
-      const rows = state.userPermitNumbers.map(number => state.userPermitMap.get(number)).filter(Boolean);
-      $("user-list-count").textContent = rows.length ? `${fmt(rows.length)} saved` : "";
+      const rows = userListRows();
+      const permitCount = rows.filter(row => !row.is_custom).length;
+      $("user-list-count").textContent = permitCount ? `${fmt(permitCount)} saved` : "";
       if (!rows.length) {
         $("user-list").innerHTML = `<div class="empty">No permits added yet.</div>`;
         return;
@@ -6089,6 +6344,7 @@
         emptyText: "No permits added yet."
       });
       fillListGeoCells(rows);
+      fetchNoteCounts(rows.filter(r => !r.is_custom).map(r => clean(r.permit_number)));
     }
 
     function specialtyText(row) {
@@ -6492,15 +6748,19 @@
       const selectHead = options.select ? "<th class=\"select-cell\" aria-label=\"Select permits\"></th>" : "";
       const removeHead = options.remove ? "<th class=\"select-cell\" aria-label=\"Remove permits\"></th>" : "";
       const notesHead = options.notes ? "<th>Notes</th>" : "";
+      const useHead = options.move ? "<th>Use</th>" : "";
+      const tickHead = options.move ? `<th class="tick-cell"><span aria-hidden="true">\u2713</span><span class="sr-only">Visited</span></th>` : "";
       const geoHead = options.geo ? "<th>Zone</th><th>TIF district</th>" : "";
       const moveHead = options.move ? "<th class=\"move-cell\" aria-label=\"Move permits\"></th>" : "";
       const head = (label, key) => options.sortable === false ? esc(label) : sortHeader(label, key);
       const tableClass = options.select ? "results-table permits-table" : options.notes ? "saved-permits-table" : "";
       return `
         <table class="${tableClass}">
-          <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th>${options.move ? "" : `<th>${head("Ward", "ward")}</th>`}<th>${head("Cost", "cost")}</th>${geoHead}${notesHead}${moveHead}</tr></thead>
+          <thead><tr>${tickHead}${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th>${options.move ? "" : `<th>${head("Ward", "ward")}</th>`}${useHead}<th>${head("Cost", "cost")}</th>${geoHead}${notesHead}${moveHead}</tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr
+              ${options.move ? `data-tick-row="${esc(tickKeyFor(row))}"` : ""}
+              class="${options.move && isTicked(row) ? "is-done" : ""}"
               draggable="${options.select || options.reorder ? "true" : "false"}"
               ondragstart="permitDragStart(event, '${enc(row.permit_number)}')"
               ondragend="permitDragEnd()"
@@ -6509,14 +6769,16 @@
             >
               ${options.remove ? `<td class="select-cell" data-label="Remove"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell" data-label="Select" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
+              ${options.move ? (() => { const tk = tickKeyFor(row); return `<td class="tick-cell" data-label="Visited"><input type="checkbox" class="tick" ${isTicked(row) ? "checked" : ""} aria-label="Mark ${esc(row.address || row.permit_number || "this stop")} visited" onclick="event.stopPropagation()" onchange="toggleTick('${enc(tk)}', this.checked)"></td>`; })() : ""}
               <td data-label="Permit">${options.move ? `<span class="list-ordinal" aria-label="Stop ${i + 1}">${i + 1}</span>` : ""}<strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
               <td data-label="Status">${esc(row.permit_status)}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
-              <td data-label="Address">${options.move && clean(row.address) ? (() => { const u = mapsUrls(row.address); return `<span class="maps-picker"><button type="button" class="address-open" aria-haspopup="true" aria-expanded="false" aria-controls="maps-menu-${i}" onclick="event.stopPropagation(); toggleMapsMenu(this)">${esc(row.address)}<span class="chev" aria-hidden="true">▾</span></button><span class="maps-menu" id="maps-menu-${i}" role="menu"><span class="maps-menu-label">Open in</span><a role="menuitem" href="${esc(u.apple)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Apple Maps</a><a role="menuitem" href="${esc(u.google)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Google Maps</a><a role="menuitem" href="${esc(u.waze)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Waze</a></span></span>`; })() : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
+              <td data-label="Address">${options.move && clean(row.address) ? (() => { const u = mapsUrls(row.address); return `<span class="maps-picker"><button type="button" class="address-open" aria-haspopup="true" aria-expanded="false" aria-controls="maps-menu-${i}" onclick="event.stopPropagation(); toggleMapsMenu(this)">${esc(row.address)}<span class="chev" aria-hidden="true">▾</span></button><span class="maps-menu" id="maps-menu-${i}" role="menu"><span class="maps-menu-label">Open in</span><a role="menuitem" href="${esc(u.apple)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Apple Maps</a><a role="menuitem" href="${esc(u.google)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Google Maps</a><a role="menuitem" href="${esc(u.waze)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Waze</a></span></span>`; })() : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span>${row.is_custom ? (row.no_geo ? `<span class="added warn" title="Could not be placed on the map">\u26A0 No location</span>` : `<span class="added" title="Typed by hand, not matched to a city permit">\u270E Added by hand</span>`) : ""}</td>
+              ${options.move ? (() => { const pu = row.is_custom ? customUse(row._use) : permitUse(row); if (pu.key === "unclear") return `<td data-label="Use"></td>`; const badge = row.is_custom ? `<span class="approx" title="Typed when this address was added">typed</span>` : `<span class="approx" title="Inferred from the work description \u2014 the permits dataset has no occupancy field">approx</span>`; return `<td data-label="Use"><span class="use use-${pu.key}">${pu.glyph} ${esc(pu.label)}</span>${badge}</td>`; })() : ""}
               ${options.move ? "" : `<td data-label="Ward">${esc(row.ward)}</td>`}
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
               ${options.geo ? `<td data-label="Zone" class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</td><td data-label="TIF district" class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</td>` : ""}
-              ${options.notes ? `<td data-label="Notes"><textarea class="permit-note" draggable="false" placeholder="Add note..." onclick="event.stopPropagation()" ondragstart="event.stopPropagation()" oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[clean(row.permit_number)] || "")}</textarea></td>` : ""}
+              ${options.notes ? (() => { const pn = clean(row.permit_number); const nt = state.userPermitNotes[pn] || ""; const attr = row.is_custom ? "" : ` data-permit="${esc(pn)}"`; return `<td class="note-count-cell" data-label="Notes"><span class="notecount${nt ? "" : " zero"}"${attr}${nt ? ' title="You have a private note on this permit"' : ""}>${nt ? "✎" : "0"}</span></td>`; })() : ""}
               ${options.move ? `<td class="move-cell" data-label="Move"><div class="move-controls"><button class="icon-button" title="Move up" aria-label="Move ${esc(row.permit_number)} up" ${i === 0 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', -1)">&uarr;</button><button class="icon-button" title="Move down" aria-label="Move ${esc(row.permit_number)} down" ${i >= rows.length - 1 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', 1)">&darr;</button></div></td>` : ""}
             </tr>`).join("")}</tbody>
         </table>`;
@@ -6559,6 +6821,24 @@
 
     // Best-effort building/dwelling type from the free-text work description.
     // Heuristic only — callers MUST label the result "approx.". "" when nothing matches.
+    // The permits dataset has NO occupancy field, so this is a heuristic over
+    // permit_type + work_description, exactly like parseBuildingType. Every
+    // inferred result is rendered with an "approx" badge, and anything the text
+    // does not support reads "Unclear" rather than being guessed at.
+    function permitUse(row) {
+      const s = `${(row && row.permit_type) || ""} ${(row && row.work_description) || ""}`.toUpperCase();
+      if (/\b(WRECK\w*|DEMOLITION)\b/.test(s) && !/\bRESIDENTIAL\b/.test(s)) return { key: "unclear", label: "Unclear", glyph: "\u2014" };
+      const RES = /\b\d{1,3}[- ]?UNITS?\b|\bSINGLE[- ]?FAMILY\b|\b(TWO|THREE|FOUR|SIX)[- ]?FLAT\b|\b\d{1,2}[- ]?FLAT\b|\bTOWN\s?HO(ME|USE)\b|\bCONDO(MINIUM)?\b|\bAPARTMENT\b|\bMULTI[- ]?FAMILY\b|\bDWELLING\b|\bRESIDENTIAL\b/;
+      const COM = /\bCOMMERCIAL\b|\bRESTAURANT\b|\bRETAIL\b|\bOFFICE\b|\bSTOREFRONT\b|\bTENANT\b|\bWAREHOUSE\b|\bHOTEL\b/;
+      if (/\bMIXED[- ]?USE\b/.test(s)) return { key: "mixed", label: "Mixed use", glyph: "\u25EB" };
+      const res = RES.test(s);
+      const com = COM.test(s);
+      if (res && com) return { key: "mixed", label: "Mixed use", glyph: "\u25EB" };
+      if (res) return { key: "residential", label: "Residential", glyph: "\u25E7" };
+      if (com) return { key: "commercial", label: "Commercial", glyph: "\u25A4" };
+      return { key: "unclear", label: "Unclear", glyph: "\u2014" };
+    }
+
     function parseBuildingType(desc) {
       const s = (desc || "").toUpperCase();
       const num = s.match(/\b(\d{1,3})[- ]?UNITS?\b/);
@@ -6719,6 +6999,282 @@
     }
 
     // One fact row list; missing values render as an em-dash.
+    // ---- Public note thread (Phase 3) ----
+    const ESTIMATE_LABELS = { "same-day": "Same day", "1-3d": "1\u20133 days", "week": "About a week", "longer": "Longer", "unknown": "Didn't say" };
+    const JOB_LABELS = { "new": "New build", "remodel": "Remodel" };
+    let currentThreadPermit = "";
+
+    // Both pages need this; index.html has no announceListAction. Self-contained
+    // aria-live region so the shared thread code is identical on both.
+    function pmAnnounce(msg) {
+      let el = document.getElementById("pm-live");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "pm-live";
+        el.setAttribute("aria-live", "polite");
+        el.style.cssText = "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;";
+        document.body.appendChild(el);
+      }
+      el.textContent = msg;
+    }
+
+    function dateStampLabel(ts) {
+      const d = new Date(Number(ts) * 1000);
+      if (!Number.isFinite(d.getTime())) return "";
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    }
+
+    function threadPostHtml(post) {
+      const when = dateStampLabel(post.ts) + (post.editedTs ? " \u00b7 edited" : "");
+      const head = `<p class="tp-head"><span class="tp-who">${esc(post.author || "anonymous")}</span><time>${esc(when)}</time>` +
+        `<span class="tp-kind">${post.kind === "walk" ? "Walkthrough" : post.kind === "photo" ? "Photo" : "Note"}</span></p>`;
+      const acts = `<p class="tp-act">` +
+        `<button type="button" onclick="editNotePost('${esc(currentThreadPermit)}','${esc(post.id)}')">Edit</button>` +
+        `<button type="button" class="del" onclick="deleteNotePost('${esc(currentThreadPermit)}','${esc(post.id)}')">Delete</button></p>`;
+      if (post.kind === "walk") {
+        const p = post.party;
+        const rows = [
+          ["Job", esc(JOB_LABELS[post.job] || "\u2014")],
+          ["On site", post.onsite === "sub" ? "Open sub" : post.onsite === "gc" ? "General contractor" : "Nobody"],
+        ];
+        if (p) {
+          if (p.name) rows.push(["Company", esc(p.name)]);
+          if (p.phone) rows.push(["Phone", `<a href="tel:${esc(p.phone)}">${esc(p.phone)}</a>`]);
+          if (p.covers) rows.push(["Covers", esc(p.covers)]);
+          const cap = [p.jobs ? `${p.jobs} jobs at a time` : "", ESTIMATE_LABELS[p.estimate] ? `estimates ${ESTIMATE_LABELS[p.estimate]}` : ""].filter(Boolean).join(" \u00b7 ");
+          if (cap) rows.push(["Capacity", esc(cap)]);
+        }
+        if (post.gc && post.gc.name) rows.push(["Their GC", esc(post.gc.name) + (post.gc.phone ? ` \u00b7 <a href="tel:${esc(post.gc.phone)}">${esc(post.gc.phone)}</a>` : "")]);
+        return `<article class="tp walk">${head}<dl class="tp-kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl>${acts}</article>`;
+      }
+      const photo = post.kind === "photo" ? `<p class="tp-photo-note">\ud83d\udcf7 photo</p>` : "";
+      return `<article class="tp">${head}<p class="tp-text">${esc(post.text || "")}</p>${photo}${acts}</article>`;
+    }
+
+    async function fetchThread(permit) {
+      state.threads = state.threads || {};
+      state.threads[permit] = { loading: true, posts: [], error: "" };
+      renderThread(permit);
+      try {
+        const res = await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}`);
+        if (!res.ok) throw new Error("thread unavailable");
+        const data = await res.json();
+        state.threads[permit] = { loading: false, posts: Array.isArray(data.notes) ? data.notes : [], error: "" };
+      } catch {
+        state.threads[permit] = { loading: false, posts: [], error: "Public notes could not be loaded." };
+      }
+      renderThread(permit);
+      if (typeof fillReportedSubs === "function") fillReportedSubs(permit);
+    }
+
+    function renderThread(permit) {
+      currentThreadPermit = permit;
+      const host = document.getElementById("pm-thread");
+      if (!host) return;
+      const t = (state.threads && state.threads[permit]) || { loading: true, posts: [] };
+      if (t.loading) { host.innerHTML = `<p class="tp-empty">Loading public notes\u2026</p>`; return; }
+      if (t.error) { host.innerHTML = `<p class="tp-empty">${esc(t.error)}</p>`; return; }
+      host.innerHTML = t.posts.length
+        ? `<h4 class="tp-count">Public notes \u00b7 ${t.posts.length}</h4>${t.posts.map(threadPostHtml).join("")}`
+        : `<p class="tp-empty">No public notes yet. Post one above.</p>`;
+    }
+
+    async function postNoteText(permit) {
+      const box = document.getElementById("pm-note-draft");
+      const text = (box && box.value || "").trim();
+      if (!text) { pmAnnounce("Type a note before posting."); return; }
+      const author = (localStorage.getItem("chi_permit_author") || "").trim();
+      const btn = document.getElementById("pm-post-btn");
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind: "text", author, text }),
+        });
+        if (!res.ok) throw new Error("post failed");
+        await fetchThread(permit);
+        pmAnnounce("Note posted.");
+        const first = document.querySelector("#pm-thread .tp");
+        if (first) { first.setAttribute("tabindex", "-1"); first.focus(); }
+      } catch {
+        pmAnnounce("Could not post \u2014 this needs the live site.");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function postNoteFromDraft(encodedPermit) {
+      const permit = decodeURIComponent(encodedPermit);
+      if (!(localStorage.getItem("chi_permit_author") || "").trim()) {
+        const name = window.prompt("Post publicly as (leave blank for anonymous):", "");
+        if (name === null) return;
+        try { localStorage.setItem("chi_permit_author", name.trim()); } catch { /* storage blocked */ }
+      }
+      await postNoteText(permit);
+    }
+
+    async function deleteNotePost(permit, id) {
+      if (!window.confirm("Delete this public note?")) return;
+      try {
+        await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}/${encodeURIComponent(id)}`, { method: "DELETE" });
+        await fetchThread(permit);
+        pmAnnounce("Note deleted.");
+      } catch { pmAnnounce("Could not delete right now."); }
+    }
+
+    async function editNotePost(permit, id) {
+      const t = state.threads && state.threads[permit];
+      const post = t && t.posts.find(p => p.id === id);
+      if (!post) return;
+      if (post.kind === "walk") { if (typeof openWalkthrough === "function") openWalkthrough(permit, id); return; }
+      const next = window.prompt("Edit note", post.text || "");
+      if (next === null) return;
+      try {
+        await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}/${encodeURIComponent(id)}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: next }),
+        });
+        await fetchThread(permit);
+        pmAnnounce("Note updated.");
+      } catch { pmAnnounce("Could not update right now."); }
+    }
+
+    // ---- Site walkthrough (Phase 3) ----
+    function walkFieldsToPayload(f) {
+      const out = { kind: "walk", job: f.job === "new" ? "new" : "remodel", onsite: ["none", "gc", "sub"].includes(f.onsite) ? f.onsite : "none" };
+      if (out.onsite !== "none") {
+        const jobs = parseInt(f.jobs, 10);
+        out.party = { name: (f.name || "").trim(), phone: (f.phone || "").trim(), covers: (f.covers || "").trim(),
+          jobs: Number.isInteger(jobs) ? jobs : null, estimate: f.estimate || "unknown" };
+      }
+      if (out.onsite === "sub" && (f.gcName || "").trim()) {
+        out.gc = { name: f.gcName.trim(), phone: (f.gcPhone || "").trim() };
+      }
+      return out;
+    }
+
+    function reportedSubsFor(permit) {
+      const t = state.threads && state.threads[permit];
+      if (!t || !t.posts) return [];
+      const existing = String((state.userPermitMap.get(clean(permit)) || {}).open_subs || "").toUpperCase();
+      const seen = new Set();
+      const out = [];
+      t.posts.forEach(post => {
+        if (post.kind !== "walk" || post.onsite !== "sub" || !post.party || !post.party.name) return;
+        const name = post.party.name.trim();
+        const up = name.toUpperCase();
+        if (!up || seen.has(up) || existing.includes(up)) return;
+        seen.add(up);
+        out.push(name);
+      });
+      return out;
+    }
+
+    function fillReportedSubs(permit) {
+      const host = document.getElementById("pm-reported");
+      if (!host) return;
+      const reported = reportedSubsFor(permit);
+      host.innerHTML = reported.length
+        ? reported.map(n => `<span class="rep-sub">${esc(n)} <span class="rep-badge">reported on site</span></span>`).join("")
+        : "";
+    }
+
+    function openWalkthrough(encodedPermit, editId) {
+      const permit = decodeURIComponent(encodedPermit);
+      const dlg = document.getElementById("walkthrough");
+      const t = state.threads && state.threads[permit];
+      const editing = editId && t ? t.posts.find(p => p.id === editId) : null;
+      const e = editing || {};
+      const party = e.party || {};
+      const gc = e.gc || {};
+      const sel = (a, b) => a === b ? " checked" : "";
+      const opt = (v, cur, label) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`;
+      dlg.innerHTML = `<h3 id="wk-title">Site walkthrough</h3>
+        <p class="dlg-sub">${esc(permit)}</p>
+        <fieldset class="wk-fieldset"><legend>What kind of job is it?</legend>
+          <div class="wk-choices">
+            <label class="wk-choice"><input type="radio" name="wk-job" value="new"${sel("new", e.job)}> New build</label>
+            <label class="wk-choice"><input type="radio" name="wk-job" value="remodel"${sel("remodel", e.job || "remodel")}> Remodel</label>
+          </div></fieldset>
+        <fieldset class="wk-fieldset"><legend>Who was on site?</legend>
+          <div class="wk-choices">
+            <label class="wk-choice"><input type="radio" name="wk-onsite" value="none"${sel("none", e.onsite || "none")}> Nobody</label>
+            <label class="wk-choice"><input type="radio" name="wk-onsite" value="gc"${sel("gc", e.onsite)}> General contractor</label>
+            <label class="wk-choice"><input type="radio" name="wk-onsite" value="sub"${sel("sub", e.onsite)}> Open sub</label>
+          </div></fieldset>
+        <div id="wk-contact" class="wk-branch" hidden>
+          <div class="dlg-field"><label for="wk-name" id="wk-name-label">Company</label><input id="wk-name" maxlength="120" value="${esc(party.name || "")}"></div>
+          <div class="dlg-field"><label for="wk-phone">Contact number</label><input id="wk-phone" type="tel" inputmode="tel" maxlength="24" value="${esc(party.phone || "")}"></div>
+          <div class="dlg-field"><label for="wk-covers">What work do they cover?</label><input id="wk-covers" maxlength="120" value="${esc(party.covers || "")}"></div>
+          <div class="dlg-row">
+            <div class="dlg-field"><label for="wk-jobs">Jobs at a time</label><input id="wk-jobs" type="number" inputmode="numeric" min="1" value="${party.jobs != null ? party.jobs : ""}"></div>
+            <div class="dlg-field"><label for="wk-est">Estimate turnaround</label><select id="wk-est">
+              ${opt("same-day", party.estimate, "Same day")}${opt("1-3d", party.estimate, "1\u20133 days")}${opt("week", party.estimate, "About a week")}${opt("longer", party.estimate, "Longer")}${opt("unknown", party.estimate || "unknown", "Didn't say")}
+            </select></div>
+          </div>
+        </div>
+        <div id="wk-gc" class="wk-branch" hidden>
+          <p class="wk-branchlab">Their general contractor</p>
+          <div class="dlg-field"><label for="wk-gcname">GC company</label><input id="wk-gcname" maxlength="120" value="${esc(gc.name || "")}"></div>
+          <div class="dlg-field"><label for="wk-gcphone">GC contact number</label><input id="wk-gcphone" type="tel" inputmode="tel" maxlength="24" value="${esc(gc.phone || "")}"></div>
+        </div>
+        <p class="dlg-error" id="wk-msg" role="alert" hidden></p>
+        <div class="dlg-foot">
+          <button type="button" id="wk-cancel">Cancel</button>
+          <button type="button" class="primary" id="wk-save">${editing ? "Save walkthrough" : "Post walkthrough"}</button>
+        </div>`;
+      dlg.setAttribute("aria-labelledby", "wk-title");
+
+      const contact = dlg.querySelector("#wk-contact");
+      const gcBlock = dlg.querySelector("#wk-gc");
+      const nameLabel = dlg.querySelector("#wk-name-label");
+      const sync = focusReveal => {
+        const onsite = dlg.querySelector('input[name="wk-onsite"]:checked').value;
+        contact.hidden = onsite === "none";
+        gcBlock.hidden = onsite !== "sub";
+        nameLabel.textContent = onsite === "sub" ? "Sub company" : "GC company";
+        if (focusReveal && !contact.hidden) { contact.scrollIntoView({ block: "nearest" }); dlg.querySelector("#wk-name").focus(); }
+      };
+      dlg.querySelectorAll('input[name="wk-onsite"]').forEach(r => r.addEventListener("change", () => sync(true)));
+      sync(false);
+
+      dlg.querySelector("#wk-cancel").addEventListener("click", () => dlg.close());
+      dlg.querySelector("#wk-save").addEventListener("click", async () => {
+        const val = id => (dlg.querySelector(id) || {}).value;
+        const payload = walkFieldsToPayload({
+          job: dlg.querySelector('input[name="wk-job"]:checked').value,
+          onsite: dlg.querySelector('input[name="wk-onsite"]:checked').value,
+          name: val("#wk-name"), phone: val("#wk-phone"), covers: val("#wk-covers"), jobs: val("#wk-jobs"), estimate: val("#wk-est"),
+          gcName: val("#wk-gcname"), gcPhone: val("#wk-gcphone"),
+        });
+        if (payload.onsite !== "none" && !(payload.party.name || "").trim()) {
+          const msg = dlg.querySelector("#wk-msg"); msg.hidden = false; msg.textContent = "Name the company on site, or choose Nobody."; return;
+        }
+        if (!(localStorage.getItem("chi_permit_author") || "").trim()) {
+          const nm = window.prompt("Post publicly as (leave blank for anonymous):", "");
+          if (nm === null) return;
+          try { localStorage.setItem("chi_permit_author", nm.trim()); } catch { /* storage blocked */ }
+        }
+        payload.author = (localStorage.getItem("chi_permit_author") || "").trim();
+        const btn = dlg.querySelector("#wk-save"); btn.disabled = true; btn.textContent = "Saving\u2026";
+        try {
+          const url = editing
+            ? `${API_BASE}/api/notes/${encodeURIComponent(permit)}/${encodeURIComponent(editId)}`
+            : `${API_BASE}/api/notes/${encodeURIComponent(permit)}`;
+          const res = await fetch(url, { method: editing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+          if (!res.ok) throw new Error("save failed");
+          dlg.close();
+          await fetchThread(permit);
+          pmAnnounce(editing ? "Walkthrough updated." : "Walkthrough posted.");
+          const posted = document.querySelector("#pm-thread .tp");
+          if (posted) { posted.setAttribute("tabindex", "-1"); posted.focus(); }
+        } catch {
+          const msg = dlg.querySelector("#wk-msg"); msg.hidden = false; msg.textContent = "Could not save \u2014 this needs the live site.";
+          btn.disabled = false; btn.textContent = editing ? "Save walkthrough" : "Post walkthrough";
+        }
+      });
+      dlg.showModal();
+    }
+
     function pmFacts(pairs) {
       return `<dl class="pm-facts">${pairs.map(([k, v, extra]) =>
         `<dt>${esc(k)}</dt><dd>${v ? esc(v) : "—"}${extra || ""}</dd>`).join("")}</dl>`;
@@ -6764,10 +7320,21 @@
             ["Total fee", money(row.total_fee)],
           ])}</section>`,
         () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div></section>`,
-        () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div></section>`,
+        () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div><div class="pm-reported" id="pm-reported"></div></section>`,
         () => `<section class="pm-block"><h3>Notes</h3>
-            <textarea class="pm-note" placeholder="Add a note about this permit…" aria-label="Note for permit ${esc(row.permit_number)}"
-              oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[num] || "")}</textarea>
+            <div class="pm-note-draft">
+              <label class="pm-draft-label" for="pm-note-draft">My note <span class="pm-lock">\ud83d\udd12 private to this browser</span></label>
+              <textarea id="pm-note-draft" class="pm-note" placeholder="Private note, saved as you type\u2026" aria-label="Private note for permit ${esc(row.permit_number)}"
+                oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[num] || "")}</textarea>
+              <div class="pm-post-row">
+                <span class="small">Posting as <strong>${esc((typeof localStorage !== "undefined" && localStorage.getItem("chi_permit_author")) || "anonymous")}</strong></span>
+                <span class="pm-post-btns">
+                  <button type="button" onclick="openWalkthrough('${enc(row.permit_number)}')">Log walkthrough</button>
+                  <button type="button" class="primary" id="pm-post-btn" onclick="postNoteFromDraft('${enc(row.permit_number)}')">Post to permit</button>
+                </span>
+              </div>
+            </div>
+            <div id="pm-thread" class="pm-thread"></div>
           </section>`,
         () => `</div>`, // close .pm-content
       ];
@@ -6794,7 +7361,7 @@
     // Public entry point for opening a permit's detail overlay.
     function openPermitDetail(row) {
       state.activeDetail = { type: "permit", row };
-      openPermitModal(permitDetailHtml(row), { onOpen: body => { fillPermitContractors(body); fillPermitGeo(body, row); } });
+      openPermitModal(permitDetailHtml(row), { onOpen: body => { fillPermitContractors(body); fillPermitGeo(body, row); const pn = clean(row.permit_number); if (pn) fetchThread(pn); } });
     }
 
     function showPermitDetail(row, pushHistory = true) {
@@ -6861,5 +7428,7 @@
   </div>
   <dialog id="list-picker" aria-modal="true"></dialog>
   <dialog id="list-details" aria-modal="true"></dialog>
+  <dialog id="add-address" aria-modal="true"></dialog>
+  <dialog id="walkthrough" aria-modal="true"></dialog>
 </body>
 </html>
