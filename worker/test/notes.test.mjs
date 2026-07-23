@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert";
-import { sanitizeText, sanitizeWalk, makeNoteId, handleNotes } from "../src/notes.js";
+import { sanitizeText, sanitizeWalk, makeNoteId, handleNotes, sanitizePhotoRefs } from "../src/notes.js";
 
 test("makeNoteId is n_ plus 8 hex and varies", () => {
   assert.match(makeNoteId(), /^n_[0-9a-f]{8}$/);
@@ -141,4 +141,39 @@ test("a walkthrough post round-trips", async () => {
   assert.equal(body.notes[0].kind, "walk");
   assert.equal(body.notes[0].party.name, "Sub");
   assert.equal(body.notes[0].gc.name, "Their GC");
+});
+
+test("sanitizePhotoRefs keeps well-formed refs and caps captions", () => {
+  const out = sanitizePhotoRefs([{ id: "p_deadbeef", caption: "x".repeat(300) }, { id: "p_00000001", caption: "front" }]);
+  assert.equal(out.length, 2);
+  assert.equal(out[0].caption.length, 200);
+  assert.equal(out[1].id, "p_00000001");
+});
+
+test("sanitizePhotoRefs drops refs with a malformed id", () => {
+  assert.deepEqual(sanitizePhotoRefs([{ id: "../../etc", caption: "x" }, { id: "p_zz", caption: "y" }]), []);
+});
+
+test("sanitizePhotoRefs caps at 6 and tolerates junk", () => {
+  const many = Array.from({ length: 10 }, (_, i) => ({ id: "p_0000000" + (i % 10), caption: "c" }));
+  assert.equal(sanitizePhotoRefs(many).length, 6);
+  assert.deepEqual(sanitizePhotoRefs("nope"), []);
+  assert.deepEqual(sanitizePhotoRefs(null), []);
+});
+
+test("a photo post round-trips its refs", async () => {
+  const env = ENV();
+  await handleNotes(new URL("https://w/api/notes/1"), env, noteReq("1", "POST", {
+    kind: "photo", author: "A", text: "site pics",
+    photos: [{ id: "p_00000001", caption: "front" }, { id: "p_00000002", caption: "roof" }],
+  }));
+  const body = await (await handleNotes(new URL("https://w/api/notes/1"), env, noteReq("1", "GET"))).json();
+  assert.equal(body.notes[0].kind, "photo");
+  assert.equal(body.notes[0].photos.length, 2);
+  assert.equal(body.notes[0].photos[0].caption, "front");
+});
+
+test("a photo post with no valid photos and no text is rejected", async () => {
+  const res = await handleNotes(new URL("https://w/api/notes/1"), ENV(), noteReq("1", "POST", { kind: "photo", text: "  ", photos: [{ id: "bad" }] }));
+  assert.equal(res.status, 400);
 });
