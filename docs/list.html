@@ -3118,6 +3118,7 @@
       view: "directory",
       directory: { rows: [], cursor: null, q: "", tag: "", loading: false, error: "" },
       tagRegistry: null,
+      live: { ws: null, id: null, clock: 0, connected: false, applying: false, closing: false, presence: { count: 0, names: [] }, retry: 0, retryTimer: null },
       userListNote: "",
       userPermitNotes: {},
       focalPoint: null,
@@ -3410,6 +3411,7 @@
     }
 
     function showDirectory() {
+      liveDisconnect();
       state.view = "directory";
       const dir = $("directory-view");
       const panel = $("user-list-panel");
@@ -3429,6 +3431,8 @@
       const panel = $("user-list-panel");
       if (dir) dir.hidden = true;
       if (panel) panel.hidden = false;
+      const opened = activeList();
+      if (opened && opened.sharedId) liveConnect(opened.sharedId); else liveDisconnect();
       renderListHeading();
       await ensurePermitMap();
       await renderUserList();
@@ -4738,6 +4742,7 @@
       const list = activeList();
       if (list) list.permits = [...state.userPermitNumbers];
       saveUserLists();
+      if (list) sendListOp({ f: "p", v: list.permits });
     }
 
     function loadUserNotes() {
@@ -4930,6 +4935,8 @@
         }
       }
       saveFocalPoint();
+      { const _l = activeList(); if (_l) _l.focal = focalShareData(); }
+      sendListOp({ f: "f", v: focalShareData() });
       renderFocalStatus();
       clearUserRoute("Starting location changed. Recalculate driving distances when ready.");
     }
@@ -4937,6 +4944,8 @@
     function clearFocalPoint() {
       state.focalPoint = null;
       saveFocalPoint();
+      { const _l = activeList(); if (_l) _l.focal = null; }
+      sendListOp({ f: "f", v: null });
       const input = $("focal-input");
       if (input) input.value = "";
       renderFocalStatus();
@@ -5495,6 +5504,7 @@
           list.author = payload.author;
           list.tags = tags;
           saveUserLists();
+          sendListOp({ f: "meta", v: { title: list.name, desc: list.desc || "", author: list.author || "", tags: list.tags || [] } });
           try { localStorage.setItem("chi_permit_author", payload.author); } catch { /* storage blocked */ }
           dlg.close();
           renderListHeading();
@@ -5632,6 +5642,7 @@
       };
       list.custom.push(stop);
       saveUserLists();
+      sendListOp({ f: "custom", v: list.custom || [] });
       dlg.close();
       await renderUserList();
       announceListAction(coords
@@ -5645,6 +5656,7 @@
       if (!list || !list.custom) return;
       list.custom = list.custom.filter(c => c.id !== id);
       saveUserLists();
+      sendListOp({ f: "custom", v: list.custom || [] });
       renderUserList();
     }
 
@@ -5691,8 +5703,12 @@
       saveUserLists();
       const row = document.querySelector(`tr[data-tick-row="${CSS.escape(key)}"]`);
       if (row) row.classList.toggle("is-done", !!on);
-      tickQueue.push([key, !!on]);
-      queueTickSync();
+      if (state.live.connected && activeList() && activeList().sharedId === state.live.id) {
+        sendListOp({ f: "tick", k: key, v: on ? 1 : 0 });
+      } else {
+        tickQueue.push([key, !!on]);
+        queueTickSync();
+      }
     }
 
     function tickKeyFor(row) {
@@ -5704,6 +5720,130 @@
       const key = tickKeyFor(row);
       return !!(list && list.ticks && key && list.ticks[key]);
     }
+
+    // ---- Live sync (Phase B) ----
+    // Applies a server op to a local list object. Mirrors the Worker's applyOp;
+    // incoming ops are already server-validated, so this applies them directly.
+    function applyListOp(list, op) {
+      switch (op && op.f) {
+        case "p": list.permits = Array.isArray(op.v) ? op.v.slice() : []; break;
+        case "f": list.focal = op.v || null; break;
+        case "custom": list.custom = Array.isArray(op.v) ? op.v.slice() : []; break;
+        case "tick":
+          list.ticks = list.ticks || {};
+          if (op.k) { if (op.v) list.ticks[op.k] = 1; else delete list.ticks[op.k]; }
+          break;
+        case "meta": {
+          const m = op.v || {};
+          if (m.title != null) list.name = m.title;
+          if (m.desc != null) list.desc = m.desc;
+          if (m.author != null) list.author = m.author;
+          if (m.tags != null) list.tags = m.tags;
+          break;
+        }
+      }
+      return list;
+    }
+
+    function sendListOp(op) {
+      const live = state.live;
+      if (live.applying || !live.connected || !live.ws) return;
+      const list = activeList();
+      if (!list || !list.sharedId || list.sharedId !== live.id) return;
+      try { live.ws.send(JSON.stringify({ t: "patch", ops: [op] })); } catch { /* closing */ }
+    }
+
+    const WS_BASE = API_BASE.replace(/^http/, "ws");
+
+    function liveConnect(sharedId) {
+      liveDisconnect();
+      if (!sharedId || typeof WebSocket === "undefined") return;
+      const live = state.live;
+      live.id = sharedId;
+      live.closing = false;
+      let ws;
+      try { ws = new WebSocket(`${WS_BASE}/api/lists/${encodeURIComponent(sharedId)}/live`); }
+      catch { liveScheduleReconnect(sharedId); return; }
+      live.ws = ws;
+      ws.onopen = () => {
+        live.connected = true;
+        live.retry = 0;
+        try { ws.send(JSON.stringify({ t: "hello", author: (localStorage.getItem("chi_permit_author") || "").trim() })); } catch { /* closing */ }
+      };
+      ws.onmessage = ev => liveOnMessage(ev.data);
+      ws.onerror = () => { /* onclose follows */ };
+      ws.onclose = () => {
+        live.connected = false;
+        if (!live.closing && live.id === sharedId) liveScheduleReconnect(sharedId);
+      };
+    }
+
+    function liveDisconnect() {
+      const live = state.live;
+      live.closing = true;
+      live.connected = false;
+      clearTimeout(live.retryTimer);
+      if (live.ws) { try { live.ws.close(); } catch { /* already closed */ } }
+      live.ws = null;
+      live.id = null;
+    }
+
+    function liveScheduleReconnect(sharedId) {
+      const live = state.live;
+      const delay = Math.min(30000, 1000 * Math.pow(2, live.retry));
+      live.retry += 1;
+      clearTimeout(live.retryTimer);
+      live.retryTimer = setTimeout(() => {
+        const l = activeList();
+        if (l && l.sharedId === sharedId) liveConnect(sharedId);
+      }, delay);
+    }
+
+    function focalPointFromDoc(f) {
+      if (!f || !Number.isFinite(Number(f.lat)) || !Number.isFinite(Number(f.lon))) return null;
+      return { address: f.label || "", label: f.label || "", latitude: Number(f.lat), longitude: Number(f.lon), resolved: true, permitNumber: null, matched: false };
+    }
+
+    function liveOnMessage(data) {
+      let msg;
+      try { msg = JSON.parse(data); } catch { return; }
+      const live = state.live;
+      if (msg.t === "error") { liveDisconnect(); return; }
+      if (msg.t === "presence") { live.presence = { count: msg.count || 0, names: msg.names || [] }; return; }
+      const list = activeList();
+      if (!list || list.sharedId !== live.id) return;
+
+      live.applying = true;
+      try {
+        if (msg.t === "state" && msg.doc) {
+          const d = msg.doc;
+          list.permits = Array.isArray(d.p) ? d.p.slice() : [];
+          list.focal = d.f || null;
+          list.custom = Array.isArray(d.custom) ? d.custom.slice() : [];
+          list.ticks = d.ticks && typeof d.ticks === "object" ? d.ticks : {};
+          if (d.meta) { list.name = d.meta.title || list.name; list.desc = d.meta.blurb != null ? d.meta.blurb : list.desc; list.author = d.meta.author != null ? d.meta.author : list.author; list.tags = d.meta.tags != null ? d.meta.tags : list.tags; }
+          live.clock = msg.clock || 0;
+          if (msg.presence) live.presence = msg.presence;
+        } else if (msg.t === "patch" && Array.isArray(msg.ops)) {
+          for (const op of msg.ops) applyListOp(list, op);
+          live.clock = msg.clock || live.clock;
+        } else {
+          return;
+        }
+        state.userPermitNumbers = [...list.permits];
+        state.focalPoint = focalPointFromDoc(list.focal);
+        saveUserLists();
+        saveFocalPoint();
+        const focalInput = $("focal-input");
+        if (focalInput) focalInput.value = state.focalPoint ? (state.focalPoint.address || "") : "";
+        renderListHeading();
+        renderFocalStatus();
+        renderUserList();
+      } finally {
+        live.applying = false;
+      }
+    }
+
 
     // ---- Add-to-list picker ----
     function listCapacity(list, incoming) {
