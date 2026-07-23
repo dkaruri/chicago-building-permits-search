@@ -1,3 +1,5 @@
+import { revKey, pruneRevs } from "./revisions.js";
+
 const ID_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const PERMIT_RE = /^[A-Za-z0-9-]{1,16}$/;
 const MAX_PERMITS = 220;
@@ -57,6 +59,43 @@ export async function handleLists(url, env, request) {
       ticks: data.ticks,
       meta: metadata || null,
     }, 200);
+  }
+  if (request.method === "PUT" && !isCollection) {
+    const id = url.pathname.replace(/^\/api\/lists\//, "");
+    if (!ID_RE.test(id)) return resp({ error: "not found" }, 404);
+    const raw = await request.text();
+    if (raw.length > MAX_BODY) return resp({ error: "too large" }, 413);
+    let body;
+    try { body = JSON.parse(raw); } catch { return resp({ error: "bad json" }, 400); }
+
+    const current = await env.CACHE.getWithMetadata("list:" + id);
+    const existing = readList(current.value);
+    if (!existing) return resp({ error: "not found" }, 404);
+
+    const rev = Number(current.metadata?.rev || 1) + 1;
+    await env.CACHE.put(revKey(id, rev - 1), current.value, { expirationTtl: LIST_TTL });
+    for (const old of pruneRevs(rev)) await env.CACHE.delete(revKey(id, old));
+
+    // Absent keys mean "unchanged", not "clear" — a metadata-only edit must
+    // never wipe the permits.
+    const permits = body.permits === undefined ? existing.p : sanitizePermits(body.permits);
+    if (!permits.length) return resp({ error: "no valid permits" }, 400);
+    const now = Math.floor(Date.now() / 1000);
+    const value = {
+      v: 2,
+      p: permits,
+      f: body.focal === undefined ? existing.f : sanitizeFocal(body.focal),
+      desc: body.desc === undefined ? existing.desc : String(body.desc).slice(0, MAX_DESC),
+      custom: existing.custom,
+      ticks: existing.ticks,
+    };
+    const metadata = {
+      ...buildListMeta(value, { ...current.metadata, ...body }, now),
+      publishedAt: Number(current.metadata?.publishedAt) || now,
+      rev,
+    };
+    await env.CACHE.put("list:" + id, JSON.stringify(value), { expirationTtl: LIST_TTL, metadata });
+    return resp({ id, rev }, 200);
   }
   return resp({ error: "method not allowed" }, 405);
 }

@@ -14,7 +14,7 @@ const ROUTES = [
 function corsHeaders(env) {
   return {
     "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN || "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
 }
@@ -53,8 +53,10 @@ export default {
           "GET /api/profiles?category=general_contractor|open_tech",
           "GET /api/contact/:name",
           "GET /api/stats",
-          "POST /api/lists  (body: {permits, focal}) -> {id}",
-          "GET /api/lists/:id -> {permits, focal}",
+          "GET /api/lists?q=&tag=&cursor= -> {lists, cursor}",
+          "POST /api/lists  (body: {permits, focal, title, author, desc, tags}) -> {id}",
+          "GET /api/lists/:id -> {permits, focal, desc, custom, ticks, meta}",
+          "PUT /api/lists/:id  (body: any subset) -> {id, rev}",
         ],
       },
       200,

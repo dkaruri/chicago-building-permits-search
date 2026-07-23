@@ -23,6 +23,7 @@ test("sanitizeFocal validates coords and caps label", () => {
 });
 
 import { handleLists } from "../src/lists.js";
+import { revKey, pruneRevs } from "../src/revisions.js";
 
 function fakeKV() {
   const map = new Map();
@@ -227,6 +228,67 @@ test("GET /api/lists returns a cursor when more than one page remains", async ()
 
   const ids = new Set([...page1.lists, ...page2.lists].map(r => r.id));
   assert.equal(ids.size, 250, "pages must not overlap or drop rows");
+});
+
+test("revKey builds a padded, sortable key", () => {
+  assert.equal(revKey("YnF7y4t", 3), "listrev:YnF7y4t:0003");
+  assert.equal(revKey("YnF7y4t", 1200), "listrev:YnF7y4t:1200");
+});
+
+test("pruneRevs keeps the newest 20 and returns older ones to delete", () => {
+  assert.deepEqual(pruneRevs(5), []);
+  assert.deepEqual(pruneRevs(20), []);
+  assert.deepEqual(pruneRevs(21), [1]);
+  assert.deepEqual(pruneRevs(25), [1, 2, 3, 4, 5]);
+});
+
+test("PUT edits metadata, bumps rev and snapshots the prior value", async () => {
+  const env = ENV();
+  const created = await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "First" }));
+  const { id } = await created.json();
+
+  const url = new URL(`https://w/api/lists/${id}`);
+  const put = body => new Request(url, { method: "PUT", body: JSON.stringify(body) });
+  const edited = await handleLists(url, env, put({ title: "Second", author: "Divyam" }));
+  assert.equal(edited.status, 200);
+  assert.equal((await edited.json()).rev, 2);
+
+  const fetched = await handleLists(url, env, get(id));
+  const body = await fetched.json();
+  assert.equal(body.meta.title, "Second");
+  assert.equal(body.meta.author, "Divyam");
+  assert.deepEqual(body.permits, ["100234"], "omitting permits must not clear them");
+  assert.ok(env.CACHE.map.has(revKey(id, 1)), "prior value must be snapshotted");
+});
+
+test("PUT preserves the original publishedAt", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "First" }))).json();
+  const before = env.CACHE.meta.get("list:" + id).publishedAt;
+  const url = new URL(`https://w/api/lists/${id}`);
+  await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ title: "Second" }) }));
+  assert.equal(env.CACHE.meta.get("list:" + id).publishedAt, before);
+});
+
+test("PUT on an unknown id is 404", async () => {
+  const url = new URL("https://w/api/lists/ZzZz999");
+  const res = await handleLists(url, ENV(), new Request(url, { method: "PUT", body: "{}" }));
+  assert.equal(res.status, 404);
+});
+
+test("PUT prunes revisions beyond the newest 20", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "v" }))).json();
+  const url = new URL(`https://w/api/lists/${id}`);
+  for (let i = 0; i < 25; i++) {
+    await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ title: "v" + i }) }));
+  }
+  const revs = [...env.CACHE.map.keys()].filter(k => k.startsWith("listrev:"));
+  assert.ok(revs.length <= 20, `kept ${revs.length} revisions`);
+  assert.ok(!env.CACHE.map.has(revKey(id, 1)), "the oldest revision must be gone");
 });
 
 test("a filtered page can be short while a cursor still remains", async () => {
