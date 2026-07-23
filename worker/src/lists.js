@@ -5,6 +5,7 @@ const PERMIT_RE = /^[A-Za-z0-9-]{1,16}$/;
 const MAX_PERMITS = 220;
 
 const LIST_TTL = 15552000;
+const TRASH_TTL = 2592000; // 30 days — a deleted list is kept, invisible, then auto-purged
 const MAX_BODY = 8192;
 const ID_RE = /^[A-Za-z0-9]{1,16}$/;
 
@@ -122,6 +123,23 @@ export async function handleLists(url, env, request) {
     };
     await env.CACHE.put("list:" + id, JSON.stringify(value), { expirationTtl: LIST_TTL, metadata });
     return resp({ id, rev }, 200);
+  }
+  if (request.method === "DELETE" && !isCollection) {
+    const id = url.pathname.replace(/^\/api\/lists\//, "");
+    if (!ID_RE.test(id)) return resp({ error: "not found" }, 404);
+    const current = await env.CACHE.getWithMetadata("list:" + id);
+    if (!current.value) return resp({ error: "not found" }, 404);
+    // Soft delete: move to a trash key with a 30-day TTL and drop the live key.
+    // The directory only lists "list:" so it disappears at once; GET /:id 404s
+    // (a shared link stops working); the trash copy stays recoverable until it
+    // auto-purges.
+    const now = Math.floor(Date.now() / 1000);
+    await env.CACHE.put("trash:" + id, current.value, {
+      expirationTtl: TRASH_TTL,
+      metadata: { ...(current.metadata || {}), trashedAt: now },
+    });
+    await env.CACHE.delete("list:" + id);
+    return resp({ ok: true, purgesInDays: 30 }, 200);
   }
   return resp({ error: "method not allowed" }, 405);
 }

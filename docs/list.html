@@ -2896,11 +2896,13 @@
 
     /* Directory heading: New list sits under the title, compact. */
     .dir-head { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
-    .dir-new { min-height: 34px; padding: .3rem .75rem; font-size: .82rem; font-weight: 700; border-radius: 8px; }
+    /* width:auto opts out of the global `button { width: 100% }` reset so these
+       are content-sized, not full-bleed. */
+    .dir-new { width: auto; min-height: 34px; padding: .3rem .75rem; font-size: .82rem; font-weight: 700; border-radius: 8px; }
 
     /* Focal Set/Clear: compact controls beside the input, not full-size buttons. */
     .focal-controls input { flex: 1 1 220px; }
-    .focal-controls button { flex: 0 0 auto; min-height: 34px; padding: .3rem .8rem; font-size: .85rem; }
+    .focal-controls button { width: auto; flex: 0 0 auto; min-height: 34px; padding: .3rem .8rem; font-size: .85rem; }
 
     @media (max-width: 640px) {
       /* Keep touch targets full-size on mobile even where desktop is compact. */
@@ -2941,7 +2943,7 @@
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" onclick="toggleTheme()"><span class="material-symbols-outlined" aria-hidden="true">moon_stars</span></button>
     </div>
     <h1>My Permit List</h1>
-    <p>Review saved permits, add notes, reorder stops, estimate driving distance, create Google Maps route chunks, and export the list for field use.</p>
+    <p>Review saved permits, add notes, reorder stops, estimate driving distance, and export the list for field use.</p>
     <nav class="app-nav" aria-label="Primary pages">
       <span class="nav-brand">Chicago Permits</span>
       <a href="index.html"><span class="material-symbols-outlined" aria-hidden="true">database_search</span><span>Search Directory</span></a>
@@ -3021,9 +3023,7 @@
           for list-order legs and the
           <a href="https://project-osrm.org/docs/v5.24.0/api/#table-service" target="_blank" rel="noopener">OSRM Table service</a>
           for drive-time sorting. Results are estimates from OpenStreetMap-based routing and are not traffic-aware.
-          Google Maps route export uses
-          <a href="https://developers.google.com/maps/documentation/urls/get-started#directions-action" target="_blank" rel="noopener">Google Maps URLs</a>;
-          the mobile route link opens the first five mapped stops. Google route chunks create sequential Google Maps links for every mapped stop, while CSV includes every saved permit with details.
+          CSV export includes every saved permit with its full details.
         </p>
       </details>
       <label class="list-note">List note
@@ -3480,9 +3480,16 @@
       const list = activeList();
       if (!list) return;
       const name = list.name || "this list";
-      const warn = `Delete "${name}"? This removes the whole list from this browser.` +
-        (list.sharedId ? " Anyone you shared the link with keeps their copy." : "");
+      const warn = list.sharedId
+        ? `Delete "${name}"? This removes it from this browser and from the public directory. It stays recoverable for 30 days, then the site purges it.`
+        : `Delete "${name}"? This removes the whole list from this browser.`;
       if (!window.confirm(warn)) return;
+      if (list.sharedId) {
+        // Soft-delete the published copy so it leaves the site-wide directory.
+        try {
+          await fetch(`${API_BASE}/api/lists/${encodeURIComponent(list.sharedId)}`, { method: "DELETE" });
+        } catch { /* offline — the local copy is still removed below */ }
+      }
       delete state.lists[state.activeListId];
       const ids = Object.keys(state.lists);
       state.activeListId = ids[0] || "local_1";
@@ -5064,16 +5071,19 @@
         }
         await resolveGeoForRows(rows);
         const headers = [
-          "order", "source", "permit_number", "status", "issued", "address", "ward", "zone", "tif_district", "permit_type",
+          "order", "source", "visited", "use", "permit_number", "status", "issued", "address", "ward", "zone", "tif_district", "permit_type",
           "work_type", "reported_cost", "processing_time", "latitude", "longitude",
           "general_contractors", "open_subs", "permit_note", "list_note", "work_description"
         ];
+        const list = activeList();
         // Prepend the starting location (when set) as row "Start".
         const exportRows = withFocalOrigin(rows);
         let ordinal = 0;
         const body = exportRows.map(row => [
           row.focal ? "Start" : (ordinal += 1),
           row.focal ? "start" : (row.is_custom ? "manual" : "permit"),
+          row.focal ? "" : ((list && list.ticks && list.ticks[tickKeyFor(row)]) ? "yes" : "no"),
+          row.focal ? "" : (row.is_custom ? (row._use || "unclear") : permitUse(row).key),
           row.permit_number,
           row.permit_status,
           row.issue_date,

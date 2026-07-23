@@ -6,6 +6,8 @@ import { handleTags } from "./tags.js";
 import { handleNotes } from "./notes.js";
 import { handlePhotos } from "./photos.js";
 
+export { ListRoom } from "./list-room.js";
+
 const ROUTES = [
   { pattern: /^\/api\/permits/, handler: handlePermits },
   { pattern: /^\/api\/profiles/, handler: handleProfiles },
@@ -32,6 +34,20 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    // WebSocket live-sync: route the upgrade straight to the list's Durable
+    // Object so its 101/404 response is returned untouched by the CORS wrapper.
+    const live = url.pathname.match(/^\/api\/lists\/([A-Za-z0-9]{1,16})\/live$/);
+    if (live) {
+      if (request.headers.get("Upgrade") !== "websocket") {
+        return new Response("expected websocket", { status: 426 });
+      }
+      const stub = env.LIST_ROOM.getByName(live[1]);
+      const fwd = new URL(request.url);
+      fwd.searchParams.set("id", live[1]);
+      return stub.fetch(new Request(fwd, request));
+    }
+
     for (const route of ROUTES) {
       if (route.pattern.test(url.pathname)) {
         try {
@@ -63,11 +79,13 @@ export default {
           "POST /api/lists  (body: {permits, focal, title, author, desc, tags}) -> {id}",
           "GET /api/lists/:id -> {permits, focal, desc, custom, ticks, meta}",
           "PUT /api/lists/:id  (body: any subset) -> {id, rev}",
+          "DELETE /api/lists/:id -> soft-delete (30-day trash)",
           "GET /api/tags -> {tags}",
           "PUT /api/tags  (body: {name, slot})",
           "GET·POST /api/notes/:permit ; PUT·DELETE /api/notes/:permit/:id",
           "GET /api/notes/counts?p=a,b,c -> {counts}",
           "POST /api/photo/:permit ; GET·DELETE /api/photo/:permit/:id",
+          "GET /api/lists/:id/live (WebSocket) -> live sync",
         ],
       },
       200,
