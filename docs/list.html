@@ -2975,6 +2975,21 @@
       font-size: 20px; line-height: 1;
     }
     .toolbar-primary button { display: inline-flex; align-items: center; gap: .4rem; }
+
+    .use {
+      display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap;
+      font-size: .78rem; font-weight: 600; padding: .1rem .4rem;
+      border-radius: 4px; border: 1px solid currentColor;
+    }
+    .use-residential { color: var(--t3); }
+    .use-commercial  { color: var(--t5); }
+    .use-mixed       { color: var(--t7); }
+    .use-unclear     { color: var(--muted); font-weight: 500; }
+    .approx {
+      font-size: .66rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+      color: var(--muted); border: 1px dashed var(--line-strong); border-radius: 3px;
+      padding: 0 .2rem; margin-left: .25rem; white-space: nowrap;
+    }
   </style>
 </head>
 <body class="list-page">
@@ -6428,13 +6443,14 @@
       const selectHead = options.select ? "<th class=\"select-cell\" aria-label=\"Select permits\"></th>" : "";
       const removeHead = options.remove ? "<th class=\"select-cell\" aria-label=\"Remove permits\"></th>" : "";
       const notesHead = options.notes ? "<th>Notes</th>" : "";
+      const useHead = options.move ? "<th>Use</th>" : "";
       const geoHead = options.geo ? "<th>Zone</th><th>TIF district</th>" : "";
       const moveHead = options.move ? "<th class=\"move-cell\" aria-label=\"Move permits\"></th>" : "";
       const head = (label, key) => options.sortable === false ? esc(label) : sortHeader(label, key);
       const tableClass = options.select ? "results-table permits-table" : options.notes ? "saved-permits-table" : "";
       return `
         <table class="${tableClass}">
-          <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th>${options.move ? "" : `<th>${head("Ward", "ward")}</th>`}<th>${head("Cost", "cost")}</th>${geoHead}${notesHead}${moveHead}</tr></thead>
+          <thead><tr>${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th>${options.move ? "" : `<th>${head("Ward", "ward")}</th>`}${useHead}<th>${head("Cost", "cost")}</th>${geoHead}${notesHead}${moveHead}</tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr
               draggable="${options.select || options.reorder ? "true" : "false"}"
@@ -6449,6 +6465,7 @@
               <td data-label="Status">${esc(row.permit_status)}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
               <td data-label="Address">${options.move && clean(row.address) ? (() => { const u = mapsUrls(row.address); return `<span class="maps-picker"><button type="button" class="address-open" aria-haspopup="true" aria-expanded="false" aria-controls="maps-menu-${i}" onclick="event.stopPropagation(); toggleMapsMenu(this)">${esc(row.address)}<span class="chev" aria-hidden="true">▾</span></button><span class="maps-menu" id="maps-menu-${i}" role="menu"><span class="maps-menu-label">Open in</span><a role="menuitem" href="${esc(u.apple)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Apple Maps</a><a role="menuitem" href="${esc(u.google)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Google Maps</a><a role="menuitem" href="${esc(u.waze)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Waze</a></span></span>`; })() : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
+              ${options.move ? (() => { const pu = permitUse(row); return `<td data-label="Use"><span class="use use-${pu.key}">${pu.glyph} ${esc(pu.label)}</span>${pu.key === "unclear" ? "" : `<span class="approx" title="Inferred from the work description \u2014 the permits dataset has no occupancy field">approx</span>`}</td>`; })() : ""}
               ${options.move ? "" : `<td data-label="Ward">${esc(row.ward)}</td>`}
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
               ${options.geo ? `<td data-label="Zone" class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</td><td data-label="TIF district" class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</td>` : ""}
@@ -6495,6 +6512,24 @@
 
     // Best-effort building/dwelling type from the free-text work description.
     // Heuristic only — callers MUST label the result "approx.". "" when nothing matches.
+    // The permits dataset has NO occupancy field, so this is a heuristic over
+    // permit_type + work_description, exactly like parseBuildingType. Every
+    // inferred result is rendered with an "approx" badge, and anything the text
+    // does not support reads "Unclear" rather than being guessed at.
+    function permitUse(row) {
+      const s = `${(row && row.permit_type) || ""} ${(row && row.work_description) || ""}`.toUpperCase();
+      if (/\b(WRECK\w*|DEMOLITION)\b/.test(s) && !/\bRESIDENTIAL\b/.test(s)) return { key: "unclear", label: "Unclear", glyph: "\u2014" };
+      const RES = /\b\d{1,3}[- ]?UNITS?\b|\bSINGLE[- ]?FAMILY\b|\b(TWO|THREE|FOUR|SIX)[- ]?FLAT\b|\b\d{1,2}[- ]?FLAT\b|\bTOWN\s?HO(ME|USE)\b|\bCONDO(MINIUM)?\b|\bAPARTMENT\b|\bMULTI[- ]?FAMILY\b|\bDWELLING\b|\bRESIDENTIAL\b/;
+      const COM = /\bCOMMERCIAL\b|\bRESTAURANT\b|\bRETAIL\b|\bOFFICE\b|\bSTOREFRONT\b|\bTENANT\b|\bWAREHOUSE\b|\bHOTEL\b/;
+      if (/\bMIXED[- ]?USE\b/.test(s)) return { key: "mixed", label: "Mixed use", glyph: "\u25EB" };
+      const res = RES.test(s);
+      const com = COM.test(s);
+      if (res && com) return { key: "mixed", label: "Mixed use", glyph: "\u25EB" };
+      if (res) return { key: "residential", label: "Residential", glyph: "\u25E7" };
+      if (com) return { key: "commercial", label: "Commercial", glyph: "\u25A4" };
+      return { key: "unclear", label: "Unclear", glyph: "\u2014" };
+    }
+
     function parseBuildingType(desc) {
       const s = (desc || "").toUpperCase();
       const num = s.match(/\b(\d{1,3})[- ]?UNITS?\b/);
