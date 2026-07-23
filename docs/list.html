@@ -22,7 +22,7 @@
   <meta name="twitter:description" content="Review, reorder, route, annotate, and export saved Chicago building permits.">
   <meta name="twitter:image" content="https://dkaruri.github.io/chicago-building-permits-search/assets/search-directory-preview.png">
   <meta name="twitter:image:alt" content="Chicago Building Permits Search preview card by Divyam Karuri">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_photo_alternate,csv,database_search,edit,list,map_search,moon_stars,photo,policy,route,share,sunny" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_photo_alternate,clear_all,csv,database_search,delete,edit,list,map_search,moon_stars,photo,policy,route,share,sunny" rel="stylesheet">
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
@@ -518,73 +518,6 @@
       font-size: 0.86rem;
     }
 
-    .action-menu {
-      position: relative;
-      min-width: 150px;
-    }
-
-    .action-menu[open] {
-      z-index: 40;
-    }
-
-    .action-menu summary {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      min-height: 44px;
-      padding: 7px 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--field);
-      color: var(--primary);
-      cursor: pointer;
-      font-size: 0.82rem;
-      font-weight: 850;
-      list-style: none;
-      text-align: center;
-      user-select: none;
-    }
-
-    .action-menu summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .action-menu summary::after {
-      content: "";
-      width: 7px;
-      height: 7px;
-      margin-left: 8px;
-      border-right: 2px solid currentColor;
-      border-bottom: 2px solid currentColor;
-      transform: translateY(-2px) rotate(45deg);
-      transition: transform 0.16s ease;
-    }
-
-    .action-menu[open] summary::after {
-      transform: translateY(1px) rotate(-135deg);
-    }
-
-    .action-menu-panel {
-      position: absolute;
-      top: calc(100% + 6px);
-      right: 0;
-      z-index: 30;
-      display: grid;
-      min-width: 220px;
-      gap: 6px;
-      padding: 8px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: var(--panel);
-      box-shadow: 0 18px 38px var(--shadow);
-    }
-
-    .action-menu-panel button {
-      width: 100%;
-      text-align: left;
-    }
-
     .subtle-danger {
       border-color: var(--danger-line);
       color: var(--danger);
@@ -593,12 +526,6 @@
     .subtle-danger:hover {
       border-color: var(--danger);
       background: var(--danger-soft);
-    }
-
-    .action-menu-sep {
-      height: 1px;
-      margin: 4px 2px;
-      background: var(--line);
     }
 
     .menu-hint {
@@ -697,74 +624,6 @@
       color: var(--primary);
       text-decoration: underline;
       text-underline-offset: 2px;
-    }
-
-    .route-chunks {
-      display: none;
-      margin: 0 0 12px;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-    }
-
-    .route-chunks.is-visible {
-      display: block;
-    }
-
-    .route-chunks-head {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      justify-content: space-between;
-      margin-bottom: 10px;
-    }
-
-    .route-chunks-head h3 {
-      margin: 0;
-      color: var(--ink);
-      font-size: 1rem;
-    }
-
-    .route-chunks-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 10px;
-    }
-
-    .route-chunk-card {
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--surface-subtle);
-    }
-
-    .route-chunk-card h4 {
-      margin: 0 0 8px;
-      color: var(--primary);
-      font-size: 0.92rem;
-    }
-
-    .route-chunk-card a {
-      display: inline-flex;
-      align-items: center;
-      min-height: 44px;
-      margin-bottom: 8px;
-      padding: 8px 11px;
-      border-radius: 6px;
-      background: var(--accent);
-      color: var(--paper);
-      text-decoration: none;
-    }
-
-    .route-chunk-card ol {
-      margin: 6px 0 0;
-      padding-left: 22px;
-    }
-
-    .route-chunk-card li {
-      margin: 7px 0;
-      line-height: 1.35;
     }
 
     #result-count {
@@ -1751,18 +1610,9 @@
       max-height: 46vh;
     }
 
-    .user-list-panel.is-collapsed .list-note,
-    .user-list-panel.is-collapsed .route-summary,
-    .user-list-panel.is-collapsed .route-chunks,
-    .user-list-panel.is-collapsed .route-source,
-    .user-list-panel.is-collapsed .table-wrap {
-      display: none;
-    }
-
     .list-note {
       margin: 8px 0 10px;
     }
-
 
     .route-leg {
       color: var(--steel);
@@ -1842,12 +1692,6 @@
       #result-count button {
         flex: 1 1 auto;
         width: 100%;
-      }
-      .route-chunks-head {
-        flex-direction: column;
-      }
-      .route-chunks-head .icon-button {
-        align-self: flex-start;
       }
       #result-count {
         min-width: 0;
@@ -2632,31 +2476,6 @@
         gap: 8px;
       }
 
-      body.list-page .action-menu {
-        min-width: 0;
-        width: 100%;
-      }
-
-      body.list-page .action-menu-panel {
-        position: absolute;
-        top: calc(100% + 6px);
-        right: 0;
-        left: 0;
-        min-width: 0;
-        max-height: min(52dvh, 320px);
-        overflow: auto;
-        margin-top: 0;
-        box-shadow: 0 18px 38px var(--shadow);
-      }
-
-      body.list-page .action-menu summary,
-      body.list-page .action-menu-panel button {
-        min-height: 44px;
-        border-radius: 8px;
-        font-size: 0.84rem;
-        touch-action: manipulation;
-      }
-
       body.list-page .route-summary,
       body.list-page .list-action-status,
       body.list-page .route-source {
@@ -2670,32 +2489,6 @@
       body.list-page .list-note textarea {
         min-height: 86px;
         font-size: 1rem;
-      }
-
-      body.list-page .route-chunks {
-        padding: 10px;
-        border-radius: 10px;
-      }
-
-      body.list-page .route-chunks-grid {
-        grid-template-columns: 1fr;
-      }
-
-      body.list-page .route-chunk-card {
-        padding: 10px;
-      }
-
-      body.list-page .route-chunk-card a {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        min-height: 44px;
-        margin: 6px 0;
-        padding: 8px 10px;
-        border: 1px solid var(--primary);
-        border-radius: 8px;
-        background: var(--primary-soft);
       }
 
       body.list-page .saved-permits-table tr {
@@ -2766,7 +2559,6 @@
         display: flex;
         justify-content: flex-start;
       }
-
 
       body.list-page .move-controls {
         display: inline-flex;
@@ -3129,6 +2921,15 @@
         font-size: 0.86rem; color: var(--ink);
       }
     }
+
+    /* Opening a list rises up like the permit detail overlay. */
+    @media (prefers-reduced-motion: no-preference) {
+      #user-list-panel:not([hidden]) { animation: listRise 0.24s ease-out; }
+      @keyframes listRise { from { opacity: 0; transform: translateY(14px); } }
+    }
+    .toolbar-manage button { display: inline-flex; align-items: center; gap: .4rem; }
+    .danger-solid { color: var(--white); background: var(--danger); border-color: var(--danger); }
+    .danger-solid:hover { background: var(--danger); filter: brightness(0.94); }
   </style>
 </head>
 <body class="list-page">
@@ -3192,8 +2993,12 @@
             <button data-list-action onclick="openAddAddress()">+ Add address</button>
           </div>
           <div class="toolbar-manage">
-            <button id="user-list-toggle" aria-expanded="true" onclick="toggleUserList()">Hide list</button>
-            <button class="subtle-danger" onclick="clearUserList()">Clear list</button>
+            <button class="subtle-danger" onclick="clearUserList()">
+              <span class="material-symbols-outlined" aria-hidden="true">clear_all</span>Clear list
+            </button>
+            <button class="danger-solid" onclick="deleteActiveList()">
+              <span class="material-symbols-outlined" aria-hidden="true">delete</span>Delete list
+            </button>
           </div>
         </div>
       </div>
@@ -3208,7 +3013,6 @@
       </div>
       <div id="user-route-summary" class="route-summary small" aria-live="polite">Add at least two permits with mapped coordinates to estimate driving distances.</div>
       <div id="list-action-status" class="list-action-status" aria-live="polite"></div>
-      <div id="user-route-chunks" class="route-chunks" aria-live="polite"></div>
       <details class="route-source">
         <summary>Routing sources and limits</summary>
         <p>
@@ -3321,7 +3125,6 @@
       userRouteLegs: [],
       userRouteSummary: "",
       listActionBusy: false,
-      routeChunksVisible: false,
       map: {
         index: null,
         map: null,
@@ -3363,29 +3166,6 @@
     const userListLimit = 220;
     const appModes = ["general_contractors", "open_subs", "open_permits"];
     const openPermitStatuses = new Set(["ACTIVE", "SUSPENDED", "PHASED PERMITTING"]);
-
-    function closeActionMenus(except = null) {
-      document.querySelectorAll(".action-menu[open]").forEach(menu => {
-        if (menu !== except) menu.removeAttribute("open");
-      });
-    }
-
-    document.addEventListener("toggle", event => {
-      if (event.target.matches(".action-menu") && event.target.open) {
-        closeActionMenus(event.target);
-      }
-    }, true);
-
-    document.addEventListener("click", event => {
-      const menu = event.target.closest(".action-menu");
-      if (!menu) {
-        closeActionMenus();
-        return;
-      }
-      if (event.target.closest(".action-menu-panel button")) {
-        window.setTimeout(() => menu.removeAttribute("open"), 0);
-      }
-    });
 
     addEventListener("scroll", () => {
       const doc = document.documentElement;
@@ -3503,7 +3283,6 @@
       // Saving rewrites the SAME KV key, so the shared URL never changes.
       if (!data.meta || !data.meta.title) openListDetails(state.activeListId);
     }
-
 
     // ---- List directory ----
     // Ten colour slots, each a light/dark pair defined as --t0..--t9. A tag
@@ -3697,6 +3476,27 @@
       await showList(localId);
     }
 
+    async function deleteActiveList() {
+      const list = activeList();
+      if (!list) return;
+      const name = list.name || "this list";
+      const warn = `Delete "${name}"? This removes the whole list from this browser.` +
+        (list.sharedId ? " Anyone you shared the link with keeps their copy." : "");
+      if (!window.confirm(warn)) return;
+      delete state.lists[state.activeListId];
+      const ids = Object.keys(state.lists);
+      state.activeListId = ids[0] || "local_1";
+      if (!state.lists[state.activeListId]) {
+        state.lists[state.activeListId] = { name: "My Permit List", permits: [], focal: null, sharedId: null };
+      }
+      state.userPermitNumbers = [...state.lists[state.activeListId].permits];
+      saveUserLists();
+      clearUserRoute();
+      announceListAction(`Deleted ${name}.`);
+      showDirectory();
+      fetchDirectory(false);
+    }
+
     function createListPrompt() {
       const name = window.prompt("Name this list", "Untitled list");
       if (name === null) return null;
@@ -3739,13 +3539,6 @@
       $("detail-panel").classList.add("hidden");
       $("content").classList.remove("detail-mode");
       $("content").classList.add("no-detail");
-    }
-
-    function toggleUserList() {
-      const panel = $("user-list-panel");
-      const collapsed = panel.classList.toggle("is-collapsed");
-      $("user-list-toggle").textContent = collapsed ? "Show list" : "Hide list";
-      $("user-list-toggle").setAttribute("aria-expanded", String(!collapsed));
     }
 
     function setBusy(label = "Loading") {
@@ -3883,7 +3676,6 @@
       await applySharedList();
       applyInitialUrlParams();
       renderStatus();
-      initListMenus();
       await renderUserList();
       // A #s= link lands directly in that list; otherwise the page opens to the
       // directory. fetchDirectory is deliberately not awaited — the local lists
@@ -3898,23 +3690,6 @@
 
     // Toolbar dropdowns behave like menus: only one open, and a click outside or
     // Escape closes them.
-    function initListMenus() {
-      const menus = () => document.querySelectorAll("details.action-menu[open]");
-      document.querySelectorAll("details.action-menu[data-list-menu]").forEach(menu => {
-        menu.addEventListener("toggle", () => {
-          if (!menu.open) return;
-          document.querySelectorAll("details.action-menu[open]").forEach(other => {
-            if (other !== menu) other.removeAttribute("open");
-          });
-        });
-      });
-      document.addEventListener("click", event => {
-        menus().forEach(menu => { if (!menu.contains(event.target)) menu.removeAttribute("open"); });
-      });
-      document.addEventListener("keydown", event => {
-        if (event.key === "Escape") menus().forEach(menu => menu.removeAttribute("open"));
-      });
-    }
 
     function renderStatus() {
       const m = state.manifest;
@@ -5013,7 +4788,6 @@
       clearRouteProgress();
       state.userRouteLegs = [];
       state.userRouteSummary = message;
-      hideGoogleRouteChunks();
       renderRouteSummary();
     }
 
@@ -5073,14 +4847,6 @@
       } finally {
         setListActionBusy(false);
       }
-    }
-
-    function hideGoogleRouteChunks() {
-      state.routeChunksVisible = false;
-      const container = $("user-route-chunks");
-      if (!container) return;
-      container.classList.remove("is-visible");
-      container.innerHTML = "";
     }
 
     function userListRows() {
@@ -5259,7 +5025,6 @@
         .join("");
     }
 
-
     function xmlText(value) {
       return esc(value);
     }
@@ -5288,102 +5053,6 @@
       const stamp = new Date().toISOString().slice(0, 10);
       return `chicago-permit-list-${stamp}.${extension}`;
     }
-
-    function googleMapsDirectionsUrl(rows, campaign = "permit_list_directions") {
-      const origin = mapCoordinateText(rows[0]);
-      const destination = mapCoordinateText(rows[rows.length - 1]);
-      const waypoints = rows.slice(1, -1).map(mapCoordinateText);
-      const params = new URLSearchParams({
-        api: "1",
-        origin,
-        destination,
-        travelmode: "driving",
-        dir_action: "navigate",
-        utm_source: "chicago_building_permits_search",
-        utm_campaign: campaign,
-      });
-      if (waypoints.length) params.set("waypoints", waypoints.join("|"));
-      return `https://www.google.com/maps/dir/?${params.toString()}`;
-    }
-
-    function googleRouteChunks(rows, chunkSize = 5) {
-      const chunks = [];
-      for (let start = 0; start < rows.length - 1; start += chunkSize - 1) {
-        const chunk = rows.slice(start, start + chunkSize);
-        if (chunk.length >= 2) chunks.push(chunk);
-      }
-      return chunks;
-    }
-
-    function routeChunkStops(chunk, offset) {
-      return chunk.map((row, index) => {
-        const stopNumber = offset + index + 1;
-        const tag = row.focal ? `<span class="muted">Start</span>` : `<span class="muted">Permit ${esc(row.permit_number)}</span>`;
-        return `<li><strong>${fmt(stopNumber)}.</strong> ${esc(row.address)} ${tag}</li>`;
-      }).join("");
-    }
-
-    async function openGoogleMapsRoute() {
-      await withListAction("Preparing Google Maps route...", async () => {
-        await ensurePermitMap();
-        const rows = withFocalOrigin(mapExportRows());
-        if (rows.length < 2) {
-          clearUserRoute("Add a starting location or at least two saved permits with mapped coordinates to open a driving route.");
-          return;
-        }
-        const routeRows = rows.slice(0, 5);
-        const url = googleMapsDirectionsUrl(routeRows);
-        const skipped = rows.length - routeRows.length;
-        state.userRouteSummary = skipped
-          ? `Opened Google Maps for the first ${fmt(routeRows.length)} mapped stops. Download CSV for all ${fmt(rows.length)} mapped permits.`
-          : `Opened Google Maps for ${fmt(routeRows.length)} mapped stops.`;
-        renderRouteSummary();
-        announceListAction("Google Maps route opened in a new tab.");
-        window.open(url, "_blank", "noopener");
-      });
-    }
-
-    async function showGoogleRouteChunks() {
-      await withListAction("Creating Google Maps route chunks...", async () => {
-        await ensurePermitMap();
-        const rows = withFocalOrigin(mapExportRows());
-        if (rows.length < 2) {
-          hideGoogleRouteChunks();
-          clearUserRoute("Add a starting location or at least two saved permits with mapped coordinates to create Google route chunks.");
-          return;
-        }
-        const chunkSize = 5;
-        const chunks = googleRouteChunks(rows, chunkSize);
-        const generatedAt = new Date().toLocaleString();
-        const chunkCards = chunks.map((chunk, index) => {
-          const start = index * (chunkSize - 1);
-          const end = start + chunk.length - 1;
-          const url = googleMapsDirectionsUrl(chunk, "permit_list_route_chunks");
-          return `
-            <section class="route-chunk-card">
-              <h4>Chunk ${fmt(index + 1)}: stops ${fmt(start + 1)}-${fmt(end + 1)}</h4>
-              <a href="${esc(url)}" target="_blank" rel="noopener">Open chunk ${fmt(index + 1)} in Google Maps</a>
-              <ol>${routeChunkStops(chunk, start)}</ol>
-            </section>`;
-        }).join("");
-        state.routeChunksVisible = true;
-        $("user-route-chunks").innerHTML = `
-          <div class="route-chunks-head">
-            <div>
-              <h3>Google Maps Route Chunks</h3>
-              <div class="small">Generated ${esc(generatedAt)}. Open each chunk in order; the last stop repeats as the first stop of the next chunk so the route stays sequential.</div>
-            </div>
-            <button class="icon-button" type="button" aria-label="Close route chunks" onclick="hideGoogleRouteChunks()">&times;</button>
-          </div>
-          <div class="small">${fmt(rows.length)} mapped permits split into ${fmt(chunks.length)} Google Maps route links.</div>
-          <div class="route-chunks-grid">${chunkCards}</div>`;
-        $("user-route-chunks").classList.add("is-visible");
-        state.userRouteSummary = `Showing ${fmt(chunks.length)} Google Maps route chunks covering ${fmt(rows.length)} mapped permits in list order.`;
-        renderRouteSummary();
-        announceListAction("Route chunks are ready below.");
-      });
-    }
-
 
     async function downloadUserListCsv() {
       await withListAction("Preparing CSV export...", async () => {
@@ -7392,7 +7061,7 @@
       let picked = [];
       dlg.innerHTML = `<h3 id="pc-title">Add photos</h3>
         <p class="dlg-sub">Up to 6 \u00b7 JPEG, PNG or WebP \u00b7 5 MB each \u00b7 location data is removed before upload</p>
-        <input id="pc-file" class="pc-file" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+        <input id="pc-file" class="pc-file" type="file" accept="image/jpeg,image/png,image/webp" multiple aria-label="Choose photos to add (JPEG, PNG or WebP, up to 6)">
         <div id="pc-list" class="pc-list"></div>
         <p class="pc-msg" id="pc-msg" role="alert" hidden></p>
         <div class="dlg-field"><label for="pc-text">Note (optional)</label><input id="pc-text" maxlength="200" placeholder="What do these show?"></div>
