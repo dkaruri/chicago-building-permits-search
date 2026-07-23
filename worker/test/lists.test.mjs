@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert";
-import { makeShareId, sanitizePermits, sanitizeFocal, sanitizeMeta, buildListMeta, readList, filterEntries } from "../src/lists.js";
+import { makeShareId, sanitizePermits, sanitizeFocal, sanitizeMeta, buildListMeta, readList, filterEntries, sanitizeCustom, sanitizeTicks } from "../src/lists.js";
 
 test("makeShareId is 7 base62 chars and varies", () => {
   const a = makeShareId();
@@ -303,4 +303,115 @@ test("a filtered page can be short while a cursor still remains", async () => {
   // Exactly the trap the client must not fall into: 1 row back, but more pages exist.
   assert.equal(body.lists.length, 1);
   assert.ok(body.cursor, "cursor must survive filtering");
+});
+
+test("sanitizeCustom keeps well-formed stops and clamps fields", () => {
+  const out = sanitizeCustom([{
+    id: "c_3f1a", pos: 3, addr: "3701 W Ainslie St", lat: 41.97, lon: -87.72,
+    use: "residential", work: "Gut rehab", gc: "606 CONSTRUCTION",
+  }]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].addr, "3701 W Ainslie St");
+  assert.equal(out[0].lat, 41.97);
+  assert.equal(out[0].use, "residential");
+});
+
+test("sanitizeCustom keeps a stop that failed to geocode, with null coords", () => {
+  const out = sanitizeCustom([{ id: "c_1", pos: 1, addr: "Coach house behind 4901 N Kedzie" }]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].lat, null);
+  assert.equal(out[0].lon, null);
+});
+
+test("sanitizeCustom drops entries with no usable address", () => {
+  assert.deepEqual(sanitizeCustom([{ id: "c_1", addr: "   " }, { id: "c_2" }]), []);
+});
+
+test("sanitizeCustom rejects an unusable id rather than trusting it", () => {
+  assert.deepEqual(sanitizeCustom([{ id: "../../etc", addr: "x" }]), []);
+  assert.deepEqual(sanitizeCustom([{ id: "list:evil", addr: "x" }]), []);
+});
+
+test("sanitizeCustom clamps an out-of-range use to unclear", () => {
+  assert.equal(sanitizeCustom([{ id: "c_1", addr: "x", use: "spaceship" }])[0].use, "unclear");
+});
+
+test("sanitizeCustom caps the array at 60", () => {
+  const many = Array.from({ length: 90 }, (_, i) => ({ id: "c_" + i, addr: "A" + i }));
+  assert.equal(sanitizeCustom(many).length, 60);
+});
+
+test("sanitizeCustom rejects a non-array", () => {
+  assert.deepEqual(sanitizeCustom("nope"), []);
+  assert.deepEqual(sanitizeCustom(null), []);
+});
+
+test("sanitizeTicks keeps only keys present in the list", () => {
+  assert.deepEqual(sanitizeTicks({ "101082609": 1, "999": 1 }, new Set(["101082609"])),
+    { "101082609": 1 });
+});
+
+test("sanitizeTicks stores only truthy ticks, normalised to 1", () => {
+  assert.deepEqual(sanitizeTicks({ a: 1, b: 0, c: true, d: false }, new Set(["a", "b", "c", "d"])),
+    { a: 1, c: 1 });
+});
+
+test("sanitizeTicks tolerates junk", () => {
+  assert.deepEqual(sanitizeTicks(null, new Set(["a"])), {});
+  assert.deepEqual(sanitizeTicks("nope", new Set(["a"])), {});
+});
+
+test("PUT /ticks flips a single key without rewriting permits", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234", "100987"], title: "T" }))).json();
+  const url = new URL(`https://w/api/lists/${id}/ticks`);
+  const res = await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "100234", on: true }) }));
+  assert.equal(res.status, 200);
+  const body = await (await handleLists(new URL(`https://w/api/lists/${id}`), env, get(id))).json();
+  assert.deepEqual(body.ticks, { "100234": 1 });
+  assert.deepEqual(body.permits, ["100234", "100987"], "permits must be untouched");
+});
+
+test("PUT /ticks can clear a tick", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "T" }))).json();
+  const url = new URL(`https://w/api/lists/${id}/ticks`);
+  await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "100234", on: true }) }));
+  await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "100234", on: false }) }));
+  const body = await (await handleLists(new URL(`https://w/api/lists/${id}`), env, get(id))).json();
+  assert.deepEqual(body.ticks, {});
+});
+
+test("PUT /ticks refuses a key that is not in the list", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "T" }))).json();
+  const url = new URL(`https://w/api/lists/${id}/ticks`);
+  const res = await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "999999", on: true }) }));
+  assert.equal(res.status, 400);
+});
+
+test("PUT /ticks does NOT write a revision", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "T" }))).json();
+  const url = new URL(`https://w/api/lists/${id}/ticks`);
+  await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "100234", on: true }) }));
+  const revs = [...env.CACHE.map.keys()].filter(k => k.startsWith("listrev:"));
+  assert.equal(revs.length, 0, "a checkbox tap is not an edit worth versioning");
+});
+
+test("POST round-trips custom stops", async () => {
+  const env = ENV();
+  const created = await handleLists(new URL("https://w/api/lists"), env, post({
+    permits: ["100234"], title: "T",
+    custom: [{ id: "c_1", pos: 2, addr: "3701 W Ainslie St", lat: 41.97, lon: -87.72, use: "residential", work: "Gut rehab" }],
+  }));
+  const { id } = await created.json();
+  const body = await (await handleLists(new URL(`https://w/api/lists/${id}`), env, get(id))).json();
+  assert.equal(body.custom.length, 1);
+  assert.equal(body.custom[0].addr, "3701 W Ainslie St");
+  assert.equal(body.meta.count, 2, "custom stops count toward the list size");
 });
