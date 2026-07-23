@@ -3063,6 +3063,26 @@
     .pm-reported { margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .5rem; }
     .rep-sub { display: inline-flex; align-items: center; gap: .35rem; font-size: .85rem; }
     .rep-badge { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--warning); border: 1px dashed var(--warning); border-radius: 3px; padding: 0 .2rem; }
+
+    #photo-compose { border: 1px solid var(--line-strong); border-radius: 12px; padding: 1rem; background: var(--panel); color: var(--ink); max-width: 520px; width: calc(100vw - 2rem); max-height: calc(100vh - 3rem); overflow-y: auto; box-shadow: 0 12px 30px var(--shadow); }
+    #photo-compose::backdrop { background: rgba(6, 14, 26, 0.55); }
+    #photo-compose h3 { margin: 0 0 .6rem; font-size: 1.05rem; }
+    #photo-compose .dlg-sub { margin: .2rem 0 .8rem; font-size: .84rem; color: var(--muted); }
+    #photo-compose .dlg-field { margin: .8rem 0 0; }
+    #photo-compose .dlg-field label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin-bottom: .3rem; }
+    #photo-compose .dlg-field input { font: inherit; font-size: 1rem; width: 100%; box-sizing: border-box; min-height: 44px; background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem; }
+    .pc-file { font: inherit; margin-bottom: .8rem; }
+    .pc-list { display: grid; gap: .6rem; }
+    .pc-item { display: flex; gap: .6rem; align-items: center; }
+    .pc-thumb { width: 64px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line-strong); flex: none; }
+    .pc-item input { font: inherit; font-size: 1rem; flex: 1; min-height: 44px; background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: .4rem .6rem; }
+    .pc-drop { font: inherit; min-height: 44px; min-width: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--danger); cursor: pointer; }
+    .pc-msg { color: var(--warning); font-size: .82rem; margin: .4rem 0; }
+    .pc-foot { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .8rem; }
+
+    .tp-gallery { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .45rem; }
+    .tp-shot { display: block; border-radius: 6px; overflow: hidden; border: 1px solid var(--line-strong); }
+    .tp-shot img { display: block; width: 96px; height: 72px; object-fit: cover; }
   </style>
 </head>
 <body class="list-page">
@@ -7024,6 +7044,13 @@
       return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     }
 
+    function photoGalleryHtml(post, permit) {
+      const photos = Array.isArray(post.photos) ? post.photos : [];
+      if (!photos.length) return "";
+      return `<div class="tp-gallery">${photos.map(ph =>
+        `<a class="tp-shot" href="${API_BASE}/api/photo/${encodeURIComponent(permit)}/${encodeURIComponent(ph.id)}" target="_blank" rel="noopener"><img loading="lazy" src="${API_BASE}/api/photo/${encodeURIComponent(permit)}/${encodeURIComponent(ph.id)}" alt="${esc(ph.caption || "Site photo")}"></a>`).join("")}</div>`;
+    }
+
     function threadPostHtml(post) {
       const when = dateStampLabel(post.ts) + (post.editedTs ? " \u00b7 edited" : "");
       const head = `<p class="tp-head"><span class="tp-who">${esc(post.author || "anonymous")}</span><time>${esc(when)}</time>` +
@@ -7047,7 +7074,7 @@
         if (post.gc && post.gc.name) rows.push(["Their GC", esc(post.gc.name) + (post.gc.phone ? ` \u00b7 <a href="tel:${esc(post.gc.phone)}">${esc(post.gc.phone)}</a>` : "")]);
         return `<article class="tp walk">${head}<dl class="tp-kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl>${acts}</article>`;
       }
-      const photo = post.kind === "photo" ? `<p class="tp-photo-note">\ud83d\udcf7 photo</p>` : "";
+      const photo = post.kind === "photo" ? photoGalleryHtml(post, currentThreadPermit) : "";
       return `<article class="tp">${head}<p class="tp-text">${esc(post.text || "")}</p>${photo}${acts}</article>`;
     }
 
@@ -7116,6 +7143,13 @@
     async function deleteNotePost(permit, id) {
       if (!window.confirm("Delete this public note?")) return;
       try {
+        const t = state.threads && state.threads[permit];
+        const post = t && t.posts.find(p => p.id === id);
+        if (post && post.kind === "photo") {
+          for (const ph of (post.photos || [])) {
+            await fetch(`${API_BASE}/api/photo/${encodeURIComponent(permit)}/${encodeURIComponent(ph.id)}`, { method: "DELETE" }).catch(() => {});
+          }
+        }
         await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}/${encodeURIComponent(id)}`, { method: "DELETE" });
         await fetchThread(permit);
         pmAnnounce("Note deleted.");
@@ -7275,6 +7309,122 @@
       dlg.showModal();
     }
 
+    // ---- Photo compose (Phase 4) ----
+    const PHOTO_MAX_EDGE = 1600;
+    const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+    const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+    function fitDimensions(w, h, max) {
+      const longest = Math.max(w, h);
+      if (longest <= max) return { w: Math.round(w), h: Math.round(h) };
+      const s = max / longest;
+      return { w: Math.round(w * s), h: Math.round(h * s) };
+    }
+
+    // Drawing to a canvas keeps only pixels, so EXIF (GPS, camera serials) is
+    // discarded as a side effect of the resize + WebP re-encode.
+    function resizeToWebp(file, max) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const { w, h } = fitDimensions(img.naturalWidth, img.naturalHeight, max);
+          const canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          URL.revokeObjectURL(img.src);
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error("encode failed")), "image/webp", 0.82);
+        };
+        img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error("not an image")); };
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    async function uploadOnePhoto(permit, blob) {
+      const res = await fetch(`${API_BASE}/api/photo/${encodeURIComponent(permit)}`, {
+        method: "POST", headers: { "Content-Type": "image/webp" }, body: blob,
+      });
+      if (!res.ok) throw new Error("upload failed");
+      return (await res.json()).id;
+    }
+
+    function openPhotoCompose(encodedPermit) {
+      const permit = decodeURIComponent(encodedPermit);
+      const dlg = document.getElementById("photo-compose");
+      let picked = [];
+      dlg.innerHTML = `<h3 id="pc-title">Add photos</h3>
+        <p class="dlg-sub">Up to 6 \u00b7 JPEG, PNG or WebP \u00b7 5 MB each \u00b7 location data is removed before upload</p>
+        <input id="pc-file" class="pc-file" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+        <div id="pc-list" class="pc-list"></div>
+        <p class="pc-msg" id="pc-msg" role="alert" hidden></p>
+        <div class="dlg-field"><label for="pc-text">Note (optional)</label><input id="pc-text" maxlength="200" placeholder="What do these show?"></div>
+        <div class="pc-foot">
+          <button type="button" id="pc-cancel">Cancel</button>
+          <button type="button" class="primary" id="pc-save" disabled>Post photos</button>
+        </div>`;
+      dlg.setAttribute("aria-labelledby", "pc-title");
+      const list = dlg.querySelector("#pc-list");
+      const msg = dlg.querySelector("#pc-msg");
+      const save = dlg.querySelector("#pc-save");
+
+      function redraw() {
+        list.innerHTML = picked.map((f, i) => `<div class="pc-item">
+          <img class="pc-thumb" src="${URL.createObjectURL(f.file)}" alt="">
+          <input type="text" maxlength="200" placeholder="Caption (also alt text)" value="${esc(f.caption)}" data-i="${i}" aria-label="Caption for photo ${i + 1}">
+          <button type="button" class="pc-drop" data-drop="${i}" aria-label="Remove photo ${i + 1}">\u2715</button>
+        </div>`).join("");
+        list.querySelectorAll("input[data-i]").forEach(inp => inp.addEventListener("input", () => { picked[Number(inp.dataset.i)].caption = inp.value; }));
+        list.querySelectorAll("[data-drop]").forEach(b => b.addEventListener("click", () => { picked.splice(Number(b.dataset.drop), 1); redraw(); }));
+        save.disabled = picked.length === 0;
+      }
+
+      dlg.querySelector("#pc-file").addEventListener("change", ev => {
+        msg.hidden = true;
+        const rejects = [];
+        for (const file of ev.target.files) {
+          if (picked.length >= 6) { rejects.push("max 6"); break; }
+          if (!PHOTO_TYPES.includes(file.type)) { rejects.push(`${file.name}: not JPEG/PNG/WebP`); continue; }
+          if (file.size > PHOTO_MAX_BYTES) { rejects.push(`${file.name}: over 5 MB`); continue; }
+          picked.push({ file, caption: "" });
+        }
+        ev.target.value = "";
+        if (rejects.length) { msg.hidden = false; msg.textContent = rejects.join(" \u00b7 "); }
+        redraw();
+      });
+
+      dlg.querySelector("#pc-cancel").addEventListener("click", () => dlg.close());
+      save.addEventListener("click", async () => {
+        if (!picked.length) return;
+        if (!(localStorage.getItem("chi_permit_author") || "").trim()) {
+          const nm = window.prompt("Post publicly as (leave blank for anonymous):", "");
+          if (nm === null) return;
+          try { localStorage.setItem("chi_permit_author", nm.trim()); } catch { /* storage blocked */ }
+        }
+        save.disabled = true;
+        const photos = [];
+        try {
+          for (let i = 0; i < picked.length; i++) {
+            save.textContent = `Uploading ${i + 1} of ${picked.length}\u2026`;
+            const blob = await resizeToWebp(picked[i].file, PHOTO_MAX_EDGE);
+            const id = await uploadOnePhoto(permit, blob);
+            photos.push({ id, caption: picked[i].caption });
+          }
+          save.textContent = "Posting\u2026";
+          const res = await fetch(`${API_BASE}/api/notes/${encodeURIComponent(permit)}`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ kind: "photo", author: (localStorage.getItem("chi_permit_author") || "").trim(), text: dlg.querySelector("#pc-text").value.trim(), photos }),
+          });
+          if (!res.ok) throw new Error("post failed");
+          dlg.close();
+          await fetchThread(permit);
+          pmAnnounce("Photos posted.");
+        } catch {
+          msg.hidden = false; msg.textContent = "Upload failed \u2014 this needs the live site.";
+          save.disabled = false; save.textContent = "Post photos";
+        }
+      });
+      dlg.showModal();
+    }
+
     function pmFacts(pairs) {
       return `<dl class="pm-facts">${pairs.map(([k, v, extra]) =>
         `<dt>${esc(k)}</dt><dd>${v ? esc(v) : "—"}${extra || ""}</dd>`).join("")}</dl>`;
@@ -7330,6 +7480,7 @@
                 <span class="small">Posting as <strong>${esc((typeof localStorage !== "undefined" && localStorage.getItem("chi_permit_author")) || "anonymous")}</strong></span>
                 <span class="pm-post-btns">
                   <button type="button" onclick="openWalkthrough('${enc(row.permit_number)}')">Log walkthrough</button>
+                  <button type="button" onclick="openPhotoCompose('${enc(row.permit_number)}')">Add photos</button>
                   <button type="button" class="primary" id="pm-post-btn" onclick="postNoteFromDraft('${enc(row.permit_number)}')">Post to permit</button>
                 </span>
               </div>
@@ -7430,5 +7581,6 @@
   <dialog id="list-details" aria-modal="true"></dialog>
   <dialog id="add-address" aria-modal="true"></dialog>
   <dialog id="walkthrough" aria-modal="true"></dialog>
+  <dialog id="photo-compose" aria-modal="true"></dialog>
 </body>
 </html>

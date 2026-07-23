@@ -6,6 +6,18 @@ const MAX_POSTS = 200;
 const JOBS = new Set(["new", "remodel"]);
 const ONSITE = new Set(["none", "gc", "sub"]);
 const ESTIMATES = new Set(["same-day", "1-3d", "week", "longer", "unknown"]);
+const PHOTO_ID_RE = /^p_[0-9a-f]{8}$/;
+
+export function sanitizePhotoRefs(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || !PHOTO_ID_RE.test(String(item.id))) continue;
+    out.push({ id: item.id, caption: String(item.caption ?? "").slice(0, 200) });
+    if (out.length >= 6) break;
+  }
+  return out;
+}
 
 function resp(obj, status) {
   return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
@@ -93,7 +105,12 @@ export async function handleNotes(url, env, request) {
     const base = { id: makeNoteId(), author, ts: now, editedTs: null };
     let post;
     if (body.kind === "walk") post = { ...base, kind: "walk", ...sanitizeWalk(body) };
-    else if (body.kind === "photo") post = { ...base, kind: "photo", text: sanitizeText(body.text), photos: [] }; // Phase 4 fills photos
+    else if (body.kind === "photo") {
+      const photos = sanitizePhotoRefs(body.photos);
+      const text = sanitizeText(body.text);
+      if (!photos.length && !text) return resp({ error: "empty" }, 400);
+      post = { ...base, kind: "photo", text, photos };
+    }
     else {
       const text = sanitizeText(body.text);
       if (!text) return resp({ error: "empty" }, 400);
@@ -117,6 +134,10 @@ export async function handleNotes(url, env, request) {
       try { body = JSON.parse(await request.text()); } catch { return resp({ error: "bad json" }, 400); }
       const post = thread[i];
       if (post.kind === "walk") Object.assign(post, sanitizeWalk(body));
+      else if (post.kind === "photo") {
+        if (body.text !== undefined) post.text = sanitizeText(body.text);
+        if (body.photos !== undefined) post.photos = sanitizePhotoRefs(body.photos);
+      }
       else { const text = sanitizeText(body.text); if (!text) return resp({ error: "empty" }, 400); post.text = text; }
       post.editedTs = Math.floor(Date.now() / 1000);
     }
