@@ -2689,6 +2689,10 @@
       text-underline-offset: 2px;
     }
 
+    .contractor-line.clickable { cursor: pointer; min-height: 44px; }
+    .contractor-line.clickable:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .ci-none { display: block; font-size: 0.79rem; color: var(--muted); margin-top: 4px; }
+
     .pm-contractors .clic { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
     .pm-contractors .lic-type { font-size: 0.72rem; font-weight: 600; color: var(--primary); background: var(--primary-soft); padding: 2px 8px; border-radius: 6px; }
     .pm-contractors .lic-class { font-size: 0.72rem; font-weight: 600; color: var(--ink); background: var(--paper); border: 1px solid var(--line); padding: 2px 8px; border-radius: 6px; }
@@ -5806,6 +5810,29 @@
       return names.map(name => `<div class="contractor-line" data-contractor="${esc(name)}" data-role="${role}"><span class="ci-name">${esc(name)}</span><span class="ci-meta"> · …</span></div>`).join("");
     }
 
+    // Open a contractor's card on top of the current one.
+    function openContactCard(encodedName, role) {
+      pushCard({ type: "contact", name: decodeURIComponent(encodedName), role });
+    }
+
+    // Add every permit currently listed on the active contractor card, in one
+    // shot, to the currently active list — no per-permit or bulk list-picker
+    // prompt (an in-card `<dialog>` stacked over the permit-modal overlay would
+    // be a jarring UI, and re-prompting per permit is worse). Goes through
+    // addPermitsToUserList, the same underlying function addPermitFromEncoded
+    // (single add) uses, so persistence/sync/list refresh all match.
+    async function addAllFromCard() {
+      const desc = activeCard();
+      if (!desc || desc.type !== "contact") return;
+      const rows = desc.permits || [];
+      if (!rows.length) return;
+      const btn = document.querySelector('.pm-actions .pm-act:not(.primary)');
+      if (btn) { btn.disabled = true; btn.textContent = "Adding…"; }
+      await addPermitsToUserList(rows, { listId: state.activeListId });
+      pmAnnounce(`${fmt(rows.length)} permits added to your list`);
+      refreshCard();
+    }
+
     const contractorInfoCache = new Map();
 
     // Fetch one contractor's open-jobs + phone from the Worker profile
@@ -5840,7 +5867,17 @@
         line.setAttribute("data-filled", "1");
         const meta = line.querySelector(".ci-meta");
         const info = await fetchContractorInfo(line.getAttribute("data-contractor"), line.getAttribute("data-role"));
-        if (!info) { meta.textContent = ""; return; }
+        if (!info) {
+          meta.textContent = "";
+          line.insertAdjacentHTML("beforeend", `<span class="ci-none">No profile on file</span>`);
+          return;
+        }
+        // A contractor we have a profile for becomes a button to its card.
+        line.setAttribute("role", "button");
+        line.setAttribute("tabindex", "0");
+        line.setAttribute("onclick", `openContactCard('${enc(line.getAttribute("data-contractor"))}', '${line.getAttribute("data-role")}')`);
+        line.setAttribute("aria-label", `Open profile for ${line.getAttribute("data-contractor")}`);
+        line.classList.add("clickable");
         const licType = parseLicenseType(info.license_type);
         const cls = parseLicenseClass(info.license_type);
         const chips = [];
