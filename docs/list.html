@@ -2711,6 +2711,13 @@
       .pm-content { padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
       .pm-act { flex: 1 1 auto; justify-content: center; }
     }
+    .pm-skel { display: block; background: var(--line); border-radius: 6px; opacity: 0.55; }
+    .pm-skel.pill { display: inline-block; width: 92px; height: 26px; border-radius: 999px; margin-right: 6px; }
+    .pm-skel.line { height: 38px; margin: 8px 0; }
+    @media (prefers-reduced-motion: no-preference) {
+      .pm-skel { animation: pmPulse 1.2s ease-in-out infinite; }
+      @keyframes pmPulse { 50% { opacity: 0.25; } }
+    }
     .approx { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--warning); background: var(--warning-soft); padding: 1px 6px; border-radius: 5px; margin-left: 6px; cursor: help; }
     .pm-note { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 1rem; padding: 9px 11px; resize: vertical; }
 
@@ -3831,15 +3838,15 @@
       const body = $("permit-modal-body");
       body.innerHTML = desc.type === "permit"
         ? permitDetailHtml(desc.row)
-        : contactDetailHtml(desc, state.cardIndex);
+        : desc.loaded
+          ? contactDetailHtml(desc, state.cardIndex)
+          : cardSkeletonHtml(desc, state.cardIndex);
       if (desc.type === "permit") {
         fillPermitContractors(body);
         fillPermitGeo(body, desc.row);
         const pn = clean(desc.row.permit_number);
         if (pn) fetchThread(pn);
-      } else if (typeof fillContactCard === "function") {
-        // fillContactCard lands in a later task; guard so the card stack still
-        // renders and navigates before that function exists.
+      } else {
         fillContactCard(body, desc);
       }
       const title = document.getElementById("permit-modal-title");
@@ -7664,6 +7671,78 @@
         ${specialtiesBlockHtml(desc.profile)}
         ${associationsBlockHtml(desc)}
         </div>`;
+    }
+
+    // Shown while the two contractor fetches are in flight. Both routinely
+    // exceed 300ms, and a blank card reads as a broken overlay.
+    function cardSkeletonHtml(desc, cardIndex) {
+      return `<div class="pm-head stacked">
+          <div class="pm-titlerow">
+            ${cardIndex > 0 ? `<button class="pm-back" aria-label="Back" onclick="popCard()">&lsaquo;</button>` : ""}
+            <div class="pm-title"><div class="k">${esc(cardKicker(desc))}</div><div class="v" id="permit-modal-title" tabindex="-1">${esc(clean(desc.name))}</div></div>
+            <button class="pm-close" aria-label="Close" onclick="closePermitModal()">&#10005;</button>
+          </div>
+        </div>
+        <div class="pm-content">
+          <div class="pm-tagrow">${"<span class=\"pm-skel pill\"></span>".repeat(4)}</div>
+          <section class="pm-block"><h3>Open permits</h3>
+            <div class="pm-skel line"></div><div class="pm-skel line"></div><div class="pm-skel line"></div>
+          </section>
+        </div>`;
+    }
+
+    // Fold a contractor name to a comparison key: case, punctuation, whitespace and
+    // a trailing corporate suffix are all noise when matching permit text against a
+    // profile name.
+    function normContractor(name) {
+      return String(name || "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9 ]+/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/\s+(INC|LLC|CO|CORP|LTD)$/, "")
+        .trim();
+    }
+
+    // /api/permits?contact_name= is a substring LIKE across all 15 contact slots,
+    // so "ACME" also returns "ACME PLUMBING". Keep only rows that actually name
+    // this contractor in the role we are showing.
+    function rowsForContractor(rows, name, role) {
+      const key = normContractor(name);
+      const field = role === "open_tech" ? "open_subs" : "general_contractors";
+      return (rows || []).filter(row =>
+        String(row[field] || "").split("|").map(normContractor).includes(key));
+    }
+
+    // Fetch a contractor's profile and live permits, cache them on the
+    // descriptor, and re-render the card. Cached descriptors skip the fetch
+    // entirely, so stepping back is instant.
+    async function fillContactCard(body, desc) {
+      if (desc.loaded) return;
+      body.setAttribute("aria-busy", "true");
+      const role = desc.role === "open_tech" ? "open_tech" : "general_contractor";
+      const [profile, permitsResult] = await Promise.all([
+        fetch(`${API_BASE}/api/contact/${encodeURIComponent(desc.name)}?category=${role}`)
+          .then(r => (r.ok ? r.json() : null)).catch(() => null),
+        fetch(`${API_BASE}/api/permits?contact_name=${encodeURIComponent(desc.name)}&limit=200`)
+          .then(r => (r.ok ? r.json() : Promise.reject(new Error(`Permits unavailable (${r.status})`))))
+          .catch(e => ({ error: e.message || "Open permits could not be loaded." })),
+      ]);
+      desc.profile = profile;
+      desc.relatedError = permitsResult.error || "";
+      desc.permits = permitsResult.error ? [] : rowsForContractor(permitsResult.rows, desc.name, role);
+      desc.loaded = true;
+      if (activeCard() !== desc) return; // user navigated away mid-flight
+      body.removeAttribute("aria-busy");
+      renderCard("none");
+    }
+
+    // Retry button in the card's error state.
+    function retryContactCard() {
+      const desc = activeCard();
+      if (!desc || desc.type !== "contact") return;
+      desc.loaded = false;
+      renderCard("none");
     }
 
     function licenseBlockHtml(profile) {
