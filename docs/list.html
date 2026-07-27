@@ -2646,7 +2646,10 @@
       border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
       box-shadow: 0 24px 60px -18px rgba(16,26,40,0.45);
     }
-    .permit-modal-body { overflow-y: auto; overscroll-behavior: contain; }
+    /* flex:1 + min-height:0 so the scroll area shrinks to the card on iOS Safari
+       (which won't shrink an overflow flex child without min-height:0 — the bottom
+       otherwise clips past a 100dvh card). */
+    .permit-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
     @media (max-width: 640px) {
       .permit-modal-card { width: 100vw; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
     }
@@ -2866,7 +2869,9 @@
     #walkthrough {
       border: 1px solid var(--line-strong); border-radius: 12px; padding: 1rem;
       background: var(--panel); color: var(--ink); max-width: 520px; width: calc(100vw - 2rem);
-      max-height: calc(100vh - 3rem); overflow-y: auto; box-shadow: 0 12px 30px var(--shadow);
+      /* dvh, not vh: iOS Safari's 100vh is taller than the visible area, so a
+         near-full-height dialog clips top/bottom and the footer is unreachable. */
+      max-height: calc(100dvh - 3rem); overflow-y: auto; box-shadow: 0 12px 30px var(--shadow);
     }
     #walkthrough::backdrop { background: rgba(6, 14, 26, 0.55); }
     #walkthrough h3 { margin: 0; font-size: 1.05rem; }
@@ -2880,7 +2885,14 @@
     #walkthrough .dlg-row { display: flex; gap: .6rem; flex-wrap: wrap; }
     #walkthrough .dlg-row .dlg-field { flex: 1 1 140px; }
     #walkthrough .dlg-error { color: var(--danger); font-size: .85rem; font-weight: 600; margin: .3rem 0 .6rem; }
-    #walkthrough .dlg-foot { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .5rem; }
+    /* Sticky footer: the walkthrough is tall on phones, so pin Cancel/Post to the
+       bottom of the scroll area (bottom:-1rem + negative margins cancel the 1rem
+       dialog padding so it bleeds to the true edges). */
+    #walkthrough .dlg-foot {
+      display: flex; justify-content: flex-end; gap: .5rem;
+      position: sticky; bottom: -1rem; margin: .5rem -1rem -1rem;
+      padding: .7rem 1rem 1rem; background: var(--panel); border-top: 1px solid var(--line);
+    }
     .wk-fieldset { border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; margin: 0 0 .7rem; }
     .wk-fieldset legend { font-size: .82rem; font-weight: 700; padding: 0 .3rem; }
     .wk-choices { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .4rem; }
