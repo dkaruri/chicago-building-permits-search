@@ -3706,13 +3706,6 @@
       return state.cardStack[state.cardIndex] || null;
     }
 
-    // Back-compat alias: several call sites still read state.activeDetail.
-    Object.defineProperty(state, "activeDetail", {
-      get() { return state.cardStack[state.cardIndex] || null; },
-      set(v) { if (v) { state.cardStack = [v]; state.cardIndex = 0; } },
-      configurable: true,
-    });
-
     // Push a new card onto the stack and show it. Opens the overlay if closed.
     function pushCard(desc) {
       const next = stackPush(state.cardStack, state.cardIndex, desc);
@@ -3736,6 +3729,14 @@
       const next = stackGo(state.cardStack, state.cardIndex, 1);
       state.cardIndex = next.index;
       renderCard("forward");
+    }
+
+    // Re-render the active card in place — no history entry, no stack change.
+    // Used when the underlying data changed (e.g. the permit was added to a
+    // list) and the same card must repaint.
+    function refreshCard() {
+      if (!activeCard()) return;
+      renderCard("none");
     }
 
     // Show the overlay shell. The body is filled by renderCard.
@@ -3799,6 +3800,8 @@
       } else {
         fillContactCard(body, desc);
       }
+      const title = document.getElementById("permit-modal-title");
+      if (title) title.focus({ preventScroll: true });
     }
 
     // Keep Tab focus inside the open modal.
@@ -6109,8 +6112,8 @@
       announceListAction(`${fmt(numbers.length)} permit${numbers.length === 1 ? "" : "s"} added to the list.`);
       await renderUserList();
       if (!skipModeRefresh) renderCurrentMode();
-      if (!skipModeRefresh && state.activeDetail?.type === "permit") {
-        showPermitDetail(state.activeDetail.row, false);
+      if (!skipModeRefresh && activeCard()?.type === "permit") {
+        refreshCard();
       }
     }
 
@@ -6234,7 +6237,7 @@
     }
 
     function refreshMapSavedPermitState(permitNumber) {
-      if (state.activeDetail?.type === "permit") return;
+      if (activeCard()?.type === "permit") return;
       const active = clean(state.map.activePermitNumber);
       const number = clean(permitNumber);
       if (active && active === number) {
@@ -6267,8 +6270,8 @@
       await renderUserList();
       const skipModeRefresh = state.mode === "map";
       if (!skipModeRefresh) renderCurrentMode();
-      if (!skipModeRefresh && state.activeDetail?.type === "permit") {
-        showPermitDetail(state.activeDetail.row, false);
+      if (!skipModeRefresh && activeCard()?.type === "permit") {
+        refreshCard();
       }
       if (skipModeRefresh) refreshMapSavedPermitState(number);
     }
@@ -6288,8 +6291,8 @@
       announceListAction("My Permit List was cleared.");
       await renderUserList();
       renderCurrentMode();
-      if (state.activeDetail?.type === "permit") {
-        showPermitDetail(state.activeDetail.row, false);
+      if (activeCard()?.type === "permit") {
+        refreshCard();
       }
     }
 
@@ -7506,7 +7509,7 @@
       const payload = enc(JSON.stringify(row));
       return [
         () => `<div class="pm-head">
-            <div class="pm-title"><div class="k">Permit</div><div class="v" id="permit-modal-title">${esc(row.permit_number)}</div></div>
+            <div class="pm-title"><div class="k">Permit</div><div class="v" id="permit-modal-title" tabindex="-1">${esc(row.permit_number)}</div></div>
             <button class="primary" onclick="addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "✓ Saved" : "Add to list"}</button>
             <button class="pm-close" aria-label="Close" onclick="closePermitModal()">✕</button>
           </div>
