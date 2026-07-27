@@ -3203,6 +3203,7 @@
     const focalPointKey = "chi_permit_focal";
     const themeKey = "chi_permit_theme";
     const mapSettingsKey = "chi_permit_map_settings";
+    const lastViewKey = "chi_permit_last_view";
     const userListLimit = 220;
     const appModes = ["general_contractors", "open_subs", "open_permits"];
     const openPermitStatuses = new Set(["ACTIVE", "SUSPENDED", "PHASED PERMITTING"]);
@@ -3335,18 +3336,16 @@
     }
 
     function directorySections(localLists, remoteRows) {
-      const mineIds = new Set();
-      const mine = Object.entries(localLists).map(([id, list]) => {
-        if (list.sharedId) mineIds.add(list.sharedId);
-        return {
-          id,
-          name: list.name,
-          count: (list.permits || []).length,
-          sharedId: list.sharedId || null,
-          draft: !list.sharedId,
-        };
-      });
-      return { mine, published: remoteRows.filter(row => !mineIds.has(row.id)) };
+      const mine = Object.entries(localLists).map(([id, list]) => ({
+        id,
+        name: list.name,
+        count: (list.permits || []).length,
+        sharedId: list.sharedId || null,
+        draft: !list.sharedId,
+      }));
+      // Your own published lists also appear under "Published to the site" —
+      // the same way anyone else sees them (they still show under My lists too).
+      return { mine, published: remoteRows };
     }
 
     // A just-deleted published list lingers in GET /api/lists until KV's list()
@@ -3479,6 +3478,7 @@
     function showDirectory() {
       liveDisconnect();
       state.view = "directory";
+      try { localStorage.setItem(lastViewKey, "directory"); } catch { /* storage blocked */ }
       const dir = $("directory-view");
       const panel = $("user-list-panel");
       if (dir) dir.hidden = false;
@@ -3493,6 +3493,7 @@
         saveUserLists();
       }
       state.view = "list";
+      try { localStorage.setItem(lastViewKey, "list"); } catch { /* storage blocked */ }
       const dir = $("directory-view");
       const panel = $("user-list-panel");
       if (dir) dir.hidden = true;
@@ -3777,11 +3778,19 @@
       // directory. fetchDirectory is deliberately not awaited — the local lists
       // render immediately and the published section fills in when it arrives.
       renderListHeading();
-      if (state.view !== "list") showDirectory();
+      // A #s= link already set view to "list" — respect it. Otherwise reopen
+      // whichever view was last seen (an owned list, or the directory).
+      if (state.view !== "list") {
+        let lastView = "";
+        try { lastView = localStorage.getItem(lastViewKey) || ""; } catch { lastView = ""; }
+        if (lastView === "list" && activeList()) await showList(state.activeListId);
+        else showDirectory();
+      }
       fetchDirectory(false);
       if (!document.body.classList.contains("list-page")) {
         await search();
       }
+      document.body.dataset.ready = "1";
     }
 
     // Toolbar dropdowns behave like menus: only one open, and a click outside or
