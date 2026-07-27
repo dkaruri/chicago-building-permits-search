@@ -3841,6 +3841,10 @@
         : desc.loaded
           ? contactDetailHtml(desc, state.cardIndex)
           : cardSkeletonHtml(desc, state.cardIndex);
+      // Any completed render is, by definition, no longer busy. Clearing here
+      // (rather than only in fillContactCard's success path) means an
+      // interrupted fetch cannot leave the body permanently marked busy.
+      body.removeAttribute("aria-busy");
       if (desc.type === "permit") {
         fillPermitContractors(body);
         fillPermitGeo(body, desc.row);
@@ -7733,7 +7737,6 @@
       desc.permits = permitsResult.error ? [] : rowsForContractor(permitsResult.rows, desc.name, role);
       desc.loaded = true;
       if (activeCard() !== desc) return; // user navigated away mid-flight
-      body.removeAttribute("aria-busy");
       renderCard("none");
     }
 
