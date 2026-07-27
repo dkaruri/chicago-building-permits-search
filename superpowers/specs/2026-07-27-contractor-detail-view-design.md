@@ -115,10 +115,19 @@ entirely when the card has zero open permits.
 `innerHTML` with no motion.
 
 Replay the same keyframe on `.permit-modal-body` per navigation: `permitRise` on
-push, a mirrored `permitFall` (from `translateY(-14px)`) on back. Same duration,
-same easing, same reduced-motion gate — under `reduce` both are absent, as the
-card entry already is. The card frame never re-animates, so a push does not read
-as the modal reopening.
+push, a mirrored `permitFall` (from `translateY(-14px)`) on back. Same easing,
+same reduced-motion gate — under `reduce` both are absent, as the card entry
+already is. The card frame never re-animates, so a push does not read as the
+modal reopening.
+
+Durations follow *exit faster than enter*: push 240ms (the existing
+`permitRise`), back 160ms (~65%). Direction is the standard hierarchy cue —
+forward enters from below, back enters from above.
+
+Animation must not block input: a second tap during a transition cancels it and
+renders immediately rather than queueing. Implemented by clearing the animation
+class before re-applying it, and never gating `renderCard` behind an
+`animationend` listener.
 
 Mobile keeps `100vw / 100dvh`; `.permit-modal-body`'s `flex:1; min-height:0`
 (the 2026-07-27 iOS fix) is what lets a long contractor card scroll rather than
@@ -193,6 +202,87 @@ read as `{view}`. `index.html` adopts the same key, which it does not use today.
 A `#s=` share link still wins over a restored view, as it does now. The overlay
 is deliberately not restored.
 
+## Accessibility and responsive requirements
+
+Derived from a `ui-ux-pro-max` pass over this design (domains: ux —
+accessibility, navigation, animation, tables). Each item is a build requirement,
+not a review-time check.
+
+### Blocking defects this pass found in the current design
+
+1. **The dialog's accessible name breaks on a contractor card.**
+   `.permit-modal-card` carries `aria-labelledby="permit-modal-title"`, and only
+   the permit card emits that id (on the permit number). A contractor card must
+   put `id="permit-modal-title"` on its `.pm-title .v`, or every contractor card
+   is an unnamed dialog.
+2. **Focus is lost on every card navigation.** `openPermitModal` only moves
+   focus when the modal was previously closed; a push swaps `innerHTML`, so the
+   focused button is destroyed and focus falls to `<body>` — screen-reader and
+   keyboard users lose their place mid-stack. Every `renderCard` must move focus
+   to the new card's title (`tabindex="-1"`) and announce the change through the
+   existing `pmAnnounce()` aria-live region ("General contractor, ACME
+   BUILDERS"). Closing still restores `_permitModalPrevFocus`, which must be the
+   element that opened the *first* card, not the last.
+3. **Heading hierarchy skips.** The pane's contractor markup nests `<h4>` under
+   `<h3>`; inside the overlay every block heading is `.pm-block h3`, matching the
+   permit card. Convert on port — do not carry `<h4>` across.
+
+### Requirements
+
+**Touch and hit targets**
+- `‹` back, `✕` close, `📞 Call`, `Add all N`: ≥44×44px with ≥8px between them.
+- Contractor rows and permit rows in the table are ≥44px tall; the whole row is
+  the target, not the name text.
+
+**The filter controls inside the card**
+- Visible `<label>` per control (the pane already does this) — carried over, not
+  reduced to placeholders.
+- ≥16px font and ≥44px height, or iOS zooms the whole card on focus.
+- Filtering is not navigation: filter changes re-render the card **without**
+  pushing a history entry or replaying the animation.
+
+**The permits table**
+- Wrapped in `overflow-x: auto` with `overflow-y: visible`, so it never creates
+  a nested vertical scroll region competing with the card body's scroll.
+- `aria-label` naming the table ("Open permits for ACME BUILDERS"); `aria-sort`
+  on any sortable header reflecting current state.
+- `font-variant-numeric: tabular-nums` on cost, date, and count columns, and on
+  the stat pills, so paging doesn't jitter the layout.
+
+**Loading, empty and error states**
+- Both fetches exceed 300ms routinely: render a skeleton (pill row + block
+  placeholders) with `aria-busy="true"` on the body, never a blank card.
+- Zero open permits → "No open permits on file for this contractor", and the
+  `Add all N` button is omitted entirely rather than shown disabled at 0.
+- Zero associations → "No other contractors on these permits".
+- Fetch failure → message plus a Retry button, announced via `role="alert"`;
+  never a silently empty section.
+- `Add all N` disables itself and shows progress while adding.
+
+**Layout**
+- Mobile header stacks: title row (`‹`, title, `✕`), then a full-width button
+  row. Desktop stays one row.
+- The title **wraps to two lines** and only then ellipsizes; a long company name
+  truncated to "ACME BUILDERS OF GREATER CHICA…" is worse than two lines.
+- The full-screen mobile card respects safe areas: `env(safe-area-inset-top)` on
+  the sticky header and `env(safe-area-inset-bottom)` on the action row, so the
+  home indicator can't sit over the Call button.
+- No horizontal scroll on the card body itself at 390px — only the table wrapper
+  may scroll sideways.
+
+**Theming**
+- Every new token pair (the `matched as` line, `No profile on file`, skeleton
+  fill, disabled button) verified at ≥4.5:1 in **both** themes, measured, not
+  assumed from the light values.
+- No state conveyed by colour alone: a stale-profile note reads as text, not a
+  yellow tint.
+
+### Accepted deviations
+
+- **No deep link per card.** Card pushes change history state but not the URL,
+  so a card can't be linked to or restored from a URL. This matches how the
+  permit overlay already behaves; changing it is out of scope here.
+
 ## Testing
 
 **Worker** — added to the existing 99 tests in `worker/test/`:
@@ -210,6 +300,13 @@ is deliberately not restored.
 - `ui-ux-pro-max` checklist per `CLAUDE.md`: ≥44px targets, labelled controls,
   focus states, 4.5:1 contrast in both themes, no sub-16px inputs,
   reduced-motion respected
+- the three blocking defects above, asserted directly: `#permit-modal-title`
+  resolves on a contractor card; focus lands on the new card's title after every
+  push/pop; no `<h4>` inside the overlay
+- skeleton appears while fetching, and `aria-busy` clears after
+- filter changes push zero history entries (assert `history.length` unchanged)
+- geometry, not just DOM presence: header buttons ≥44px and ≥8px apart at
+  390px, card body `scrollWidth <= clientWidth`
 
 **Invariant** — the shared overlay block must stay byte-identical between
 `index.html` and `list.html`; verify with a byte-diff of the block before

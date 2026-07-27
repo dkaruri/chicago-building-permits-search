@@ -133,9 +133,14 @@ static site.
 - Tests should pass before landing; one PR/commit per change where practical.
 - Check `git status` before assuming HEAD reflects deployed behavior — this
   repo frequently carries uncommitted work in progress.
-- **UI/UX Pro Max on every new UI feature (standing instruction, 2026-07-23).**
-  Any change that adds or reworks user-facing UI on `docs/*.html` must invoke the
-  `ui-ux-pro-max` skill and verify the result against its checklist BEFORE landing:
+- **UI/UX Pro Max on every new UI feature (standing instruction, 2026-07-23;
+  extended to design time 2026-07-27).** Invoke the `ui-ux-pro-max` skill TWICE
+  on any change that adds or reworks user-facing UI on `docs/*.html`:
+  1. **While designing** — before a spec or plan is written, so accessibility and
+     mobile constraints shape the design instead of being retrofitted. Fold the
+     findings into the spec as build requirements, and record any deliberate
+     deviations. A design doc for a UI feature counts as UI work.
+  2. **Before landing** — verify the built result against the checklist:
   ≥44px touch targets on mobile, visible labels/aria-labels on every control,
   focus states, 4.5:1 contrast in BOTH light and dark, no meaning by colour alone,
   no sub-16px inputs (iOS zoom), and reduced-motion respected. Verify headless at
