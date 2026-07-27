@@ -3162,6 +3162,8 @@
       detailFilters: { q: "", workType: "", permitType: "", role: "" },
       detailPageIndex: 0,
       detailPageSize: 25,
+      cardStack: [],
+      cardIndex: -1,
       selectedPermitNumbers: new Set(),
       userPermitNumbers: [],
       userPermitMap: new Map(),
@@ -3684,49 +3686,120 @@
 
     let _permitModalPrevFocus = null;
     let _permitModalScrollY = 0;
-    let _permitModalHistory = false;
+    // How many history entries the open overlay owns — one per card pushed.
+    let _permitModalDepth = 0;
+    // Set while closePermitModal unwinds its own entries, so the popstate
+    // handler ignores the events history.go(-n) is about to fire.
+    let _permitModalClosing = false;
 
-    function openPermitModal(html, opts = {}) {
+    // Card-stack transitions. Pure; mirrored in verify-tmp/p5-stack-impl.mjs.
+    function stackPush(stack, index, desc) {
+      return { stack: [...stack.slice(0, index + 1), desc], index: index + 1 };
+    }
+
+    function stackGo(stack, index, delta) {
+      const next = Math.min(Math.max(index + delta, 0), stack.length - 1);
+      return { stack, index: next };
+    }
+
+    function activeCard() {
+      return state.cardStack[state.cardIndex] || null;
+    }
+
+    // Back-compat alias: several call sites still read state.activeDetail.
+    Object.defineProperty(state, "activeDetail", {
+      get() { return state.cardStack[state.cardIndex] || null; },
+      set(v) { if (v) { state.cardStack = [v]; state.cardIndex = 0; } },
+      configurable: true,
+    });
+
+    // Push a new card onto the stack and show it. Opens the overlay if closed.
+    function pushCard(desc) {
+      const next = stackPush(state.cardStack, state.cardIndex, desc);
+      state.cardStack = next.stack;
+      state.cardIndex = next.index;
+      openPermitModal();
+      history.pushState({ permitModal: true, card: state.cardIndex }, "");
+      _permitModalDepth += 1;
+      renderCard("forward");
+    }
+
+    function popCard() {
+      if (state.cardIndex <= 0) { closePermitModal(); return; }
+      const next = stackGo(state.cardStack, state.cardIndex, -1);
+      state.cardIndex = next.index;
+      renderCard("back");
+    }
+
+    function forwardCard() {
+      if (state.cardIndex >= state.cardStack.length - 1) return;
+      const next = stackGo(state.cardStack, state.cardIndex, 1);
+      state.cardIndex = next.index;
+      renderCard("forward");
+    }
+
+    // Show the overlay shell. The body is filled by renderCard.
+    function openPermitModal() {
       const modal = $("permit-modal");
-      const body = $("permit-modal-body");
-      const alreadyOpen = !modal.hidden;
-      if (!alreadyOpen) {
-        _permitModalPrevFocus = document.activeElement;
-        _permitModalScrollY = window.scrollY;
-      }
-      body.innerHTML = html;
-      if (!alreadyOpen) {
-        modal.hidden = false;
-        document.body.classList.add("modal-open");
-        // Browser back closes the modal (Android/iOS back gesture).
-        history.pushState({ permitModal: true }, "");
-        _permitModalHistory = true;
-        // Focus first focusable control (or the card) for keyboard users.
-        const focusable = body.querySelector('button:not([disabled]), a[href], textarea:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
-        (focusable || modal.querySelector(".permit-modal-card")).focus?.();
-      }
-      if (opts.onOpen) opts.onOpen(body);
+      if (!modal.hidden) return;
+      _permitModalPrevFocus = document.activeElement;
+      _permitModalScrollY = window.scrollY;
+      modal.hidden = false;
+      document.body.classList.add("modal-open");
     }
 
     function closePermitModal(fromPopState = false) {
       const modal = $("permit-modal");
       if (modal.hidden) return;
+      const depth = _permitModalDepth;
       modal.hidden = true;
       $("permit-modal-body").innerHTML = "";
       document.body.classList.remove("modal-open");
+      state.cardStack = [];
+      state.cardIndex = -1;
+      _permitModalDepth = 0;
       window.scrollTo(0, _permitModalScrollY);
       if (_permitModalPrevFocus && _permitModalPrevFocus.focus) _permitModalPrevFocus.focus();
-      if (_permitModalHistory && !fromPopState) { _permitModalHistory = false; history.back(); }
-      else { _permitModalHistory = false; }
+      // Drop the history entries this overlay owns. One popstate already fired
+      // when the user pressed Back, so unwind one fewer in that case.
+      const unwind = fromPopState ? depth - 1 : depth;
+      if (unwind > 0) {
+        _permitModalClosing = true;
+        history.go(-unwind);
+        setTimeout(() => { _permitModalClosing = false; }, 0);
+      }
     }
 
     window.addEventListener("popstate", () => {
-      if (!$("permit-modal").hidden) closePermitModal(true);
+      if (_permitModalClosing) return;
+      if ($("permit-modal").hidden) return;
+      _permitModalDepth = Math.max(0, _permitModalDepth - 1);
+      if (state.cardIndex > 0) popCard();
+      else closePermitModal(true);
     });
     document.addEventListener("keydown", e => {
       if (e.key === "Escape" && !$("permit-modal").hidden) closePermitModal();
       if (e.key === "Tab" && !$("permit-modal").hidden) trapPermitModalFocus(e);
     });
+
+    // Render the active card into the overlay body and run its onOpen hooks.
+    // direction is "forward" or "back" and only drives the animation.
+    function renderCard(direction = "forward") {
+      const desc = activeCard();
+      if (!desc) return;
+      const body = $("permit-modal-body");
+      body.innerHTML = desc.type === "permit"
+        ? permitDetailHtml(desc.row)
+        : contactDetailHtml(desc);
+      if (desc.type === "permit") {
+        fillPermitContractors(body);
+        fillPermitGeo(body, desc.row);
+        const pn = clean(desc.row.permit_number);
+        if (pn) fetchThread(pn);
+      } else {
+        fillContactCard(body, desc);
+      }
+    }
 
     // Keep Tab focus inside the open modal.
     function trapPermitModalFocus(e) {
@@ -7503,10 +7576,10 @@
       if (tif) tif.textContent = geoTifCache.get(num) || "—";
     }
 
-    // Public entry point for opening a permit's detail overlay.
+    // Public entry point for opening a permit's detail overlay. Starts a fresh
+    // stack when the overlay is closed; pushes a card when it is already open.
     function openPermitDetail(row) {
-      state.activeDetail = { type: "permit", row };
-      openPermitModal(permitDetailHtml(row), { onOpen: body => { fillPermitContractors(body); fillPermitGeo(body, row); const pn = clean(row.permit_number); if (pn) fetchThread(pn); } });
+      pushCard({ type: "permit", row });
     }
 
     function showPermitDetail(row, pushHistory = true) {
