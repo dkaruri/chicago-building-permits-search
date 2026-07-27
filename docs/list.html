@@ -2683,6 +2683,7 @@
     .pm-act[disabled] { opacity: 0.45; cursor: default; }
     /* Tabular figures so paging cannot jitter the column widths. */
     .pm-tag.num, .pm-tablewrap td.num { font-variant-numeric: tabular-nums; }
+    .pm-tagrow.stats .pm-tag { font-variant-numeric: tabular-nums; }
     /* Horizontal only — a nested vertical scroller would fight the card body. */
     .pm-tablewrap { overflow-x: auto; overflow-y: visible; }
     .pm-tablewrap table { width: 100%; border-collapse: collapse; }
@@ -7623,7 +7624,7 @@
       if (p.usable_processing_jobs != null) pills.push({ text: `${fmt(p.usable_processing_jobs)} usable timing records`, num: false });
       if (p.reported_cost_total != null) pills.push({ text: `${money(p.reported_cost_total)} reported cost`, num: true });
       if (!pills.length) return "";
-      return `<div class="pm-tagrow">${pills.map(t => `<span class="pm-tag${t.num ? " num" : ""}">${esc(t.text)}</span>`).join("")}</div>`;
+      return `<div class="pm-tagrow stats">${pills.map(t => `<span class="pm-tag">${esc(t.text)}</span>`).join("")}</div>`;
     }
 
     function contactDetailHtml(desc, cardIndex = 0) {
