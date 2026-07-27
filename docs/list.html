@@ -2671,6 +2671,45 @@
     .pm-facts { display: grid; grid-template-columns: minmax(96px, 34%) 1fr; gap: 7px 14px; }
     .pm-facts dt { color: var(--muted); font-size: 0.8rem; margin: 0; }
     .pm-facts dd { margin: 0; font-size: 0.88rem; }
+    /* Card-stack header: one row on desktop, title over actions on mobile. */
+    .pm-head.stacked { flex-direction: column; align-items: stretch; gap: 10px; }
+    .pm-titlerow { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .pm-title .v { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .pm-back { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; font-size: 1.35rem; line-height: 1; flex: none; }
+    .pm-back:focus-visible, .pm-close:focus-visible, .pm-act:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .pm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pm-act { min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; text-decoration: none; }
+    .pm-act.primary { background: var(--primary); border-color: var(--primary); color: var(--panel); }
+    .pm-act[disabled] { opacity: 0.45; cursor: default; }
+    /* Tabular figures so paging cannot jitter the column widths. */
+    .pm-tag.num, .pm-tablewrap td.num { font-variant-numeric: tabular-nums; }
+    /* Horizontal only — a nested vertical scroller would fight the card body. */
+    .pm-tablewrap { overflow-x: auto; overflow-y: visible; }
+    .pm-tablewrap table { width: 100%; border-collapse: collapse; }
+    .pm-tablewrap th, .pm-tablewrap td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); font-size: 0.85rem; }
+    .pm-tablewrap tbody tr { cursor: pointer; }
+    .pm-tablewrap tbody tr:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+    .pm-empty, .pm-error { font-size: 0.85rem; color: var(--muted); }
+    .pm-error { color: var(--ink); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    /* Specialties / associations chip lists — not covered by the existing .tag
+       vocabulary, which belongs to the separate directory pane. */
+    .pm-chiplist { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    .pm-chiplist li { display: flex; }
+    .pm-chiplist li > span:first-child { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); border: 1px solid var(--line); color: var(--ink); font-size: 0.82rem; }
+    .assoc { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 44px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); border: 1px solid var(--line); color: var(--ink); font-size: 0.82rem; cursor: pointer; }
+    .assoc:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .assoc-n { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; }
+    @media (min-width: 721px) {
+      .pm-head.stacked { flex-direction: row; align-items: center; }
+      .pm-actions { flex: none; }
+    }
+    @media (max-width: 720px) {
+      /* Full-screen card: keep the sticky header and actions clear of the
+         notch and the home indicator. */
+      .pm-head.stacked { padding-top: calc(16px + env(safe-area-inset-top)); }
+      .pm-content { padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
+      .pm-act { flex: 1 1 auto; justify-content: center; }
+    }
     .approx { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--warning); background: var(--warning-soft); padding: 1px 6px; border-radius: 5px; margin-left: 6px; cursor: help; }
     .pm-note { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 1rem; padding: 9px 11px; resize: vertical; }
 
@@ -3791,13 +3830,15 @@
       const body = $("permit-modal-body");
       body.innerHTML = desc.type === "permit"
         ? permitDetailHtml(desc.row)
-        : contactDetailHtml(desc);
+        : contactDetailHtml(desc, state.cardIndex);
       if (desc.type === "permit") {
         fillPermitContractors(body);
         fillPermitGeo(body, desc.row);
         const pn = clean(desc.row.permit_number);
         if (pn) fetchThread(pn);
-      } else {
+      } else if (typeof fillContactCard === "function") {
+        // fillContactCard lands in a later task; guard so the card stack still
+        // renders and navigates before that function exists.
         fillContactCard(body, desc);
       }
       const title = document.getElementById("permit-modal-title");
@@ -7508,16 +7549,19 @@
       const saved = isInUserList(row.permit_number);
       const payload = enc(JSON.stringify(row));
       return [
-        () => `<div class="pm-head">
-            <div class="pm-title"><div class="k">Permit</div><div class="v" id="permit-modal-title" tabindex="-1">${esc(row.permit_number)}</div></div>
-            <button class="primary" onclick="addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "✓ Saved" : "Add to list"}</button>
-            <button class="pm-close" aria-label="Close" onclick="closePermitModal()">✕</button>
+        () => `<div class="pm-head stacked">
+            <div class="pm-titlerow">
+              ${state.cardIndex > 0 ? `<button class="pm-back" aria-label="Back" onclick="popCard()">&lsaquo;</button>` : ""}
+              <div class="pm-title"><div class="k">Permit</div><div class="v" id="permit-modal-title" tabindex="-1">${esc(row.permit_number)}</div></div>
+              <button class="pm-close" aria-label="Close" onclick="closePermitModal()">&#10005;</button>
+            </div>
+            <div class="pm-actions"><button class="pm-act primary" onclick="addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "✓ Saved" : "Add to list"}</button></div>
           </div>
           <div class="pm-content">
           <div class="pm-tagrow">
             <span class="pm-tag">${esc(row.permit_status)}</span>
             <span class="pm-tag">${esc(row.permit_type)}</span>
-            ${row.reported_cost ? `<span class="pm-tag">${money(row.reported_cost)}</span>` : ""}
+            ${row.reported_cost ? `<span class="pm-tag num">${money(row.reported_cost)}</span>` : ""}
           </div>`,
         () => `<section class="pm-block"><h3>Location</h3>${pmFacts([
             ["Address", clean(row.address)],
@@ -7563,6 +7607,111 @@
 
     function permitDetailHtml(row) {
       return permitDetailSections(row).map(fn => fn()).join("");
+    }
+
+    function cardKicker(desc) {
+      if (desc.type === "permit") return "Permit";
+      return desc.role === "open_tech" ? "Open sub" : "General contractor";
+    }
+
+    function contactPillsHtml(profile, liveOpenJobs) {
+      const p = profile || {};
+      const pills = [];
+      if (liveOpenJobs != null) pills.push({ text: `${fmt(liveOpenJobs)} open jobs`, num: false });
+      if (p.total_jobs != null) pills.push({ text: `${fmt(p.total_jobs)} total jobs`, num: false });
+      if (p.avg_processing_days != null) pills.push({ text: `${Number(p.avg_processing_days).toFixed(1)} avg processing days`, num: false });
+      if (p.usable_processing_jobs != null) pills.push({ text: `${fmt(p.usable_processing_jobs)} usable timing records`, num: false });
+      if (p.reported_cost_total != null) pills.push({ text: `${money(p.reported_cost_total)} reported cost`, num: true });
+      if (!pills.length) return "";
+      return `<div class="pm-tagrow">${pills.map(t => `<span class="pm-tag${t.num ? " num" : ""}">${esc(t.text)}</span>`).join("")}</div>`;
+    }
+
+    function contactDetailHtml(desc, cardIndex = 0) {
+      const name = clean(desc.name);
+      const rows = desc.permits || [];
+      const err = clean(desc.relatedError);
+      const back = cardIndex > 0
+        ? `<button class="pm-back" aria-label="Back" onclick="popCard()">&lsaquo;</button>`
+        : "";
+      const phone = ((desc.profile && desc.profile.license_matches) || [])
+        .map(m => clean(m.phone)).find(ph => ph && ph.toUpperCase() !== "NA") || "";
+      const actions = [];
+      if (phone) actions.push(`<a class="pm-act primary" href="tel:${esc(phone.replace(/[^\d+]/g, ""))}">Call ${esc(phone)}</a>`);
+      if (rows.length) actions.push(`<button class="pm-act" onclick="addAllFromCard()">Add all ${fmt(rows.length)} to list</button>`);
+
+      return `<div class="pm-head stacked">
+          <div class="pm-titlerow">
+            ${back}
+            <div class="pm-title">
+              <div class="k">${esc(cardKicker(desc))}</div>
+              <div class="v" id="permit-modal-title" tabindex="-1">${esc(name)}</div>
+            </div>
+            <button class="pm-close" aria-label="Close" onclick="closePermitModal()">&#10005;</button>
+          </div>
+          ${actions.length ? `<div class="pm-actions">${actions.join("")}</div>` : ""}
+        </div>
+        <div class="pm-content">
+        ${contactPillsHtml(desc.profile, rows.length)}
+        <section class="pm-block"><h3>Open permits</h3>
+          ${err
+            ? `<p class="pm-error" role="alert">${esc(err)} <button class="pm-act" onclick="retryContactCard()">Retry</button></p>`
+            : rows.length
+              ? `<div class="pm-tablewrap"><table aria-label="Open permits for ${esc(name)}"><thead><tr><th>Permit</th><th>Issued</th><th>Address</th><th>Cost</th></tr></thead><tbody>${rows.map(r => `<tr tabindex="0" onclick="openPermitDetailFromEncoded('${enc(JSON.stringify(r))}')"><td><strong>${esc(r.permit_number)}</strong><br><span class="small">${esc(r.permit_status)}</span></td><td class="num">${esc(r.issue_date)}</td><td>${esc(r.address)}</td><td class="num">${money(r.reported_cost)}</td></tr>`).join("")}</tbody></table></div>`
+              : `<p class="pm-empty">No open permits on file for this contractor.</p>`}
+        </section>
+        ${licenseBlockHtml(desc.profile)}
+        ${specialtiesBlockHtml(desc.profile)}
+        ${associationsBlockHtml(desc)}
+        </div>`;
+    }
+
+    function licenseBlockHtml(profile) {
+      const p = profile || {};
+      const matches = p.license_matches || [];
+      if (!matches.length) {
+        return `<section class="pm-block"><h3>License</h3><p class="pm-empty">No City license match on file for this name.</p></section>`;
+      }
+      const m = matches[0];
+      const phone = matches.map(x => clean(x.phone)).find(ph => ph && ph.toUpperCase() !== "NA") || "";
+      const where = [clean(p.city), clean(p.state)].filter(Boolean).join(", ");
+      const locality = [where, clean(p.zipcode)].filter(Boolean).join(" ");
+      const rows = [
+        ["Type", parseLicenseType(m.license_type)],
+        ["Class", parseLicenseClass(m.license_type) ? `Class ${parseLicenseClass(m.license_type)}` : ""],
+        ["Licence no.", clean(m.license_number)],
+        ["Expires", clean(m.license_expiration_date)],
+        ["Phone", phone],
+        ["Based in", locality],
+      ];
+      return `<section class="pm-block"><h3>License</h3><dl class="pm-facts">${rows.map(([k, v]) =>
+        `<dt>${esc(k)}</dt><dd>${v ? (k === "Phone" ? `<a href="tel:${esc(String(v).replace(/[^\d+]/g, ""))}">${esc(v)}</a>` : esc(v)) : "—"}</dd>`).join("")}</dl>${
+        matches.length > 1 ? `<p class="pm-empty">${fmt(matches.length - 1)} more licence rows matched this name.</p>` : ""}</section>`;
+    }
+
+    function specialtiesBlockHtml(profile) {
+      const items = ((profile || {}).work_types || []).slice(0, 6);
+      if (!items.length) return "";
+      return `<section class="pm-block"><h3>Specialties</h3><ul class="pm-chiplist">${items.map(w =>
+        `<li><span>${esc(clean(w.work_type))}</span> <span class="assoc-n">${fmt(w.jobs)}</span></li>`).join("")}</ul></section>`;
+    }
+
+    // Contractors seen alongside this one on its permits, in the opposite role.
+    // Chips push a card — openContactProfile drives the separate directory pane and
+    // would replace the overlay's stack.
+    function associationsBlockHtml(desc) {
+      const otherField = desc.role === "open_tech" ? "general_contractors" : "open_subs";
+      const otherRole = desc.role === "open_tech" ? "general_contractor" : "open_tech";
+      const counts = new Map();
+      (desc.permits || []).forEach(row => {
+        clean(row[otherField]).split("|").map(x => x.trim()).filter(Boolean)
+          .forEach(nm => counts.set(nm, (counts.get(nm) || 0) + 1));
+      });
+      if (!counts.size) {
+        return `<section class="pm-block"><h3>Associations</h3><p class="pm-empty">No other contractors named on these permits.</p></section>`;
+      }
+      const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 20);
+      return `<section class="pm-block"><h3>Associations</h3><ul class="pm-chiplist">${sorted.map(([nm, n]) =>
+        `<li><button type="button" class="assoc" onclick="openContactCard('${enc(nm)}', '${otherRole}')" aria-label="Open profile for ${esc(nm)}"><span>${esc(nm)}</span> <span class="assoc-n">${fmt(n)}</span></button></li>`).join("")}</ul></section>`;
     }
 
     // Fill Zone / TIF district into a permit-detail overlay body (Task 5),
