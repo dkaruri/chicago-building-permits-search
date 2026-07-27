@@ -2311,7 +2311,6 @@
 
       body.directory-page .directory-search-field { order: 1; }
       body.directory-page .search-mode-field { order: 2; }
-      body.directory-page .directory-ward-field { order: 3; }
       body.directory-page .directory-sort-field { order: 4; }
       body.directory-page .directory-processing-field { order: 5; }
       body.directory-page .directory-search-action { order: 6; }
@@ -2580,7 +2579,6 @@
         grid-template-columns: 1fr;
       }
 
-      body.directory-page .directory-ward-field,
       body.directory-page .directory-sort-field,
       body.directory-page .directory-search-action,
       body.directory-page .directory-clear-action {
@@ -2947,9 +2945,10 @@
         <label class="directory-search-field">Search
           <input id="q" placeholder="Name, permit, address, work type..." oninput="scheduleSearch()">
         </label>
-        <label class="directory-ward-field">Ward
-          <input id="ward" placeholder="Open permits only" oninput="scheduleSearch()">
-        </label>
+        <!-- Ward search box removed from the UI. Kept as a hidden input so the
+             "Ward N" tag click in a permit detail, the ?ward= URL param, and the
+             reset/filter code keep working without touching every $("ward") site. -->
+        <input id="ward" type="hidden">
         <label class="check-row directory-processing-field">
           <input id="usable-processing" type="checkbox" onchange="search()">
           <span>Only usable processing times</span>
@@ -3603,7 +3602,6 @@
           <span class="tag">${esc(permit.permit_status)}</span>
           <span class="tag">${esc(permit.permit_type)}</span>
           <span class="tag">${fmt(permit.gc_open_jobs || 0)} GC open jobs</span>
-          ${permit.ward ? `<span class="tag clickable" onclick="searchWard('${enc(permit.ward)}')">Ward ${esc(permit.ward)}</span>` : ""}
         </div>
         ${permitFacts(permit, [
           ["Issued", permit.issue_date],
@@ -6282,22 +6280,6 @@
       } else {
         showDetail(`<p class="small">No profile matched ${esc(name)} in ${mode === "general_contractors" ? "General Contractors" : "Open Subs"}.</p>`);
       }
-    }
-
-    async function searchWard(encodedWard) {
-      const ward = decodeURIComponent(encodedWard);
-      state.mode = "open_permits";
-      state.selected = null;
-      state.activeDetailKey = "";
-      state.resultSort = { key: null, direction: null };
-      appModes.forEach(tabName => $("tab-" + tabName)?.classList.remove("active"));
-      $("tab-open_permits")?.classList.add("active");
-      if ($("mode-select")) $("mode-select").value = "open_permits";
-      if ($("sort")) $("sort").value = "latest_issue_date";
-      if ($("q")) $("q").value = "";
-      if ($("ward")) $("ward").value = ward;
-      hideDetail();
-      await search();
     }
 
     function nameTags(value, mode) {
