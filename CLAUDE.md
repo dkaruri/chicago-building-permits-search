@@ -20,6 +20,38 @@ static site.
 - `README.md` documents refresh commands and data files — keep it in sync with
   `static_export.py`'s output when JSON files are added or renamed.
 
+## Kanban board (cross-repo — dkaruri/kanban)
+- The task board for this project lives OUTSIDE this repo:
+  <https://github.com/dkaruri/kanban>, file `KANBAN.md`. Live view:
+  <https://dkaruri.github.io/kanban/board.html>. It is the single source of
+  truth for what to work on.
+- Local convention: keep a sibling clone at `../kanban`. If missing, run
+  `git clone https://github.com/dkaruri/kanban ../kanban`. ALWAYS
+  `git -C ../kanban pull` before reading the board, and pull again right
+  before pushing board updates.
+- `KANBAN.md` opens with a CLAUDE CODE PROTOCOL comment block — follow it
+  exactly: task selection is Fixes list → status todo → P0→P3 → oldest first
+  unless the user names a list or ID; set in-progress before starting; stamp
+  real Chicago time (`TZ=America/Chicago date '+%Y-%m-%d %H:%M CT'`); check
+  off checklist items as completed; append a Log line per status change;
+  never touch the Futures list, never delete tasks, never reuse IDs.
+- **After completing any work in this repo that corresponds to a board task,
+  updating the board is part of the task** — not optional: update status,
+  checklist, Updated timestamp, and Log in `../kanban/KANBAN.md`, then commit
+  (`board: <ID> <what changed>`) and push the kanban repo. If the work has no
+  matching card, offer to add one.
+- **Board-only requests are in scope for this project** — the user should
+  never have to switch chats/projects to manage the board. Treat messages
+  beginning with `kanban:` (e.g. `kanban: status`, `kanban: add fix — map
+  popup clips on mobile, P1`, `kanban: mark FEAT-017 done`, `kanban: check
+  off "Add export button" on FEAT-021`) as pure board operations: edit
+  `../kanban/KANBAN.md` per the protocol, push, and make no changes in this
+  repo. The board's own README and `CLAUDE_CODE_PROMPTS.md` (in the kanban
+  repo) contain the full prompt patterns.
+- Open one-time chore: tasks whose Log says "backfilled" carry placeholder
+  dates — when asked, correct them from THIS repo's `git log` (first/last
+  commit per feature) and record the correction in each task's Log.
+
 ## Site pages (`docs/`, each a large self-contained HTML+JS app, ~5,000+ lines)
 - `index.html` — <https://dkaruri.github.io/chicago-building-permits-search/> —
   search directory: open permits, general contractors, open subs.
