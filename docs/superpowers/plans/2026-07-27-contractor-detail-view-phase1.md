@@ -336,8 +336,10 @@ else:
     sys.exit(1)
 ```
 
-Run: `python verify-tmp/_bytediff.py "let _permitModalPrevFocus" "const geoZoneCache"`
+Run: `python verify-tmp/_bytediff.py "let _permitModalPrevFocus" "function trapPermitModalFocus"`
 Expected: two byte counts and `MATCH`.
+
+Note: do **not** widen the end marker to `const geoZoneCache` — the region beyond `trapPermitModalFocus` contains pre-existing, unrelated ordering drift between the two files (`detailBack` sits in a different place in each), so a wider range reports DIFFER for reasons this phase did not cause and must not "fix".
 
 - [ ] **Step 10: Write the browser test for stack navigation**
 
@@ -523,6 +525,58 @@ test("a fetch failure states the problem and offers a retry", () => {
   assert.match(html, /role="alert"/);
   assert.match(html, /Retry/);
 });
+
+test("the card carries the full profile, not just the permits table", () => {
+  const html = contactDetailHtml(desc({
+    profile: {
+      total_jobs: 88,
+      license_matches: [{ license_type: "General Contractor (Class E)", phone: "(773) 555-0180", license_number: "TGC12345", license_expiration_date: "2027-03-01" }],
+      work_types: [{ work_type: "RENOVATION", jobs: 40 }, { work_type: "NEW CONSTRUCTION", jobs: 12 }],
+      permit_types: [], contact_types: [],
+      city: "CHICAGO", state: "IL", zipcode: "60618",
+    },
+  }));
+  assert.match(html, /<h3>License<\/h3>/);
+  assert.match(html, /General Contractor/);
+  assert.match(html, /Class E/);
+  assert.match(html, /\(773\) 555-0180/);
+  assert.match(html, /CHICAGO, IL 60618/);
+  assert.match(html, /<h3>Specialties<\/h3>/);
+  assert.match(html, /RENOVATION/);
+});
+
+test("a contractor with no license match says so rather than showing an empty block", () => {
+  const html = contactDetailHtml(desc({ profile: { license_matches: [], work_types: [], permit_types: [], contact_types: [] } }));
+  assert.match(html, /No City license match/);
+});
+
+test("associations list the OTHER role and open a card, never the pane", () => {
+  const html = contactDetailHtml(desc({
+    permits: [
+      { permit_number: "1", address: "A", issue_date: "2026-01-01", permit_status: "ACTIVE", reported_cost: 1, general_contractors: "ACME BUILDERS", open_subs: "SPARK ELECTRIC | FLOW PLUMBING" },
+      { permit_number: "2", address: "B", issue_date: "2026-01-02", permit_status: "ACTIVE", reported_cost: 2, general_contractors: "ACME BUILDERS", open_subs: "SPARK ELECTRIC" },
+    ],
+  }));
+  assert.match(html, /<h3>Associations<\/h3>/);
+  assert.match(html, /SPARK ELECTRIC/);
+  assert.match(html, /FLOW PLUMBING/);
+  // Association chips must push a card onto the stack. openContactProfile drives
+  // the separate directory pane and would wipe the overlay's stack.
+  assert.match(html, /openContactCard\(/);
+  assert.ok(!/openContactProfile\(/.test(html), "the pane entry point must not be used from inside the overlay");
+  assert.match(html, /open_tech/, "a GC's associations are its open subs");
+});
+
+test("associations are counted, most frequent first", () => {
+  const html = contactDetailHtml(desc({
+    permits: [
+      { permit_number: "1", general_contractors: "ACME BUILDERS", open_subs: "SPARK ELECTRIC | FLOW PLUMBING" },
+      { permit_number: "2", general_contractors: "ACME BUILDERS", open_subs: "SPARK ELECTRIC" },
+    ],
+  }));
+  assert.ok(html.indexOf("SPARK ELECTRIC") < html.indexOf("FLOW PLUMBING"));
+  assert.match(html, /SPARK ELECTRIC<\/span> <span class="assoc-n">2/);
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -592,9 +646,68 @@ export function contactDetailHtml(desc, cardIndex = 0) {
           ? `<div class="pm-tablewrap"><table aria-label="Open permits for ${esc(name)}"><thead><tr><th>Permit</th><th>Issued</th><th>Address</th><th>Cost</th></tr></thead><tbody>${rows.map(r => `<tr tabindex="0" onclick="openPermitDetailFromEncoded('${enc(JSON.stringify(r))}')"><td><strong>${esc(r.permit_number)}</strong><br><span class="small">${esc(r.permit_status)}</span></td><td class="num">${esc(r.issue_date)}</td><td>${esc(r.address)}</td><td class="num">${money(r.reported_cost)}</td></tr>`).join("")}</tbody></table></div>`
           : `<p class="pm-empty">No open permits on file for this contractor.</p>`}
     </section>
+    ${licenseBlockHtml(desc.profile)}
+    ${specialtiesBlockHtml(desc.profile)}
+    ${associationsBlockHtml(desc)}
     </div>`;
 }
+
+// Trade portion of a license type string: "General Contractor (Class E)" -> "General Contractor".
+function parseLicenseTypeLocal(t) { return String(t || "").replace(/\s*\(Class\s+[A-Z]\)\s*/i, "").trim(); }
+// Class letter: "... (Class E)" -> "E", "" when none.
+function parseLicenseClassLocal(t) { const m = String(t || "").match(/\(Class\s+([A-Z])\)/i); return m ? m[1].toUpperCase() : ""; }
+
+export function licenseBlockHtml(profile) {
+  const p = profile || {};
+  const matches = p.license_matches || [];
+  if (!matches.length) {
+    return `<section class="pm-block"><h3>License</h3><p class="pm-empty">No City license match on file for this name.</p></section>`;
+  }
+  const m = matches[0];
+  const phone = matches.map(x => clean(x.phone)).find(ph => ph && ph.toUpperCase() !== "NA") || "";
+  const where = [clean(p.city), clean(p.state)].filter(Boolean).join(", ");
+  const locality = [where, clean(p.zipcode)].filter(Boolean).join(" ");
+  const rows = [
+    ["Type", parseLicenseTypeLocal(m.license_type)],
+    ["Class", parseLicenseClassLocal(m.license_type) ? `Class ${parseLicenseClassLocal(m.license_type)}` : ""],
+    ["Licence no.", clean(m.license_number)],
+    ["Expires", clean(m.license_expiration_date)],
+    ["Phone", phone],
+    ["Based in", locality],
+  ];
+  return `<section class="pm-block"><h3>License</h3><dl class="pm-facts">${rows.map(([k, v]) =>
+    `<dt>${esc(k)}</dt><dd>${v ? (k === "Phone" ? `<a href="tel:${esc(String(v).replace(/[^\d+]/g, ""))}">${esc(v)}</a>` : esc(v)) : "—"}</dd>`).join("")}</dl>${
+    matches.length > 1 ? `<p class="pm-empty">${fmt(matches.length - 1)} more licence rows matched this name.</p>` : ""}</section>`;
+}
+
+export function specialtiesBlockHtml(profile) {
+  const items = ((profile || {}).work_types || []).slice(0, 6);
+  if (!items.length) return "";
+  return `<section class="pm-block"><h3>Specialties</h3><ul class="pm-chiplist">${items.map(w =>
+    `<li><span>${esc(clean(w.work_type))}</span> <span class="assoc-n">${fmt(w.jobs)}</span></li>`).join("")}</ul></section>`;
+}
+
+// Contractors seen alongside this one on its permits, in the opposite role.
+// Chips push a card — openContactProfile drives the separate directory pane and
+// would replace the overlay's stack.
+export function associationsBlockHtml(desc) {
+  const otherField = desc.role === "open_tech" ? "general_contractors" : "open_subs";
+  const otherRole = desc.role === "open_tech" ? "general_contractor" : "open_tech";
+  const counts = new Map();
+  (desc.permits || []).forEach(row => {
+    clean(row[otherField]).split("|").map(x => x.trim()).filter(Boolean)
+      .forEach(nm => counts.set(nm, (counts.get(nm) || 0) + 1));
+  });
+  if (!counts.size) {
+    return `<section class="pm-block"><h3>Associations</h3><p class="pm-empty">No other contractors named on these permits.</p></section>`;
+  }
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 20);
+  return `<section class="pm-block"><h3>Associations</h3><ul class="pm-chiplist">${sorted.map(([nm, n]) =>
+    `<li><button type="button" class="assoc" onclick="openContactCard('${enc(nm)}', '${otherRole}')" aria-label="Open profile for ${esc(nm)}"><span>${esc(nm)}</span> <span class="assoc-n">${fmt(n)}</span></button></li>`).join("")}</ul></section>`;
+}
 ```
+
+These three helpers are what makes the card **full parity** with the directory pane, which the spec's decision #1 requires. Note they are exported from the extracted module for testing, and ported into both pages alongside `contactDetailHtml` in Step 5. `parseLicenseTypeLocal` / `parseLicenseClassLocal` exist only in the extracted test module — **both pages already define `parseLicenseType` and `parseLicenseClass`**, so in the page copies call those existing functions instead and do not add duplicates.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -668,7 +781,7 @@ In **both** files, immediately after the `.pm-facts dd` rule (index.html:2739, l
 
 - [ ] **Step 7: Verify the shared blocks still match**
 
-Run: `python verify-tmp/_bytediff.py "let _permitModalPrevFocus" "const geoZoneCache"`
+Run: `python verify-tmp/_bytediff.py "let _permitModalPrevFocus" "function trapPermitModalFocus"`
 Run: `python verify-tmp/_bytediff.py "function cardKicker" "function fillPermitGeo"`
 Expected: `MATCH` from both.
 
@@ -1219,7 +1332,7 @@ Expected: PASS, 99 tests. Phase 1 touches no Worker code; a failure means someth
 - [ ] **Step 5: Verify both shared blocks are byte-identical**
 
 ```bash
-python verify-tmp/_bytediff.py "let _permitModalPrevFocus" "const geoZoneCache"
+python verify-tmp/_bytediff.py "let _permitModalPrevFocus" "function trapPermitModalFocus"
 python verify-tmp/_bytediff.py "function cardKicker" "function fillPermitGeo"
 ```
 
