@@ -13,40 +13,45 @@ test("sanitizeText trims and caps at 2000", () => {
   assert.equal(sanitizeText(null), "");
 });
 
-test("sanitizeWalk keeps a full sub-on-site payload", () => {
+test("sanitizeWalk keeps full gc AND sub parties (new shape)", () => {
   const out = sanitizeWalk({
-    job: "new", onsite: "sub",
-    party: { name: "A PLUS REFRIGERATION", phone: "7735550142", covers: "Electrical", jobs: 3, estimate: "1-3d" },
-    gc: { name: "606 CONSTRUCTION", phone: "3125550198" },
+    job: "new",
+    gc: { name: "606 CONSTRUCTION", phone: "3125550198", covers: "GC", jobs: 5, estimate: "week" },
+    sub: { name: "A PLUS REFRIGERATION", phone: "7735550142", covers: "Electrical", jobs: 3, estimate: "1-3d" },
   });
   assert.equal(out.job, "new");
-  assert.equal(out.onsite, "sub");
-  assert.equal(out.party.name, "A PLUS REFRIGERATION");
-  assert.equal(out.party.jobs, 3);
   assert.equal(out.gc.name, "606 CONSTRUCTION");
+  assert.equal(out.gc.jobs, 5);
+  assert.equal(out.sub.name, "A PLUS REFRIGERATION");
+  assert.equal(out.sub.covers, "Electrical");
 });
 
-test("sanitizeWalk clamps job and onsite to their allowed sets", () => {
-  assert.equal(sanitizeWalk({ job: "spaceship", onsite: "nobody" }).job, "remodel");
-  assert.equal(sanitizeWalk({ job: "new", onsite: "aliens" }).onsite, "none");
+test("sanitizeWalk keeps one party and nulls the other", () => {
+  const gcOnly = sanitizeWalk({ job: "remodel", gc: { name: "GC" }, sub: null });
+  assert.equal(gcOnly.gc.name, "GC");
+  assert.equal(gcOnly.sub, null);
+  const nobody = sanitizeWalk({ job: "remodel" });
+  assert.equal(nobody.gc, null);
+  assert.equal(nobody.sub, null);
 });
 
-test("sanitizeWalk clamps estimate to the fixed set", () => {
-  assert.equal(sanitizeWalk({ onsite: "gc", party: { name: "X", estimate: "someday" } }).party.estimate, "unknown");
-  assert.equal(sanitizeWalk({ onsite: "gc", party: { name: "X", estimate: "1-3d" } }).party.estimate, "1-3d");
+test("sanitizeWalk clamps job and estimate to their allowed sets", () => {
+  assert.equal(sanitizeWalk({ job: "spaceship" }).job, "remodel");
+  assert.equal(sanitizeWalk({ gc: { name: "X", estimate: "someday" } }).gc.estimate, "unknown");
+  assert.equal(sanitizeWalk({ gc: { name: "X", estimate: "1-3d" } }).gc.estimate, "1-3d");
 });
 
-test("sanitizeWalk with nobody on site drops party and gc", () => {
-  const out = sanitizeWalk({ job: "remodel", onsite: "none", party: { name: "x" }, gc: { name: "y" } });
-  assert.equal(out.party, null);
-  assert.equal(out.gc, null);
-});
-
-test("sanitizeWalk keeps gc only when a sub was on site", () => {
-  const gcOnSite = sanitizeWalk({ onsite: "gc", party: { name: "GC" }, gc: { name: "ignored" } });
-  assert.equal(gcOnSite.gc, null, "a GC on site has no separate their-GC block");
+test("sanitizeWalk still accepts the legacy onsite/party shape (back-compat)", () => {
+  const gcOnSite = sanitizeWalk({ onsite: "gc", party: { name: "GC", jobs: 2 } });
+  assert.equal(gcOnSite.gc.name, "GC");
+  assert.equal(gcOnSite.gc.jobs, 2);
+  assert.equal(gcOnSite.sub, null);
   const subOnSite = sanitizeWalk({ onsite: "sub", party: { name: "Sub" }, gc: { name: "Their GC" } });
+  assert.equal(subOnSite.sub.name, "Sub");
   assert.equal(subOnSite.gc.name, "Their GC");
+  const nobody = sanitizeWalk({ onsite: "none", party: { name: "x" }, gc: { name: "y" } });
+  assert.equal(nobody.gc, null);
+  assert.equal(nobody.sub, null);
 });
 
 function fakeKV() {
@@ -130,17 +135,18 @@ test("the count map reads every noted permit in one list call", async () => {
   assert.equal(body.counts["300"], undefined, "a permit with no notes is simply absent");
 });
 
-test("a walkthrough post round-trips", async () => {
+test("a walkthrough post with both parties round-trips", async () => {
   const env = ENV();
   await handleNotes(new URL("https://w/api/notes/1"), env, noteReq("1", "POST", {
-    kind: "walk", author: "Divyam", job: "new", onsite: "sub",
-    party: { name: "Sub", phone: "7735550142", covers: "Electrical", jobs: 3, estimate: "1-3d" },
-    gc: { name: "Their GC", phone: "3125550198" },
+    kind: "walk", author: "Divyam", job: "new",
+    gc: { name: "Their GC", phone: "3125550198", covers: "GC", jobs: 5, estimate: "week" },
+    sub: { name: "Sub", phone: "7735550142", covers: "Electrical", jobs: 3, estimate: "1-3d" },
   }));
   const body = await (await handleNotes(new URL("https://w/api/notes/1"), env, noteReq("1", "GET"))).json();
   assert.equal(body.notes[0].kind, "walk");
-  assert.equal(body.notes[0].party.name, "Sub");
   assert.equal(body.notes[0].gc.name, "Their GC");
+  assert.equal(body.notes[0].sub.name, "Sub");
+  assert.equal(body.notes[0].sub.covers, "Electrical");
 });
 
 test("sanitizePhotoRefs keeps well-formed refs and caps captions", () => {

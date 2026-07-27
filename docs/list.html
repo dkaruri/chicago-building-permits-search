@@ -2910,6 +2910,7 @@
     @media (max-width: 640px) { .wk-choice { flex: 1 1 100%; min-width: 0; justify-content: flex-start; } }
     .wk-branch { border-left: 3px solid var(--primary); background: var(--surface-subtle); border-radius: 0 8px 8px 0; padding: .7rem .8rem; margin-bottom: .7rem; }
     .wk-branchlab { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--primary); margin: 0 0 .5rem; }
+    .wk-hint { font-size: .76rem; color: var(--muted); margin: .5rem 0 0; }
     .pm-reported { margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .5rem; }
     .rep-sub { display: inline-flex; align-items: center; gap: .35rem; font-size: .85rem; }
     .rep-badge { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--warning); border: 1px dashed var(--warning); border-radius: 3px; padding: 0 .2rem; }
@@ -7032,19 +7033,18 @@
         `<button type="button" onclick="editNotePost('${esc(currentThreadPermit)}','${esc(post.id)}')">Edit</button>` +
         `<button type="button" class="del" onclick="deleteNotePost('${esc(currentThreadPermit)}','${esc(post.id)}')">Delete</button></p>`;
       if (post.kind === "walk") {
-        const p = post.party;
-        const rows = [
-          ["Job", esc(JOB_LABELS[post.job] || "\u2014")],
-          ["On site", post.onsite === "sub" ? "Open sub" : post.onsite === "gc" ? "General contractor" : "Nobody"],
-        ];
-        if (p) {
-          if (p.name) rows.push(["Company", esc(p.name)]);
-          if (p.phone) rows.push(["Phone", `<a href="tel:${esc(p.phone)}">${esc(p.phone)}</a>`]);
-          if (p.covers) rows.push(["Covers", esc(p.covers)]);
+        const { gc, sub } = walkParties(post);
+        const rows = [["Job", esc(JOB_LABELS[post.job] || "\u2014")]];
+        const addParty = (label, p) => {
+          if (!p || !p.name) return;
+          rows.push([label, esc(p.name) + (p.phone ? ` \u00b7 <a href="tel:${esc(p.phone)}">${esc(p.phone)}</a>` : "")]);
+          if (p.covers) rows.push([label + " covers", esc(p.covers)]);
           const cap = [p.jobs ? `${p.jobs} jobs at a time` : "", ESTIMATE_LABELS[p.estimate] ? `estimates ${ESTIMATE_LABELS[p.estimate]}` : ""].filter(Boolean).join(" \u00b7 ");
-          if (cap) rows.push(["Capacity", esc(cap)]);
-        }
-        if (post.gc && post.gc.name) rows.push(["Their GC", esc(post.gc.name) + (post.gc.phone ? ` \u00b7 <a href="tel:${esc(post.gc.phone)}">${esc(post.gc.phone)}</a>` : "")]);
+          if (cap) rows.push([label + " capacity", esc(cap)]);
+        };
+        addParty("General contractor", gc);
+        addParty("Open sub", sub);
+        if (!gc && !sub) rows.push(["On site", "Nobody"]);
         return `<article class="tp walk">${head}<dl class="tp-kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl>${acts}</article>`;
       }
       const photo = post.kind === "photo" ? photoGalleryHtml(post, currentThreadPermit) : "";
@@ -7146,17 +7146,32 @@
     }
 
     // ---- Site walkthrough (Phase 3) ----
+    // A full contact party from raw form fields, or null if unnamed.
+    function walkPartyFromFields(f) {
+      if (!f) return null;
+      const name = (f.name || "").trim();
+      if (!name) return null;
+      const jobs = parseInt(f.jobs, 10);
+      return { name, phone: (f.phone || "").trim(), covers: (f.covers || "").trim(),
+        jobs: Number.isInteger(jobs) ? jobs : null, estimate: f.estimate || "unknown" };
+    }
+
+    // New walk shape: independent full parties for the GC and the open sub.
     function walkFieldsToPayload(f) {
-      const out = { kind: "walk", job: f.job === "new" ? "new" : "remodel", onsite: ["none", "gc", "sub"].includes(f.onsite) ? f.onsite : "none" };
-      if (out.onsite !== "none") {
-        const jobs = parseInt(f.jobs, 10);
-        out.party = { name: (f.name || "").trim(), phone: (f.phone || "").trim(), covers: (f.covers || "").trim(),
-          jobs: Number.isInteger(jobs) ? jobs : null, estimate: f.estimate || "unknown" };
+      return { kind: "walk", job: f.job === "new" ? "new" : "remodel",
+        gc: walkPartyFromFields(f.gc), sub: walkPartyFromFields(f.sub) };
+    }
+
+    // Normalise a stored walk post (new OR legacy shape) to { gc, sub }. Legacy
+    // posts used onsite + a single party, plus a lite their-GC when a sub was on
+    // site; keep reading them without a data migration.
+    function walkParties(post) {
+      if (post && "onsite" in post) {
+        if (post.onsite === "sub") return { gc: post.gc || null, sub: post.party || null };
+        if (post.onsite === "gc") return { gc: post.party || null, sub: null };
+        return { gc: null, sub: null };
       }
-      if (out.onsite === "sub" && (f.gcName || "").trim()) {
-        out.gc = { name: f.gcName.trim(), phone: (f.gcPhone || "").trim() };
-      }
-      return out;
+      return { gc: (post && post.gc) || null, sub: (post && post.sub) || null };
     }
 
     function reportedSubsFor(permit) {
@@ -7166,8 +7181,10 @@
       const seen = new Set();
       const out = [];
       t.posts.forEach(post => {
-        if (post.kind !== "walk" || post.onsite !== "sub" || !post.party || !post.party.name) return;
-        const name = post.party.name.trim();
+        if (post.kind !== "walk") return;
+        const { sub } = walkParties(post);
+        if (!sub || !sub.name) return;
+        const name = sub.name.trim();
         const up = name.toUpperCase();
         if (!up || seen.has(up) || existing.includes(up)) return;
         seen.add(up);
@@ -7191,10 +7208,25 @@
       const t = state.threads && state.threads[permit];
       const editing = editId && t ? t.posts.find(p => p.id === editId) : null;
       const e = editing || {};
-      const party = e.party || {};
-      const gc = e.gc || {};
+      const { gc, sub } = walkParties(e);
       const sel = (a, b) => a === b ? " checked" : "";
-      const opt = (v, cur, label) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`;
+      const opt = (v, cur, label) => `<option value="${v}"${v === (cur || "unknown") ? " selected" : ""}>${label}</option>`;
+      // A full contact block for one party (GC or sub). prefix keys its field ids.
+      const partyBlock = (prefix, legend, p) => {
+        p = p || {};
+        return `<div id="wk-${prefix}-block" class="wk-branch" hidden>
+          <p class="wk-branchlab">${legend}</p>
+          <div class="dlg-field"><label for="wk-${prefix}-name">Company</label><input id="wk-${prefix}-name" maxlength="120" value="${esc(p.name || "")}"></div>
+          <div class="dlg-field"><label for="wk-${prefix}-phone">Contact number</label><input id="wk-${prefix}-phone" type="tel" inputmode="tel" maxlength="24" value="${esc(p.phone || "")}"></div>
+          <div class="dlg-field"><label for="wk-${prefix}-covers">What work do they cover?</label><input id="wk-${prefix}-covers" maxlength="120" value="${esc(p.covers || "")}"></div>
+          <div class="dlg-row">
+            <div class="dlg-field"><label for="wk-${prefix}-jobs">Jobs at a time</label><input id="wk-${prefix}-jobs" type="number" inputmode="numeric" min="1" value="${p.jobs != null ? p.jobs : ""}"></div>
+            <div class="dlg-field"><label for="wk-${prefix}-est">Estimate turnaround</label><select id="wk-${prefix}-est">
+              ${opt("same-day", p.estimate, "Same day")}${opt("1-3d", p.estimate, "1\u20133 days")}${opt("week", p.estimate, "About a week")}${opt("longer", p.estimate, "Longer")}${opt("unknown", p.estimate, "Didn't say")}
+            </select></div>
+          </div>
+        </div>`;
+      };
       dlg.innerHTML = `<h3 id="wk-title">Site walkthrough</h3>
         <p class="dlg-sub">${esc(permit)}</p>
         <fieldset class="wk-fieldset"><legend>What kind of job is it?</legend>
@@ -7204,26 +7236,13 @@
           </div></fieldset>
         <fieldset class="wk-fieldset"><legend>Who was on site?</legend>
           <div class="wk-choices">
-            <label class="wk-choice"><input type="radio" name="wk-onsite" value="none"${sel("none", e.onsite || "none")}> Nobody</label>
-            <label class="wk-choice"><input type="radio" name="wk-onsite" value="gc"${sel("gc", e.onsite)}> General contractor</label>
-            <label class="wk-choice"><input type="radio" name="wk-onsite" value="sub"${sel("sub", e.onsite)}> Open sub</label>
-          </div></fieldset>
-        <div id="wk-contact" class="wk-branch" hidden>
-          <div class="dlg-field"><label for="wk-name" id="wk-name-label">Company</label><input id="wk-name" maxlength="120" value="${esc(party.name || "")}"></div>
-          <div class="dlg-field"><label for="wk-phone">Contact number</label><input id="wk-phone" type="tel" inputmode="tel" maxlength="24" value="${esc(party.phone || "")}"></div>
-          <div class="dlg-field"><label for="wk-covers">What work do they cover?</label><input id="wk-covers" maxlength="120" value="${esc(party.covers || "")}"></div>
-          <div class="dlg-row">
-            <div class="dlg-field"><label for="wk-jobs">Jobs at a time</label><input id="wk-jobs" type="number" inputmode="numeric" min="1" value="${party.jobs != null ? party.jobs : ""}"></div>
-            <div class="dlg-field"><label for="wk-est">Estimate turnaround</label><select id="wk-est">
-              ${opt("same-day", party.estimate, "Same day")}${opt("1-3d", party.estimate, "1\u20133 days")}${opt("week", party.estimate, "About a week")}${opt("longer", party.estimate, "Longer")}${opt("unknown", party.estimate || "unknown", "Didn't say")}
-            </select></div>
+            <label class="wk-choice"><input type="checkbox" id="wk-has-gc"${gc ? " checked" : ""}> General contractor</label>
+            <label class="wk-choice"><input type="checkbox" id="wk-has-sub"${sub ? " checked" : ""}> Open sub</label>
           </div>
-        </div>
-        <div id="wk-gc" class="wk-branch" hidden>
-          <p class="wk-branchlab">Their general contractor</p>
-          <div class="dlg-field"><label for="wk-gcname">GC company</label><input id="wk-gcname" maxlength="120" value="${esc(gc.name || "")}"></div>
-          <div class="dlg-field"><label for="wk-gcphone">GC contact number</label><input id="wk-gcphone" type="tel" inputmode="tel" maxlength="24" value="${esc(gc.phone || "")}"></div>
-        </div>
+          <p class="wk-hint">Tick both to record a GC and a sub. Leave both off for "nobody on site".</p>
+        </fieldset>
+        ${partyBlock("gc", "General contractor", gc)}
+        ${partyBlock("sub", "Open sub", sub)}
         <p class="dlg-error" id="wk-msg" role="alert" hidden></p>
         <div class="dlg-foot">
           <button type="button" id="wk-cancel">Cancel</button>
@@ -7231,31 +7250,33 @@
         </div>`;
       dlg.setAttribute("aria-labelledby", "wk-title");
 
-      const contact = dlg.querySelector("#wk-contact");
-      const gcBlock = dlg.querySelector("#wk-gc");
-      const nameLabel = dlg.querySelector("#wk-name-label");
-      const sync = focusReveal => {
-        const onsite = dlg.querySelector('input[name="wk-onsite"]:checked').value;
-        contact.hidden = onsite === "none";
-        gcBlock.hidden = onsite !== "sub";
-        nameLabel.textContent = onsite === "sub" ? "Sub company" : "GC company";
-        if (focusReveal && !contact.hidden) { contact.scrollIntoView({ block: "nearest" }); dlg.querySelector("#wk-name").focus(); }
+      const hasGc = dlg.querySelector("#wk-has-gc");
+      const hasSub = dlg.querySelector("#wk-has-sub");
+      const gcBlock = dlg.querySelector("#wk-gc-block");
+      const subBlock = dlg.querySelector("#wk-sub-block");
+      const sync = (focusReveal, which) => {
+        gcBlock.hidden = !hasGc.checked;
+        subBlock.hidden = !hasSub.checked;
+        if (focusReveal && which === "gc" && hasGc.checked) { gcBlock.scrollIntoView({ block: "nearest" }); dlg.querySelector("#wk-gc-name").focus(); }
+        if (focusReveal && which === "sub" && hasSub.checked) { subBlock.scrollIntoView({ block: "nearest" }); dlg.querySelector("#wk-sub-name").focus(); }
       };
-      dlg.querySelectorAll('input[name="wk-onsite"]').forEach(r => r.addEventListener("change", () => sync(true)));
+      hasGc.addEventListener("change", () => sync(true, "gc"));
+      hasSub.addEventListener("change", () => sync(true, "sub"));
       sync(false);
 
       dlg.querySelector("#wk-cancel").addEventListener("click", () => dlg.close());
       dlg.querySelector("#wk-save").addEventListener("click", async () => {
         const val = id => (dlg.querySelector(id) || {}).value;
+        const partyFields = prefix => ({ name: val(`#wk-${prefix}-name`), phone: val(`#wk-${prefix}-phone`),
+          covers: val(`#wk-${prefix}-covers`), jobs: val(`#wk-${prefix}-jobs`), estimate: val(`#wk-${prefix}-est`) });
         const payload = walkFieldsToPayload({
           job: dlg.querySelector('input[name="wk-job"]:checked').value,
-          onsite: dlg.querySelector('input[name="wk-onsite"]:checked').value,
-          name: val("#wk-name"), phone: val("#wk-phone"), covers: val("#wk-covers"), jobs: val("#wk-jobs"), estimate: val("#wk-est"),
-          gcName: val("#wk-gcname"), gcPhone: val("#wk-gcphone"),
+          gc: hasGc.checked ? partyFields("gc") : null,
+          sub: hasSub.checked ? partyFields("sub") : null,
         });
-        if (payload.onsite !== "none" && !(payload.party.name || "").trim()) {
-          const msg = dlg.querySelector("#wk-msg"); msg.hidden = false; msg.textContent = "Name the company on site, or choose Nobody."; return;
-        }
+        const err = m => { const el = dlg.querySelector("#wk-msg"); el.hidden = false; el.textContent = m; };
+        if (hasGc.checked && !payload.gc) return err("Name the general contractor, or untick it.");
+        if (hasSub.checked && !payload.sub) return err("Name the open sub, or untick it.");
         if (!(localStorage.getItem("chi_permit_author") || "").trim()) {
           const nm = window.prompt("Post publicly as (leave blank for anonymous):", "");
           if (nm === null) return;
