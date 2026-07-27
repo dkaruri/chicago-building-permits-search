@@ -4,7 +4,6 @@ const MAX_TEXT = 2000;
 const MAX_NAME = 120;
 const MAX_POSTS = 200;
 const JOBS = new Set(["new", "remodel"]);
-const ONSITE = new Set(["none", "gc", "sub"]);
 const ESTIMATES = new Set(["same-day", "1-3d", "week", "longer", "unknown"]);
 const PHOTO_ID_RE = /^p_[0-9a-f]{8}$/;
 
@@ -49,16 +48,18 @@ function sanitizeParty(value) {
 
 export function sanitizeWalk(body) {
   const b = body && typeof body === "object" ? body : {};
-  const onsite = ONSITE.has(b.onsite) ? b.onsite : "none";
-  const party = onsite === "none" ? null : sanitizeParty(b.party);
-  // Only a sub on site has a separate "their GC" block.
-  const gc = onsite === "sub" && b.gc && typeof b.gc === "object"
-    ? (() => {
-        const name = String(b.gc.name ?? "").trim().slice(0, MAX_NAME);
-        return name ? { name, phone: String(b.gc.phone ?? "").replace(/[^0-9+() .-]/g, "").slice(0, 24) } : null;
-      })()
-    : null;
-  return { job: JOBS.has(b.job) ? b.job : "remodel", onsite, party, gc };
+  const job = JOBS.has(b.job) ? b.job : "remodel";
+  // New shape: independent full parties for the general contractor and the open
+  // sub — either, both, or neither may be on site.
+  // Legacy shape (onsite + single party, plus a lite their-GC when a sub was on
+  // site) is still accepted so old clients / re-submitted old posts land right.
+  if ("onsite" in b) {
+    const legacy = sanitizeParty(b.party);
+    if (b.onsite === "gc") return { job, gc: legacy, sub: null };
+    if (b.onsite === "sub") return { job, gc: sanitizeParty(b.gc), sub: legacy };
+    return { job, gc: null, sub: null };
+  }
+  return { job, gc: sanitizeParty(b.gc), sub: sanitizeParty(b.sub) };
 }
 
 async function readThread(env, permit) {
