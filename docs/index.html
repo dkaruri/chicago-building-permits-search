@@ -2764,6 +2764,10 @@
     .pm-tablewrap { overflow-x: auto; overflow-y: visible; }
     .pm-tablewrap table { width: 100%; border-collapse: collapse; }
     .pm-tablewrap th, .pm-tablewrap td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); font-size: 0.85rem; }
+    /* A permit number or a dollar amount broken across two lines is unreadable
+       — at 390px the columns are tight enough that both were wrapping. Let the
+       address column absorb the width and the wrapper scroll if it must. */
+    .pm-tablewrap td.num, .pm-tablewrap td strong { white-space: nowrap; }
     .pm-tablewrap tbody tr { cursor: pointer; }
     .pm-tablewrap tbody tr:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
     .pm-empty, .pm-error { font-size: 0.85rem; color: var(--muted); }
