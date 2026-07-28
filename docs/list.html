@@ -864,6 +864,10 @@
       text-underline-offset: 2px;
     }
 
+    .contractor-line.clickable { cursor: pointer; min-height: 44px; }
+    .contractor-line.clickable:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .ci-none { display: block; font-size: 0.79rem; color: var(--muted); margin-top: 4px; }
+
     .pm-contractors .clic { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
     .pm-contractors .lic-type { font-size: 0.72rem; font-weight: 600; color: var(--primary); background: var(--primary-soft); padding: 2px 8px; border-radius: 6px; }
     .pm-contractors .lic-class { font-size: 0.72rem; font-weight: 600; color: var(--ink); background: var(--paper); border: 1px solid var(--line); padding: 2px 8px; border-radius: 6px; }
@@ -2671,6 +2675,53 @@
     .pm-facts { display: grid; grid-template-columns: minmax(96px, 34%) 1fr; gap: 7px 14px; }
     .pm-facts dt { color: var(--muted); font-size: 0.8rem; margin: 0; }
     .pm-facts dd { margin: 0; font-size: 0.88rem; }
+    /* Card-stack header: one row on desktop, title over actions on mobile. */
+    .pm-head.stacked { flex-direction: column; align-items: stretch; gap: 10px; }
+    .pm-titlerow { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .pm-title .v { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .pm-back { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; font-size: 1.35rem; line-height: 1; flex: none; }
+    .pm-back:focus-visible, .pm-close:focus-visible, .pm-act:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .pm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pm-act { min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; text-decoration: none; }
+    .pm-act.primary { background: var(--primary); border-color: var(--primary); color: var(--panel); }
+    .pm-act[disabled] { opacity: 0.45; cursor: default; }
+    /* Tabular figures so paging cannot jitter the column widths. */
+    .pm-tag.num, .pm-tablewrap td.num { font-variant-numeric: tabular-nums; }
+    .pm-tagrow.stats .pm-tag { font-variant-numeric: tabular-nums; }
+    /* Horizontal only — a nested vertical scroller would fight the card body. */
+    .pm-tablewrap { overflow-x: auto; overflow-y: visible; }
+    .pm-tablewrap table { width: 100%; border-collapse: collapse; }
+    .pm-tablewrap th, .pm-tablewrap td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); font-size: 0.85rem; }
+    .pm-tablewrap tbody tr { cursor: pointer; }
+    .pm-tablewrap tbody tr:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+    .pm-empty, .pm-error { font-size: 0.85rem; color: var(--muted); }
+    .pm-error { color: var(--ink); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    /* Specialties / associations chip lists — not covered by the existing .tag
+       vocabulary, which belongs to the separate directory pane. */
+    .pm-chiplist { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    .pm-chiplist li { display: flex; }
+    .pm-chiplist li > span:first-child { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); border: 1px solid var(--line); color: var(--ink); font-size: 0.82rem; }
+    .assoc { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 44px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); border: 1px solid var(--line); color: var(--ink); font-size: 0.82rem; cursor: pointer; }
+    .assoc:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .assoc-n { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; }
+    @media (min-width: 721px) {
+      .pm-head.stacked { flex-direction: row; align-items: center; }
+      .pm-actions { flex: none; }
+    }
+    @media (max-width: 720px) {
+      /* Full-screen card: keep the sticky header and actions clear of the
+         notch and the home indicator. */
+      .pm-head.stacked { padding-top: calc(16px + env(safe-area-inset-top)); }
+      .pm-content { padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
+      .pm-act { flex: 1 1 auto; justify-content: center; }
+    }
+    .pm-skel { display: block; background: var(--line); border-radius: 6px; opacity: 0.55; }
+    .pm-skel.pill { display: inline-block; width: 92px; height: 26px; border-radius: 999px; margin-right: 6px; }
+    .pm-skel.line { height: 38px; margin: 8px 0; }
+    @media (prefers-reduced-motion: no-preference) {
+      .pm-skel { animation: pmPulse 1.2s ease-in-out infinite; }
+      @keyframes pmPulse { 50% { opacity: 0.25; } }
+    }
     .approx { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--warning); background: var(--warning-soft); padding: 1px 6px; border-radius: 5px; margin-left: 6px; cursor: help; }
     .pm-note { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 1rem; padding: 9px 11px; resize: vertical; }
 
@@ -3162,6 +3213,8 @@
       detailFilters: { q: "", workType: "", permitType: "", role: "" },
       detailPageIndex: 0,
       detailPageSize: 25,
+      cardStack: [],
+      cardIndex: -1,
       selectedPermitNumbers: new Set(),
       userPermitNumbers: [],
       userPermitMap: new Map(),
@@ -3684,49 +3737,129 @@
 
     let _permitModalPrevFocus = null;
     let _permitModalScrollY = 0;
-    let _permitModalHistory = false;
+    // How many history entries the open overlay owns — one per card pushed.
+    let _permitModalDepth = 0;
+    // Set while closePermitModal unwinds its own entries, so the popstate
+    // handler ignores the events history.go(-n) is about to fire.
+    let _permitModalClosing = false;
 
-    function openPermitModal(html, opts = {}) {
+    // Card-stack transitions. Pure; mirrored in verify-tmp/p5-stack-impl.mjs.
+    function stackPush(stack, index, desc) {
+      return { stack: [...stack.slice(0, index + 1), desc], index: index + 1 };
+    }
+
+    function stackGo(stack, index, delta) {
+      const next = Math.min(Math.max(index + delta, 0), stack.length - 1);
+      return { stack, index: next };
+    }
+
+    function activeCard() {
+      return state.cardStack[state.cardIndex] || null;
+    }
+
+    // Push a new card onto the stack and show it. Opens the overlay if closed.
+    function pushCard(desc) {
+      const next = stackPush(state.cardStack, state.cardIndex, desc);
+      state.cardStack = next.stack;
+      state.cardIndex = next.index;
+      openPermitModal();
+      history.pushState({ permitModal: true, card: state.cardIndex }, "");
+      _permitModalDepth += 1;
+      renderCard("forward");
+    }
+
+    function popCard() {
+      if (state.cardIndex <= 0) { closePermitModal(); return; }
+      const next = stackGo(state.cardStack, state.cardIndex, -1);
+      state.cardIndex = next.index;
+      renderCard("back");
+    }
+
+    function forwardCard() {
+      if (state.cardIndex >= state.cardStack.length - 1) return;
+      const next = stackGo(state.cardStack, state.cardIndex, 1);
+      state.cardIndex = next.index;
+      renderCard("forward");
+    }
+
+    // Re-render the active card in place — no history entry, no stack change.
+    // Used when the underlying data changed (e.g. the permit was added to a
+    // list) and the same card must repaint.
+    function refreshCard() {
+      if (!activeCard()) return;
+      renderCard("none");
+    }
+
+    // Show the overlay shell. The body is filled by renderCard.
+    function openPermitModal() {
       const modal = $("permit-modal");
-      const body = $("permit-modal-body");
-      const alreadyOpen = !modal.hidden;
-      if (!alreadyOpen) {
-        _permitModalPrevFocus = document.activeElement;
-        _permitModalScrollY = window.scrollY;
-      }
-      body.innerHTML = html;
-      if (!alreadyOpen) {
-        modal.hidden = false;
-        document.body.classList.add("modal-open");
-        // Browser back closes the modal (Android/iOS back gesture).
-        history.pushState({ permitModal: true }, "");
-        _permitModalHistory = true;
-        // Focus first focusable control (or the card) for keyboard users.
-        const focusable = body.querySelector('button:not([disabled]), a[href], textarea:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
-        (focusable || modal.querySelector(".permit-modal-card")).focus?.();
-      }
-      if (opts.onOpen) opts.onOpen(body);
+      if (!modal.hidden) return;
+      _permitModalPrevFocus = document.activeElement;
+      _permitModalScrollY = window.scrollY;
+      modal.hidden = false;
+      document.body.classList.add("modal-open");
     }
 
     function closePermitModal(fromPopState = false) {
       const modal = $("permit-modal");
       if (modal.hidden) return;
+      const depth = _permitModalDepth;
       modal.hidden = true;
       $("permit-modal-body").innerHTML = "";
       document.body.classList.remove("modal-open");
+      state.cardStack = [];
+      state.cardIndex = -1;
+      _permitModalDepth = 0;
       window.scrollTo(0, _permitModalScrollY);
       if (_permitModalPrevFocus && _permitModalPrevFocus.focus) _permitModalPrevFocus.focus();
-      if (_permitModalHistory && !fromPopState) { _permitModalHistory = false; history.back(); }
-      else { _permitModalHistory = false; }
+      // Drop the history entries this overlay owns. One popstate already fired
+      // when the user pressed Back, so unwind one fewer in that case.
+      const unwind = fromPopState ? depth - 1 : depth;
+      if (unwind > 0) {
+        _permitModalClosing = true;
+        history.go(-unwind);
+        setTimeout(() => { _permitModalClosing = false; }, 0);
+      }
     }
 
     window.addEventListener("popstate", () => {
-      if (!$("permit-modal").hidden) closePermitModal(true);
+      if (_permitModalClosing) return;
+      if ($("permit-modal").hidden) return;
+      _permitModalDepth = Math.max(0, _permitModalDepth - 1);
+      if (state.cardIndex > 0) popCard();
+      else closePermitModal(true);
     });
     document.addEventListener("keydown", e => {
       if (e.key === "Escape" && !$("permit-modal").hidden) closePermitModal();
       if (e.key === "Tab" && !$("permit-modal").hidden) trapPermitModalFocus(e);
     });
+
+    // Render the active card into the overlay body and run its onOpen hooks.
+    // direction is "forward" or "back" and only drives the animation.
+    function renderCard(direction = "forward") {
+      const desc = activeCard();
+      if (!desc) return;
+      const body = $("permit-modal-body");
+      body.innerHTML = desc.type === "permit"
+        ? permitDetailHtml(desc.row)
+        : desc.loaded
+          ? contactDetailHtml(desc, state.cardIndex)
+          : cardSkeletonHtml(desc, state.cardIndex);
+      // Any completed render is, by definition, no longer busy. Clearing here
+      // (rather than only in fillContactCard's success path) means an
+      // interrupted fetch cannot leave the body permanently marked busy.
+      body.removeAttribute("aria-busy");
+      if (desc.type === "permit") {
+        fillPermitContractors(body);
+        fillPermitGeo(body, desc.row);
+        const pn = clean(desc.row.permit_number);
+        if (pn) fetchThread(pn);
+      } else {
+        fillContactCard(body, desc);
+      }
+      const title = document.getElementById("permit-modal-title");
+      if (title) title.focus({ preventScroll: true });
+    }
 
     // Keep Tab focus inside the open modal.
     function trapPermitModalFocus(e) {
@@ -6036,8 +6169,8 @@
       announceListAction(`${fmt(numbers.length)} permit${numbers.length === 1 ? "" : "s"} added to the list.`);
       await renderUserList();
       if (!skipModeRefresh) renderCurrentMode();
-      if (!skipModeRefresh && state.activeDetail?.type === "permit") {
-        showPermitDetail(state.activeDetail.row, false);
+      if (!skipModeRefresh && activeCard()?.type === "permit") {
+        refreshCard();
       }
     }
 
@@ -6161,7 +6294,7 @@
     }
 
     function refreshMapSavedPermitState(permitNumber) {
-      if (state.activeDetail?.type === "permit") return;
+      if (activeCard()?.type === "permit") return;
       const active = clean(state.map.activePermitNumber);
       const number = clean(permitNumber);
       if (active && active === number) {
@@ -6194,8 +6327,8 @@
       await renderUserList();
       const skipModeRefresh = state.mode === "map";
       if (!skipModeRefresh) renderCurrentMode();
-      if (!skipModeRefresh && state.activeDetail?.type === "permit") {
-        showPermitDetail(state.activeDetail.row, false);
+      if (!skipModeRefresh && activeCard()?.type === "permit") {
+        refreshCard();
       }
       if (skipModeRefresh) refreshMapSavedPermitState(number);
     }
@@ -6215,8 +6348,8 @@
       announceListAction("My Permit List was cleared.");
       await renderUserList();
       renderCurrentMode();
-      if (state.activeDetail?.type === "permit") {
-        showPermitDetail(state.activeDetail.row, false);
+      if (activeCard()?.type === "permit") {
+        refreshCard();
       }
     }
 
@@ -6862,6 +6995,30 @@
       return names.map(name => `<div class="contractor-line" data-contractor="${esc(name)}" data-role="${role}"><span class="ci-name">${esc(name)}</span><span class="ci-meta"> · …</span></div>`).join("");
     }
 
+    // Open a contractor's card on top of the current one.
+    function openContactCard(encodedName, role) {
+      pushCard({ type: "contact", name: decodeURIComponent(encodedName), role });
+    }
+
+    // Add every permit currently listed on the active contractor card, in one
+    // shot. Asks which list first — same picker a single add uses (D7) — then
+    // passes the choice through so addPermitsToUserList does not prompt again.
+    // The picker is a native <dialog>; showModal() puts it in the top layer,
+    // above the permit-modal overlay, and restores focus on close.
+    async function addAllFromCard() {
+      const desc = activeCard();
+      if (!desc || desc.type !== "contact") return;
+      const rows = desc.permits || [];
+      if (!rows.length) return;
+      const targetId = await pickList(rows.length);
+      if (!targetId) return;
+      const btn = document.querySelector('.pm-actions .pm-act:not(.primary)');
+      if (btn) { btn.disabled = true; btn.textContent = "Adding…"; }
+      await addPermitsToUserList(rows, { listId: targetId });
+      pmAnnounce(`${fmt(rows.length)} permits added to your list`);
+      refreshCard();
+    }
+
     const contractorInfoCache = new Map();
 
     // Fetch one contractor's open-jobs + phone from the Worker profile
@@ -6895,7 +7052,21 @@
         line.setAttribute("data-filled", "1");
         const meta = line.querySelector(".ci-meta");
         const info = await fetchContractorInfo(line.getAttribute("data-contractor"), line.getAttribute("data-role"));
-        if (!info) { meta.textContent = ""; return; }
+        if (!info) {
+          meta.textContent = "";
+          line.insertAdjacentHTML("beforeend", `<span class="ci-none">No profile on file</span>`);
+          return;
+        }
+        // A contractor we have a profile for becomes a button to its card. It
+        // stays a <div role="button"> rather than a real <button> because the
+        // line holds a tel: link, which cannot live inside a button — so the
+        // Enter/Space activation a native button gives free is wired by hand.
+        line.setAttribute("role", "button");
+        line.setAttribute("tabindex", "0");
+        line.setAttribute("onclick", `openContactCard('${enc(line.getAttribute("data-contractor"))}', '${line.getAttribute("data-role")}')`);
+        line.setAttribute("onkeydown", "if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();this.click();}");
+        line.setAttribute("aria-label", `Open profile for ${line.getAttribute("data-contractor")}`);
+        line.classList.add("clickable");
         const licType = parseLicenseType(info.license_type);
         const cls = parseLicenseClass(info.license_type);
         const chips = [];
@@ -7432,16 +7603,19 @@
       const saved = isInUserList(row.permit_number);
       const payload = enc(JSON.stringify(row));
       return [
-        () => `<div class="pm-head">
-            <div class="pm-title"><div class="k">Permit</div><div class="v" id="permit-modal-title">${esc(row.permit_number)}</div></div>
-            <button class="primary" onclick="addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "✓ Saved" : "Add to list"}</button>
-            <button class="pm-close" aria-label="Close" onclick="closePermitModal()">✕</button>
+        () => `<div class="pm-head stacked">
+            <div class="pm-titlerow">
+              ${state.cardIndex > 0 ? `<button class="pm-back" aria-label="Back" onclick="popCard()">&lsaquo;</button>` : ""}
+              <div class="pm-title"><div class="k">Permit</div><div class="v" id="permit-modal-title" tabindex="-1">${esc(row.permit_number)}</div></div>
+              <button class="pm-close" aria-label="Close" onclick="closePermitModal()">&#10005;</button>
+            </div>
+            <div class="pm-actions"><button class="pm-act primary" onclick="addPermitFromEncoded('${payload}')" ${saved ? "disabled" : ""}>${saved ? "✓ Saved" : "Add to list"}</button></div>
           </div>
           <div class="pm-content">
           <div class="pm-tagrow">
             <span class="pm-tag">${esc(row.permit_status)}</span>
             <span class="pm-tag">${esc(row.permit_type)}</span>
-            ${row.reported_cost ? `<span class="pm-tag">${money(row.reported_cost)}</span>` : ""}
+            ${row.reported_cost ? `<span class="pm-tag num">${money(row.reported_cost)}</span>` : ""}
           </div>`,
         () => `<section class="pm-block"><h3>Location</h3>${pmFacts([
             ["Address", clean(row.address)],
@@ -7489,6 +7663,182 @@
       return permitDetailSections(row).map(fn => fn()).join("");
     }
 
+    function cardKicker(desc) {
+      if (desc.type === "permit") return "Permit";
+      return desc.role === "open_tech" ? "Open sub" : "General contractor";
+    }
+
+    function contactPillsHtml(profile, liveOpenJobs) {
+      const p = profile || {};
+      const pills = [];
+      if (liveOpenJobs != null) pills.push({ text: `${fmt(liveOpenJobs)} open jobs`, num: false });
+      if (p.total_jobs != null) pills.push({ text: `${fmt(p.total_jobs)} total jobs`, num: false });
+      if (p.avg_processing_days != null) pills.push({ text: `${Number(p.avg_processing_days).toFixed(1)} avg processing days`, num: false });
+      if (p.usable_processing_jobs != null) pills.push({ text: `${fmt(p.usable_processing_jobs)} usable timing records`, num: false });
+      if (p.reported_cost_total != null) pills.push({ text: `${money(p.reported_cost_total)} reported cost`, num: true });
+      if (!pills.length) return "";
+      return `<div class="pm-tagrow stats">${pills.map(t => `<span class="pm-tag">${esc(t.text)}</span>`).join("")}</div>`;
+    }
+
+    function contactDetailHtml(desc, cardIndex = 0) {
+      const name = clean(desc.name);
+      const rows = desc.permits || [];
+      const err = clean(desc.relatedError);
+      const back = cardIndex > 0
+        ? `<button class="pm-back" aria-label="Back" onclick="popCard()">&lsaquo;</button>`
+        : "";
+      const phone = ((desc.profile && desc.profile.license_matches) || [])
+        .map(m => clean(m.phone)).find(ph => ph && ph.toUpperCase() !== "NA") || "";
+      const actions = [];
+      if (phone) actions.push(`<a class="pm-act primary" href="tel:${esc(phone.replace(/[^\d+]/g, ""))}">Call ${esc(phone)}</a>`);
+      if (rows.length) actions.push(`<button class="pm-act" onclick="addAllFromCard()">Add all ${fmt(rows.length)} to list</button>`);
+
+      return `<div class="pm-head stacked">
+          <div class="pm-titlerow">
+            ${back}
+            <div class="pm-title">
+              <div class="k">${esc(cardKicker(desc))}</div>
+              <div class="v" id="permit-modal-title" tabindex="-1">${esc(name)}</div>
+            </div>
+            <button class="pm-close" aria-label="Close" onclick="closePermitModal()">&#10005;</button>
+          </div>
+          ${actions.length ? `<div class="pm-actions">${actions.join("")}</div>` : ""}
+        </div>
+        <div class="pm-content">
+        ${contactPillsHtml(desc.profile, rows.length)}
+        <section class="pm-block"><h3>Open permits</h3>
+          ${err
+            ? `<p class="pm-error" role="alert">${esc(err)} <button class="pm-act" onclick="retryContactCard()">Retry</button></p>`
+            : rows.length
+              ? `<div class="pm-tablewrap"><table aria-label="Open permits for ${esc(name)}"><thead><tr><th>Permit</th><th>Issued</th><th>Address</th><th>Cost</th></tr></thead><tbody>${rows.map(r => `<tr tabindex="0" onclick="openPermitDetailFromEncoded('${enc(JSON.stringify(r))}')"><td><strong>${esc(r.permit_number)}</strong><br><span class="small">${esc(r.permit_status)}</span></td><td class="num">${esc(r.issue_date)}</td><td>${esc(r.address)}</td><td class="num">${money(r.reported_cost)}</td></tr>`).join("")}</tbody></table></div>`
+              : `<p class="pm-empty">No open permits on file for this contractor.</p>`}
+        </section>
+        ${licenseBlockHtml(desc.profile)}
+        ${specialtiesBlockHtml(desc.profile)}
+        ${associationsBlockHtml(desc)}
+        </div>`;
+    }
+
+    // Shown while the two contractor fetches are in flight. Both routinely
+    // exceed 300ms, and a blank card reads as a broken overlay.
+    function cardSkeletonHtml(desc, cardIndex) {
+      return `<div class="pm-head stacked">
+          <div class="pm-titlerow">
+            ${cardIndex > 0 ? `<button class="pm-back" aria-label="Back" onclick="popCard()">&lsaquo;</button>` : ""}
+            <div class="pm-title"><div class="k">${esc(cardKicker(desc))}</div><div class="v" id="permit-modal-title" tabindex="-1">${esc(clean(desc.name))}</div></div>
+            <button class="pm-close" aria-label="Close" onclick="closePermitModal()">&#10005;</button>
+          </div>
+        </div>
+        <div class="pm-content">
+          <div class="pm-tagrow">${"<span class=\"pm-skel pill\"></span>".repeat(4)}</div>
+          <section class="pm-block"><h3>Open permits</h3>
+            <div class="pm-skel line"></div><div class="pm-skel line"></div><div class="pm-skel line"></div>
+          </section>
+        </div>`;
+    }
+
+    // Fold a contractor name to a comparison key: case, punctuation, whitespace and
+    // a trailing corporate suffix are all noise when matching permit text against a
+    // profile name.
+    function normContractor(name) {
+      return String(name || "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9 ]+/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/\s+(INC|LLC|CO|CORP|LTD)$/, "")
+        .trim();
+    }
+
+    // /api/permits?contact_name= is a substring LIKE across all 15 contact slots,
+    // so "ACME" also returns "ACME PLUMBING". Keep only rows that actually name
+    // this contractor in the role we are showing.
+    function rowsForContractor(rows, name, role) {
+      const key = normContractor(name);
+      const field = role === "open_tech" ? "open_subs" : "general_contractors";
+      return (rows || []).filter(row =>
+        String(row[field] || "").split("|").map(normContractor).includes(key));
+    }
+
+    // Fetch a contractor's profile and live permits, cache them on the
+    // descriptor, and re-render the card. Cached descriptors skip the fetch
+    // entirely, so stepping back is instant.
+    async function fillContactCard(body, desc) {
+      if (desc.loaded) return;
+      body.setAttribute("aria-busy", "true");
+      const role = desc.role === "open_tech" ? "open_tech" : "general_contractor";
+      const [profile, permitsResult] = await Promise.all([
+        fetch(`${API_BASE}/api/contact/${encodeURIComponent(desc.name)}?category=${role}`)
+          .then(r => (r.ok ? r.json() : null)).catch(() => null),
+        fetch(`${API_BASE}/api/permits?contact_name=${encodeURIComponent(desc.name)}&limit=200`)
+          .then(r => (r.ok ? r.json() : Promise.reject(new Error(`Permits unavailable (${r.status})`))))
+          .catch(e => ({ error: e.message || "Open permits could not be loaded." })),
+      ]);
+      desc.profile = profile;
+      desc.relatedError = permitsResult.error || "";
+      desc.permits = permitsResult.error ? [] : rowsForContractor(permitsResult.rows, desc.name, role);
+      desc.loaded = true;
+      if (activeCard() !== desc) return; // user navigated away mid-flight
+      renderCard("none");
+    }
+
+    // Retry button in the card's error state.
+    function retryContactCard() {
+      const desc = activeCard();
+      if (!desc || desc.type !== "contact") return;
+      desc.loaded = false;
+      renderCard("none");
+    }
+
+    function licenseBlockHtml(profile) {
+      const p = profile || {};
+      const matches = p.license_matches || [];
+      if (!matches.length) {
+        return `<section class="pm-block"><h3>License</h3><p class="pm-empty">No City license match on file for this name.</p></section>`;
+      }
+      const m = matches[0];
+      const phone = matches.map(x => clean(x.phone)).find(ph => ph && ph.toUpperCase() !== "NA") || "";
+      const where = [clean(p.city), clean(p.state)].filter(Boolean).join(", ");
+      const locality = [where, clean(p.zipcode)].filter(Boolean).join(" ");
+      const rows = [
+        ["Type", parseLicenseType(m.license_type)],
+        ["Class", parseLicenseClass(m.license_type) ? `Class ${parseLicenseClass(m.license_type)}` : ""],
+        ["Licence no.", clean(m.license_number)],
+        ["Expires", clean(m.license_expiration_date)],
+        ["Phone", phone],
+        ["Based in", locality],
+      ];
+      return `<section class="pm-block"><h3>License</h3><dl class="pm-facts">${rows.map(([k, v]) =>
+        `<dt>${esc(k)}</dt><dd>${v ? (k === "Phone" ? `<a href="tel:${esc(String(v).replace(/[^\d+]/g, ""))}">${esc(v)}</a>` : esc(v)) : "—"}</dd>`).join("")}</dl>${
+        matches.length > 1 ? `<p class="pm-empty">${fmt(matches.length - 1)} more licence rows matched this name.</p>` : ""}</section>`;
+    }
+
+    function specialtiesBlockHtml(profile) {
+      const items = ((profile || {}).work_types || []).slice(0, 6);
+      if (!items.length) return "";
+      return `<section class="pm-block"><h3>Specialties</h3><ul class="pm-chiplist">${items.map(w =>
+        `<li><span>${esc(clean(w.work_type))}</span> <span class="assoc-n">${fmt(w.jobs)}</span></li>`).join("")}</ul></section>`;
+    }
+
+    // Contractors seen alongside this one on its permits, in the opposite role.
+    // Chips push a card — openContactProfile drives the separate directory pane and
+    // would replace the overlay's stack.
+    function associationsBlockHtml(desc) {
+      const otherField = desc.role === "open_tech" ? "general_contractors" : "open_subs";
+      const otherRole = desc.role === "open_tech" ? "general_contractor" : "open_tech";
+      const counts = new Map();
+      (desc.permits || []).forEach(row => {
+        clean(row[otherField]).split("|").map(x => x.trim()).filter(Boolean)
+          .forEach(nm => counts.set(nm, (counts.get(nm) || 0) + 1));
+      });
+      if (!counts.size) {
+        return `<section class="pm-block"><h3>Associations</h3><p class="pm-empty">No other contractors named on these permits.</p></section>`;
+      }
+      const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 20);
+      return `<section class="pm-block"><h3>Associations</h3><ul class="pm-chiplist">${sorted.map(([nm, n]) =>
+        `<li><button type="button" class="assoc" onclick="openContactCard('${enc(nm)}', '${otherRole}')" aria-label="Open profile for ${esc(nm)}"><span>${esc(nm)}</span> <span class="assoc-n">${fmt(n)}</span></button></li>`).join("")}</ul></section>`;
+    }
+
     // Fill Zone / TIF district into a permit-detail overlay body (Task 5),
     // resolving via the existing geo cache/fetch (shared with the saved-list
     // table columns) rather than a fresh lookup path.
@@ -7503,10 +7853,10 @@
       if (tif) tif.textContent = geoTifCache.get(num) || "—";
     }
 
-    // Public entry point for opening a permit's detail overlay.
+    // Public entry point for opening a permit's detail overlay. Starts a fresh
+    // stack when the overlay is closed; pushes a card when it is already open.
     function openPermitDetail(row) {
-      state.activeDetail = { type: "permit", row };
-      openPermitModal(permitDetailHtml(row), { onOpen: body => { fillPermitContractors(body); fillPermitGeo(body, row); const pn = clean(row.permit_number); if (pn) fetchThread(pn); } });
+      pushCard({ type: "permit", row });
     }
 
     function showPermitDetail(row, pushHistory = true) {
