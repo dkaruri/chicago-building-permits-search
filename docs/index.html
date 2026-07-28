@@ -3202,7 +3202,15 @@
     // Snapshot of where the user is now. Cheap enough to call on every scroll
     // frame because saveLastView debounces the actual write.
     function captureLastView() {
+      // Only a CONTACT card is worth reopening. A permit card is a transient
+      // drill-down, and reopening one on load would strand the user in a modal
+      // over a page they never chose to be looking at.
+      const card = activeCard();
+      const openContact = card && card.type === "contact" && !$("permit-modal").hidden
+        ? { name: clean(card.name), role: card.role === "open_tech" ? "open_tech" : "general_contractor" }
+        : null;
       saveLastView({
+        card: openContact,
         tab: state.mode,
         q: $("q") ? $("q").value : "",
         sort: $("sort") ? $("sort").value : "",
@@ -3249,6 +3257,15 @@
           renderCurrentMode();
         }
       }
+      // Reopen the contractor card that was open when the page was left. This
+      // deliberately reverses the original spec's "the overlay is never
+      // restored" — that decision predates the overlay becoming the ONLY way to
+      // view a contractor, so leaving it closed now loses the user's place
+      // rather than protecting it. Permit cards are still never restored.
+      if (last.card && clean(last.card.name)) {
+        openContactCard(encodeURIComponent(clean(last.card.name)), last.card.role);
+      }
+
       // After the last repaint, or the page is not tall enough to scroll yet.
       // "instant" is explicit: restoring a position is not a navigation, and if
       // scroll-behavior: smooth is ever set globally this must not animate a
@@ -5480,6 +5497,7 @@
       history.pushState({ permitModal: true, card: state.cardIndex }, "");
       _permitModalDepth += 1;
       renderCard("forward");
+      captureLastView();
     }
 
     function popCard() {
@@ -5487,6 +5505,7 @@
       const next = stackGo(state.cardStack, state.cardIndex, -1);
       state.cardIndex = next.index;
       renderCard("back");
+      captureLastView();
     }
 
     function forwardCard() {
@@ -5524,6 +5543,7 @@
       state.cardStack = [];
       state.cardIndex = -1;
       _permitModalDepth = 0;
+      saveLastView({ card: null });
       window.scrollTo(0, _permitModalScrollY);
       if (_permitModalPrevFocus && _permitModalPrevFocus.focus) _permitModalPrevFocus.focus();
       // Drop the history entries this overlay owns. One popstate already fired
