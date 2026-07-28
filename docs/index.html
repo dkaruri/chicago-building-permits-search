@@ -5816,19 +5816,20 @@
     }
 
     // Add every permit currently listed on the active contractor card, in one
-    // shot, to the currently active list — no per-permit or bulk list-picker
-    // prompt (an in-card `<dialog>` stacked over the permit-modal overlay would
-    // be a jarring UI, and re-prompting per permit is worse). Goes through
-    // addPermitsToUserList, the same underlying function addPermitFromEncoded
-    // (single add) uses, so persistence/sync/list refresh all match.
+    // shot. Asks which list first — same picker a single add uses (D7) — then
+    // passes the choice through so addPermitsToUserList does not prompt again.
+    // The picker is a native <dialog>; showModal() puts it in the top layer,
+    // above the permit-modal overlay, and restores focus on close.
     async function addAllFromCard() {
       const desc = activeCard();
       if (!desc || desc.type !== "contact") return;
       const rows = desc.permits || [];
       if (!rows.length) return;
+      const targetId = await pickList(rows.length);
+      if (!targetId) return;
       const btn = document.querySelector('.pm-actions .pm-act:not(.primary)');
       if (btn) { btn.disabled = true; btn.textContent = "Adding…"; }
-      await addPermitsToUserList(rows, { listId: state.activeListId });
+      await addPermitsToUserList(rows, { listId: targetId });
       pmAnnounce(`${fmt(rows.length)} permits added to your list`);
       refreshCard();
     }
