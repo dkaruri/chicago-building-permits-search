@@ -6600,7 +6600,7 @@
         <table class="results-table contacts-table">
           <thead><tr><th>${sortHeader("Name", "contact_name")}</th><th>${sortHeader("Type", "contact_type")}</th><th>${sortHeader("Public Contact", "public_contact")}</th><th>${sortHeader("Open Jobs", "open_jobs")}</th><th>${sortHeader("Avg Days", "avg_processing_days")}</th></tr></thead>
           <tbody>${rows.map((row, i) => `
-            <tr tabindex="0" onclick="openContactCard('${enc(row.contact_name)}', '${state.mode === "open_subs" ? "open_tech" : "general_contractor"}')">
+            <tr tabindex="0" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target.closest('tr')===this){event.preventDefault();this.click();}" onclick="openContactCard('${enc(row.contact_name)}', '${state.mode === "open_subs" ? "open_tech" : "general_contractor"}')">
               <td data-label="Name"><strong>${esc(row.contact_name)}</strong><br><span class="small">${esc(specialtySummary(row))}</span></td>
               <td data-label="Type">${esc(row.sample_contact_type)}</td>
               <td data-label="Public contact">${esc([row.city, row.state, row.zipcode].filter(Boolean).join(", "))}</td>
@@ -7610,7 +7610,7 @@
       return `${pager}
         <div class="pm-tablewrap"><table aria-label="Open permits for ${esc(name)}">
           <thead><tr><th>Permit</th><th>Issued</th><th>Address</th><th>Cost</th></tr></thead>
-          <tbody>${rows.map(r => `<tr tabindex="0" onclick="openPermitDetailFromEncoded('${enc(JSON.stringify(r))}')"><td><strong>${esc(r.permit_number)}</strong><br><span class="small">${esc(r.permit_status)}</span></td><td class="num">${esc(r.issue_date)}</td><td>${esc(r.address)}</td><td class="num">${money(r.reported_cost)}</td></tr>`).join("")}</tbody>
+          <tbody>${rows.map(r => `<tr tabindex="0" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target.closest('tr')===this){event.preventDefault();this.click();}" onclick="openPermitDetailFromEncoded('${enc(JSON.stringify(r))}')"><td><strong>${esc(r.permit_number)}</strong><br><span class="small">${esc(r.permit_status)}</span></td><td class="num">${esc(r.issue_date)}</td><td>${esc(r.address)}</td><td class="num">${money(r.reported_cost)}</td></tr>`).join("")}</tbody>
         </table></div>`;
     }
 
