@@ -154,8 +154,13 @@ async function fetchLicenses() {
   return [...rowsByKey.values()];
 }
 
+// --remote is REQUIRED. Wrangler 4.x defaults `kv key put` to the local
+// Miniflare simulation, so without it this script writes to
+// worker/.wrangler/state/v3/kv/ and still prints "Production KV seeded" —
+// the deployed Worker never sees a byte of it. Caught 2026-07-28 when a full
+// seed reported success and /api/contact still returned no seeded_at.
 function kvPut(key, file) {
-  execSync(`npx wrangler kv key put --namespace-id ${KV_NAMESPACE_ID} "${key}" --path "${file}"`, { stdio: "inherit" });
+  execSync(`npx wrangler kv key put --remote --namespace-id ${KV_NAMESPACE_ID} "${key}" --path "${file}"`, { stdio: "inherit" });
 }
 
 async function main() {
