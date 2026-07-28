@@ -2757,6 +2757,16 @@
     .pm-act { min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; text-decoration: none; }
     .pm-act.primary { background: var(--primary); border-color: var(--primary); color: var(--panel); }
     .pm-act[disabled] { opacity: 0.45; cursor: default; }
+    /* The overlay's small type is set in px, not rem, for two reasons. It was
+       falling under the 12px floor (labels rendered at 10.2-11.5px), and the
+       two pages disagree about what a rem is below 640px — index.html shrinks
+       `html` to 15px, list.html shrinks only `body` — so byte-identical markup
+       rendered at two different sizes. px pins both. */
+    .permit-modal-card .pm-head .pm-title .k,
+    .permit-modal-card .pm-block h3 { font-size: 12px; }
+    .permit-modal-card .pm-tag { font-size: 12.5px; }
+    .permit-modal-card .small,
+    .permit-modal-card .ci-none { font-size: 12px; }
     /* Tabular figures so paging cannot jitter the column widths. */
     .pm-tag.num, .pm-tablewrap td.num { font-variant-numeric: tabular-nums; }
     .pm-tagrow.stats .pm-tag { font-variant-numeric: tabular-nums; }
