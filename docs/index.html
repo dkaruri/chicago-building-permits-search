@@ -2726,6 +2726,12 @@
     @media (prefers-reduced-motion: no-preference) {
       .permit-modal:not([hidden]) .permit-modal-card { animation: permitRise 0.24s ease; }
       @keyframes permitRise { from { opacity: 0; transform: translateY(14px); } }
+      /* Card-stack motion. Forward enters from below, back from above — the
+         standard depth cue. Exit is ~65% of enter so going back feels
+         immediate. Only the body animates; the shell stays put. */
+      .permit-modal-body.pm-in { animation: permitRise 0.24s ease; }
+      .permit-modal-body.pm-out { animation: permitFall 0.16s ease; }
+      @keyframes permitFall { from { opacity: 0; transform: translateY(-14px); } }
     }
     .pm-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px 14px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
     .pm-head .pm-title { flex: 1; min-width: 0; }
@@ -5681,6 +5687,7 @@
       const desc = activeCard();
       if (!desc) return;
       const body = $("permit-modal-body");
+      const prevScroll = body.scrollTop;
       body.innerHTML = desc.type === "permit"
         ? permitDetailHtml(desc.row)
         : desc.loaded
@@ -5690,6 +5697,21 @@
       // (rather than only in fillContactCard's success path) means an
       // interrupted fetch cannot leave the body permanently marked busy.
       body.removeAttribute("aria-busy");
+
+      // Motion. Clearing the classes first (plus a reflow) restarts the
+      // keyframe, so a rapid second tap cancels the running animation instead
+      // of queueing behind it. "none" is an in-place refresh — no motion.
+      body.classList.remove("pm-in", "pm-out");
+      if (direction === "none") {
+        // In-place refresh: the innerHTML swap zeroed scrollTop, so put the
+        // reader back where they were instead of throwing them to the top.
+        body.scrollTop = prevScroll;
+      } else {
+        void body.offsetWidth;
+        body.classList.add(direction === "back" ? "pm-out" : "pm-in");
+        body.scrollTop = 0;
+      }
+
       if (desc.type === "permit") {
         fillPermitContractors(body);
         fillPermitGeo(body, desc.row);
@@ -5698,8 +5720,15 @@
       } else {
         fillContactCard(body, desc);
       }
+      // The innerHTML swap destroyed whatever had focus; without this it falls
+      // to <body> and a keyboard or screen-reader user loses the stack.
       const title = document.getElementById("permit-modal-title");
       if (title) title.focus({ preventScroll: true });
+      // An in-place refresh is not a navigation — announcing it would talk over
+      // whatever the refresh itself just announced (e.g. the add-to-list count).
+      if (direction !== "none") {
+        pmAnnounce(`${cardKicker(desc)}, ${desc.type === "permit" ? clean(desc.row.permit_number) : clean(desc.name)}`);
+      }
     }
 
     // Keep Tab focus inside the open modal.
