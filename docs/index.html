@@ -2726,6 +2726,12 @@
     @media (prefers-reduced-motion: no-preference) {
       .permit-modal:not([hidden]) .permit-modal-card { animation: permitRise 0.24s ease; }
       @keyframes permitRise { from { opacity: 0; transform: translateY(14px); } }
+      /* Card-stack motion. Forward enters from below, back from above — the
+         standard depth cue. Exit is ~65% of enter so going back feels
+         immediate. Only the body animates; the shell stays put. */
+      .permit-modal-body.pm-in { animation: permitRise 0.24s ease; }
+      .permit-modal-body.pm-out { animation: permitFall 0.16s ease; }
+      @keyframes permitFall { from { opacity: 0; transform: translateY(-14px); } }
     }
     .pm-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px 14px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
     .pm-head .pm-title { flex: 1; min-width: 0; }
@@ -2751,6 +2757,16 @@
     .pm-act { min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; text-decoration: none; }
     .pm-act.primary { background: var(--primary); border-color: var(--primary); color: var(--panel); }
     .pm-act[disabled] { opacity: 0.45; cursor: default; }
+    /* The overlay's small type is set in px, not rem, for two reasons. It was
+       falling under the 12px floor (labels rendered at 10.2-11.5px), and the
+       two pages disagree about what a rem is below 640px — index.html shrinks
+       `html` to 15px, list.html shrinks only `body` — so byte-identical markup
+       rendered at two different sizes. px pins both. */
+    .permit-modal-card .pm-head .pm-title .k,
+    .permit-modal-card .pm-block h3 { font-size: 12px; }
+    .permit-modal-card .pm-tag { font-size: 12.5px; }
+    .permit-modal-card .small,
+    .permit-modal-card .ci-none { font-size: 12px; }
     /* Tabular figures so paging cannot jitter the column widths. */
     .pm-tag.num, .pm-tablewrap td.num { font-variant-numeric: tabular-nums; }
     .pm-tagrow.stats .pm-tag { font-variant-numeric: tabular-nums; }
@@ -2758,6 +2774,10 @@
     .pm-tablewrap { overflow-x: auto; overflow-y: visible; }
     .pm-tablewrap table { width: 100%; border-collapse: collapse; }
     .pm-tablewrap th, .pm-tablewrap td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); font-size: 0.85rem; }
+    /* A permit number or a dollar amount broken across two lines is unreadable
+       — at 390px the columns are tight enough that both were wrapping. Let the
+       address column absorb the width and the wrapper scroll if it must. */
+    .pm-tablewrap td.num, .pm-tablewrap td strong { white-space: nowrap; }
     .pm-tablewrap tbody tr { cursor: pointer; }
     .pm-tablewrap tbody tr:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
     .pm-empty, .pm-error { font-size: 0.85rem; color: var(--muted); }
@@ -5681,6 +5701,7 @@
       const desc = activeCard();
       if (!desc) return;
       const body = $("permit-modal-body");
+      const prevScroll = body.scrollTop;
       body.innerHTML = desc.type === "permit"
         ? permitDetailHtml(desc.row)
         : desc.loaded
@@ -5690,6 +5711,21 @@
       // (rather than only in fillContactCard's success path) means an
       // interrupted fetch cannot leave the body permanently marked busy.
       body.removeAttribute("aria-busy");
+
+      // Motion. Clearing the classes first (plus a reflow) restarts the
+      // keyframe, so a rapid second tap cancels the running animation instead
+      // of queueing behind it. "none" is an in-place refresh — no motion.
+      body.classList.remove("pm-in", "pm-out");
+      if (direction === "none") {
+        // In-place refresh: the innerHTML swap zeroed scrollTop, so put the
+        // reader back where they were instead of throwing them to the top.
+        body.scrollTop = prevScroll;
+      } else {
+        void body.offsetWidth;
+        body.classList.add(direction === "back" ? "pm-out" : "pm-in");
+        body.scrollTop = 0;
+      }
+
       if (desc.type === "permit") {
         fillPermitContractors(body);
         fillPermitGeo(body, desc.row);
@@ -5698,8 +5734,15 @@
       } else {
         fillContactCard(body, desc);
       }
+      // The innerHTML swap destroyed whatever had focus; without this it falls
+      // to <body> and a keyboard or screen-reader user loses the stack.
       const title = document.getElementById("permit-modal-title");
       if (title) title.focus({ preventScroll: true });
+      // An in-place refresh is not a navigation — announcing it would talk over
+      // whatever the refresh itself just announced (e.g. the add-to-list count).
+      if (direction !== "none") {
+        pmAnnounce(`${cardKicker(desc)}, ${desc.type === "permit" ? clean(desc.row.permit_number) : clean(desc.name)}`);
+      }
     }
 
     // Keep Tab focus inside the open modal.
