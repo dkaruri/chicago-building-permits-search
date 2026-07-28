@@ -5873,10 +5873,14 @@
           line.insertAdjacentHTML("beforeend", `<span class="ci-none">No profile on file</span>`);
           return;
         }
-        // A contractor we have a profile for becomes a button to its card.
+        // A contractor we have a profile for becomes a button to its card. It
+        // stays a <div role="button"> rather than a real <button> because the
+        // line holds a tel: link, which cannot live inside a button — so the
+        // Enter/Space activation a native button gives free is wired by hand.
         line.setAttribute("role", "button");
         line.setAttribute("tabindex", "0");
         line.setAttribute("onclick", `openContactCard('${enc(line.getAttribute("data-contractor"))}', '${line.getAttribute("data-role")}')`);
+        line.setAttribute("onkeydown", "if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();this.click();}");
         line.setAttribute("aria-label", `Open profile for ${line.getAttribute("data-contractor")}`);
         line.classList.add("clickable");
         const licType = parseLicenseType(info.license_type);
