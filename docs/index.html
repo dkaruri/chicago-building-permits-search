@@ -3131,6 +3131,8 @@
     const userNotesKey = "chi_permit_user_notes";
     const themeKey = "chi_permit_theme";
     const mapSettingsKey = "chi_permit_map_settings";
+    // Shared with list.html, which has used it for its view since 2026-07-27.
+    const lastViewKey = "chi_permit_last_view";
     const userListLimit = 220;
     const appModes = ["general_contractors", "open_subs", "open_permits"];
     const openPermitStatuses = new Set(["ACTIVE", "SUSPENDED", "PHASED PERMITTING"]);
@@ -3139,6 +3141,7 @@
       const doc = document.documentElement;
       const max = doc.scrollHeight - doc.clientHeight;
       $("progress").style.width = (max > 0 ? doc.scrollTop / max * 100 : 0) + "%";
+      captureLastView();
     }, { passive: true });
 
     document.addEventListener("click", event => {
@@ -3195,6 +3198,117 @@
       if ($("ward") && params.has("ward")) $("ward").value = params.get("ward") || "";
     }
 
+    // Snapshot of where the user is now. Cheap enough to call on every scroll
+    // frame because saveLastView debounces the actual write.
+    function captureLastView() {
+      const sel = state.selected;
+      saveLastView({
+        tab: state.mode,
+        q: $("q") ? $("q").value : "",
+        sort: $("sort") ? $("sort").value : "",
+        page: state.pageIndex,
+        scroll: Math.round(window.scrollY || document.documentElement.scrollTop || 0),
+        selected: sel && clean(sel.contact_name)
+          ? { name: clean(sel.contact_name), role: state.mode }
+          : null,
+      });
+    }
+
+    // Restores tab, query and sort BEFORE the first search, and RETURNS the
+    // snapshot for restoreLastViewPosition to finish with. The snapshot has to
+    // be read once, here, and carried: init's own search() ends with a
+    // captureLastView(), which would otherwise overwrite the very values the
+    // position restore is about to read (page, selection and scroll all reset
+    // to the freshly-searched state).
+    // An explicit URL param is a deliberate intent and always wins.
+    function restoreLastView() {
+      const params = new URLSearchParams(location.search);
+      const last = readLastView();
+      if (!params.get("mode") && appModes.includes(last.tab)) {
+        state.mode = last.tab;
+        appModes.forEach(name => $("tab-" + name)?.classList.remove("active"));
+        $("tab-" + last.tab)?.classList.add("active");
+        if ($("mode-select")) $("mode-select").value = last.tab;
+        if ($("sort")) $("sort").value = last.tab === "open_permits" ? "latest_issue_date" : "open_jobs";
+      }
+      if (!params.has("q") && $("q") && typeof last.q === "string") $("q").value = last.q;
+      // Applied after the mode block, which resets sort to that tab's default.
+      // Only a value the select actually offers — a stale sort key from another
+      // tab would silently select nothing.
+      if ($("sort") && last.sort && [...$("sort").options].some(o => o.value === last.sort)) {
+        $("sort").value = last.sort;
+      }
+      return last;
+    }
+
+    // Page, selection and scroll can only be restored once results exist.
+    // Deliberately NOT restored: the permit overlay (per the design).
+    async function restoreLastViewPosition(last) {
+      if (!last) return;
+      if (Number.isInteger(last.page) && last.page > 0) {
+        const target = Math.min(last.page, pageCount() - 1);
+        if (target > 0) {
+          state.pageIndex = target;
+          renderCurrentMode();
+        }
+      }
+      const want = last.selected && clean(last.selected.name);
+      if (want && state.mode !== "open_permits") {
+        const index = state.visibleRows.findIndex(row => norm(row.contact_name) === norm(want));
+        if (index >= 0) await selectContact(index);
+      }
+      // After the last repaint, or the page is not tall enough to scroll yet.
+      // "instant" is explicit: restoring a position is not a navigation, and if
+      // scroll-behavior: smooth is ever set globally this must not animate a
+      // long scroll on every page load.
+      if (Number.isFinite(last.scroll) && last.scroll > 0) {
+        requestAnimationFrame(() => window.scrollTo({ top: last.scroll, behavior: "instant" }));
+      }
+    }
+
+    // ---- Last-view persistence (shared block — keep byte-identical) ----
+    // One key holds where the user was: view/tab, search box, sort, page,
+    // scroll offset, and the selected profile. Writes are debounced because
+    // scroll fires continuously. A value written before this change is a bare
+    // string ("list" / "directory"), so anything that is not JSON migrates to
+    // { view } rather than being thrown away.
+    let lastViewPending = null;
+    let lastViewTimer = null;
+
+    function readLastView() {
+      if (lastViewPending) return lastViewPending;
+      let raw = "";
+      try { raw = localStorage.getItem(lastViewKey) || ""; } catch { return {}; }
+      if (!raw) return {};
+      if (raw[0] !== "{") return { view: raw };
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+      } catch { return {}; }
+    }
+
+    // Patches accumulate on lastViewPending rather than being merged against
+    // storage at call time — two saves inside one debounce window would
+    // otherwise read the same stale storage and the first patch would vanish.
+    function saveLastView(patch) {
+      lastViewPending = { ...readLastView(), ...patch };
+      clearTimeout(lastViewTimer);
+      lastViewTimer = setTimeout(flushLastView, 400);
+    }
+
+    function flushLastView() {
+      clearTimeout(lastViewTimer);
+      if (!lastViewPending) return;
+      const value = lastViewPending;
+      lastViewPending = null;
+      try { localStorage.setItem(lastViewKey, JSON.stringify(value)); } catch { /* storage blocked */ }
+    }
+
+    // Closing or backgrounding the tab inside the debounce window would
+    // otherwise lose the write — which is the common case for a scroll.
+    addEventListener("pagehide", flushLastView);
+    addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushLastView(); });
+
     function dateTimeLabel(value) {
       if (!value) return "";
       const date = new Date(value);
@@ -3222,6 +3336,9 @@
     }
 
     function hideDetail() {
+      // state.selected is cleared by the callers that own it; capture here so a
+      // closed pane is not restored as an open one on the next load.
+      saveLastView({ selected: null });
       $("detail").innerHTML = "";
       $("detail-panel").classList.add("hidden");
       $("content").classList.remove("detail-mode");
@@ -3333,9 +3450,14 @@
       loadUserListCookie();
       loadUserNotes();
       applyInitialUrlParams();
+      const lastView = restoreLastView();
       renderStatus();
       await renderUserList();
       await search();
+      await restoreLastViewPosition(lastView);
+      // Headless tests wait on this rather than guessing when init settled.
+      // list.html has flagged it since 2026-07-27; index.html now matches.
+      document.body.dataset.ready = "1";
     }
 
     function renderStatus() {
@@ -3510,6 +3632,7 @@
         renderContacts();
       }
       clearBusy(token);
+      captureLastView();
     }
 
     function filterContacts(rows) {
@@ -5199,6 +5322,7 @@
       if (next === state.pageIndex) return;
       state.pageIndex = next;
       hideDetail();
+      captureLastView();
       if (state.mode === "map") {
         renderMapSideList();
       } else if (state.mode === "open_permits") {
@@ -5255,6 +5379,7 @@
       const row = state.visibleRows[index];
       state.selected = row;
       state.activeDetailKey = detailRowKey(row);
+      captureLastView();
       showDetail(detailShell(`<p class="small">Loading matching open permits for ${esc(row.contact_name)}...</p>`), false);
       let allRelated = [];
       let relatedError = "";

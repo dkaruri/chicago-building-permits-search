@@ -3566,7 +3566,7 @@
     function showDirectory() {
       liveDisconnect();
       state.view = "directory";
-      try { localStorage.setItem(lastViewKey, "directory"); } catch { /* storage blocked */ }
+      saveLastView({ view: "directory" });
       const dir = $("directory-view");
       const panel = $("user-list-panel");
       if (dir) dir.hidden = false;
@@ -3581,7 +3581,7 @@
         saveUserLists();
       }
       state.view = "list";
-      try { localStorage.setItem(lastViewKey, "list"); } catch { /* storage blocked */ }
+      saveLastView({ view: "list" });
       const dir = $("directory-view");
       const panel = $("user-list-panel");
       if (dir) dir.hidden = true;
@@ -3692,6 +3692,49 @@
       renderDirectory();
       return id;
     }
+
+    // ---- Last-view persistence (shared block — keep byte-identical) ----
+    // One key holds where the user was: view/tab, search box, sort, page,
+    // scroll offset, and the selected profile. Writes are debounced because
+    // scroll fires continuously. A value written before this change is a bare
+    // string ("list" / "directory"), so anything that is not JSON migrates to
+    // { view } rather than being thrown away.
+    let lastViewPending = null;
+    let lastViewTimer = null;
+
+    function readLastView() {
+      if (lastViewPending) return lastViewPending;
+      let raw = "";
+      try { raw = localStorage.getItem(lastViewKey) || ""; } catch { return {}; }
+      if (!raw) return {};
+      if (raw[0] !== "{") return { view: raw };
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+      } catch { return {}; }
+    }
+
+    // Patches accumulate on lastViewPending rather than being merged against
+    // storage at call time — two saves inside one debounce window would
+    // otherwise read the same stale storage and the first patch would vanish.
+    function saveLastView(patch) {
+      lastViewPending = { ...readLastView(), ...patch };
+      clearTimeout(lastViewTimer);
+      lastViewTimer = setTimeout(flushLastView, 400);
+    }
+
+    function flushLastView() {
+      clearTimeout(lastViewTimer);
+      if (!lastViewPending) return;
+      const value = lastViewPending;
+      lastViewPending = null;
+      try { localStorage.setItem(lastViewKey, JSON.stringify(value)); } catch { /* storage blocked */ }
+    }
+
+    // Closing or backgrounding the tab inside the debounce window would
+    // otherwise lose the write — which is the common case for a scroll.
+    addEventListener("pagehide", flushLastView);
+    addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushLastView(); });
 
     function dateTimeLabel(value) {
       if (!value) return "";
@@ -3972,8 +4015,7 @@
       // A #s= link already set view to "list" — respect it. Otherwise reopen
       // whichever view was last seen (an owned list, or the directory).
       if (state.view !== "list") {
-        let lastView = "";
-        try { lastView = localStorage.getItem(lastViewKey) || ""; } catch { lastView = ""; }
+        const lastView = readLastView().view || "";
         if (lastView === "list" && activeList()) await showList(state.activeListId);
         else showDirectory();
       }
