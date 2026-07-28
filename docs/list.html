@@ -3745,6 +3745,25 @@
     addEventListener("pagehide", flushLastView);
     addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushLastView(); });
 
+    // Snapshot of where the user is now. Cheap enough to call on every scroll
+    // frame because saveLastView debounces the actual write.
+    function captureLastView() {
+      // Only a CONTACT card is worth reopening. A permit card is a transient
+      // drill-down, and reopening one on load would strand the user in a modal
+      // over a page they never chose to be looking at.
+      const card = activeCard();
+      const openContact = card && card.type === "contact" && !$("permit-modal").hidden
+        ? { name: clean(card.name), role: card.role === "open_tech" ? "open_tech" : "general_contractor" }
+        : null;
+      saveLastView({
+        card: openContact,
+        tab: state.mode,
+        q: $("q") ? $("q").value : "",
+        sort: $("sort") ? $("sort").value : "",
+        page: state.pageIndex,
+        scroll: Math.round(window.scrollY || document.documentElement.scrollTop || 0),
+      });
+    }
     function dateTimeLabel(value) {
       if (!value) return "";
       const date = new Date(value);
@@ -3808,6 +3827,7 @@
       history.pushState({ permitModal: true, card: state.cardIndex }, "");
       _permitModalDepth += 1;
       renderCard("forward");
+      captureLastView();
     }
 
     function popCard() {
@@ -3815,6 +3835,7 @@
       const next = stackGo(state.cardStack, state.cardIndex, -1);
       state.cardIndex = next.index;
       renderCard("back");
+      captureLastView();
     }
 
     function forwardCard() {
@@ -3852,6 +3873,7 @@
       state.cardStack = [];
       state.cardIndex = -1;
       _permitModalDepth = 0;
+      saveLastView({ card: null });
       window.scrollTo(0, _permitModalScrollY);
       if (_permitModalPrevFocus && _permitModalPrevFocus.focus) _permitModalPrevFocus.focus();
       // Drop the history entries this overlay owns. One popstate already fired
