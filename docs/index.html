@@ -2767,6 +2767,8 @@
     .permit-modal-card .pm-tag { font-size: 12.5px; }
     .permit-modal-card .small,
     .permit-modal-card .ci-none { font-size: 12px; }
+    /* Provenance line under the stat pills: matched-as name and profile age. */
+    .pm-prov { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
     /* Tabular figures so paging cannot jitter the column widths. */
     .pm-tag.num, .pm-tablewrap td.num { font-variant-numeric: tabular-nums; }
     .pm-tagrow.stats .pm-tag { font-variant-numeric: tabular-nums; }
@@ -6461,6 +6463,27 @@
       return `<div class="pm-tagrow stats">${pills.map(t => `<span class="pm-tag">${esc(t.text)}</span>`).join("")}</div>`;
     }
 
+    // Provenance under the stat pills: which name the Worker actually matched
+    // (only when it differs from the one tapped, so a fuzzy hit is never passed
+    // off as an exact one), and how old the profile aggregates are. Both are
+    // omitted rather than guessed when the Worker does not supply them — an
+    // older deployed Worker returns neither.
+    function provenanceHtml(desc) {
+      const p = desc.profile || {};
+      const bits = [];
+      const matched = clean(p.matched_as);
+      if (matched && matched.toLowerCase() !== clean(desc.name).toLowerCase()) {
+        bits.push(`matched as ${esc(matched)}`);
+      }
+      const seeded = clean(p.seeded_at);
+      // An unparseable timestamp is dropped, not printed raw — dateTimeLabel
+      // would happily echo the garbage back.
+      if (seeded && !Number.isNaN(new Date(seeded).getTime())) {
+        bits.push(`Profile data as of ${esc(dateTimeLabel(seeded))}`);
+      }
+      return bits.length ? `<p class="pm-prov">${bits.join(" · ")}</p>` : "";
+    }
+
     function contactDetailHtml(desc, cardIndex = 0) {
       const name = clean(desc.name);
       const rows = desc.permits || [];
@@ -6487,6 +6510,7 @@
         </div>
         <div class="pm-content">
         ${contactPillsHtml(desc.profile, rows.length)}
+        ${provenanceHtml(desc)}
         <section class="pm-block"><h3>Open permits</h3>
           ${err
             ? `<p class="pm-error" role="alert">${esc(err)} <button class="pm-act" onclick="retryContactCard()">Retry</button></p>`
@@ -6557,7 +6581,16 @@
       ]);
       desc.profile = profile;
       desc.relatedError = permitsResult.error || "";
-      desc.permits = permitsResult.error ? [] : rowsForContractor(permitsResult.rows, desc.name, role);
+      // Filter on what the Worker actually matched, not what was tapped. The
+      // ladder can resolve a name in the OTHER category, and rowsForContractor
+      // picks its permit column from the role — filtering a cross-category hit
+      // by the requested role reads the wrong column and empties the table.
+      // Both fall back to the request when an older Worker returns neither.
+      const matchedRole = (profile && profile.matched_category) === "open_tech" ? "open_tech"
+        : (profile && profile.matched_category) === "general_contractor" ? "general_contractor"
+        : role;
+      const matchedName = (profile && clean(profile.matched_as)) || desc.name;
+      desc.permits = permitsResult.error ? [] : rowsForContractor(permitsResult.rows, matchedName, matchedRole);
       desc.loaded = true;
       if (activeCard() !== desc) return; // user navigated away mid-flight
       renderCard("none");
