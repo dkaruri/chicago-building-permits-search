@@ -192,11 +192,19 @@ async function main() {
   writeFileSync(tmpTech, JSON.stringify(tech));
   writeFileSync(tmpMeta, JSON.stringify({ fetched_at: new Date().toISOString(), rows: licenses.length }));
 
+  // Written after the profiles themselves, so a seeded_at can never advertise
+  // data that failed to upload. The card omits the staleness line when the key
+  // is absent, which is what a KV seeded before this change looks like.
+  const tmpSeeded = "tmp_seeded.json";
+  writeFileSync(tmpSeeded, new Date().toISOString());
+
   kvPut("profiles:general_contractor", tmpGc);
   kvPut("profiles:open_tech", tmpTech);
   kvPut("licenses:meta", tmpMeta);
+  kvPut("profiles:general_contractor:seeded_at", tmpSeeded);
+  kvPut("profiles:open_tech:seeded_at", tmpSeeded);
 
-  unlinkSync(tmpGc); unlinkSync(tmpTech); unlinkSync(tmpMeta);
+  unlinkSync(tmpGc); unlinkSync(tmpTech); unlinkSync(tmpMeta); unlinkSync(tmpSeeded);
 
   console.log("Done! Production KV seeded.");
 }
