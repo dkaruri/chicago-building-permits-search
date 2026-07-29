@@ -7001,6 +7001,10 @@
       return { lat: Number(fp.latitude), lon: Number(fp.longitude), label: fp.address || fp.label || "" };
     }
 
+    // Upper bound on how long a native share sheet may hold the list toolbar.
+    // Generous enough that a user genuinely picking a target is never cut off.
+    const SHARE_SHEET_TIMEOUT_MS = 20000;
+
     function showShareFallback(url) {
       state.userRouteSummary = `Share link: ${url}`;
       renderRouteSummary();
@@ -7030,12 +7034,34 @@
             clearUserRoute("Sharing needs the live site. Try again on the published page.");
             return;
           }
-          if (list && id) { list.sharedId = id; saveUserLists(); }
+          if (list && id) {
+            list.sharedId = id;
+            saveUserLists();
+            // Join the room the new link points at. showList() only connects for
+            // lists that were ALREADY shared, so without this the publisher stays
+            // disconnected from its own share until the next navigation —
+            // sendListOp drops every edit in between and the shared copy goes
+            // stale while the link keeps being handed out (FIX-005).
+            liveConnect(id);
+          }
         }
         const shareUrl = `${location.origin}${location.pathname}#s=${id}`;
         if (navigator.share) {
-          try { await navigator.share({ title: "Chicago Permit List", url: shareUrl }); return; }
-          catch { /* cancelled or blocked after await — fall through to copy */ }
+          // Dismissing the OS share sheet without picking anything can leave this
+          // promise pending forever (desktop Chrome). withListAction has no
+          // timeout, so that latched state.listActionBusy true and left EVERY
+          // [data-list-action] button disabled for the rest of the session —
+          // share, CSV export, drive distances and sort all dead (FIX-005).
+          // Racing a timeout bounds it. The sheet is OS-modal, so the toolbar is
+          // meant to stay disabled while it is genuinely open; this only caps how
+          // long a sheet that never reports back can hold it.
+          try {
+            await Promise.race([
+              navigator.share({ title: "Chicago Permit List", url: shareUrl }),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("share sheet timed out")), SHARE_SHEET_TIMEOUT_MS)),
+            ]);
+            return;
+          } catch { /* cancelled, blocked, or timed out — fall through to copy */ }
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {
           try {
