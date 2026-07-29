@@ -2953,6 +2953,43 @@
     .pm-draft-label { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); margin-bottom: .35rem; }
     .pm-lock { font-weight: 600; }
     .pm-post-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+    /* The posting name is a real button so it is keyboard- and screen-reader
+       reachable, but it sits inline inside "Posting as ___" and must keep text
+       metrics. The 640px breakpoint forces min-height:44px and 0.9rem on every
+       `button`; a class selector outranks that bare element selector, so the
+       resets below win and the sentence does not grow a 44px box in its middle.
+       WCAG 2.5.8 exempts targets inline in a block of text from the 44px
+       minimum; the padding still widens the tap area. */
+    .pm-author-edit {
+      font: inherit;
+      font-weight: 700;
+      /* The global `button` rule is width:100% / min-height:44px — sized for the
+         full-width stacked buttons everywhere else on this page. Both have to go
+         for a control that lives inside a sentence. */
+      width: auto;
+      min-height: 0;
+      color: var(--primary);
+      background: none;
+      border: 0;
+      padding: 2px 4px;
+      /* No negative margin, and a roomy inline box: with margin:-2px and
+         outline-offset:2px the focus ring reached into the line above and cut
+         through the "Posting as" label whenever the text wrapped. */
+      line-height: 1.7;
+      border-radius: 6px;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+    }
+    .pm-author-edit:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+    @media (max-width: 640px) {
+      /* Give "Posting as ___" a row of its own. Sharing the flex row with the
+         action buttons squeezed the span to the button's min-content width, so
+         the label wrapped away from the name it belongs to. */
+      /* line-height matches .pm-author-edit so the label's descenders are not
+         clipped by the taller inline button box beside it. */
+      .pm-post-row > .small { flex: 1 1 100%; line-height: 1.7; }
+    }
     .pm-post-btns { display: flex; gap: .5rem; flex-wrap: wrap; }
     .pm-thread { display: grid; gap: .6rem; }
     .tp { border: 1px solid var(--cell-line); border-left: 3px solid var(--t7); border-radius: 0 8px 8px 0; padding: .55rem .7rem; background: var(--surface-subtle); }
@@ -7107,6 +7144,35 @@
 
     // Both pages need this; index.html has no announceListAction. Self-contained
     // aria-live region so the shared thread code is identical on both.
+    // The name shown in the permit view's "Posting as" line, and sent as the
+    // author of any post. Reads through a helper because localStorage can be
+    // absent or blocked entirely (private mode, embedded webviews).
+    function postingName() {
+      try {
+        if (typeof localStorage === "undefined") return "anonymous";
+        return (localStorage.getItem("chi_permit_author") || "").trim() || "anonymous";
+      } catch { return "anonymous"; }
+    }
+
+    // Let the user correct that name. It used to be captured once by prompt() on
+    // the first post and then be unreachable — a typo was permanent, and there is
+    // no browser console on a phone to work around it (FIX-016).
+    function changePostingName() {
+      const current = postingName();
+      const next = prompt("Post publicly as:", current === "anonymous" ? "" : current);
+      if (next === null) return;                       // cancelled — change nothing
+      const name = next.trim().slice(0, 40);           // the Worker caps author at 40
+      if (!name) return;
+      try { localStorage.setItem("chi_permit_author", name); } catch { /* storage blocked */ }
+      // Repaint the label in place. Re-rendering the card would rebuild the note
+      // textarea and throw away whatever has been typed but not yet posted.
+      document.querySelectorAll("[data-posting-as]").forEach(el => {
+        el.textContent = name;
+        el.setAttribute("aria-label", `Change the name you post as, currently ${name}`);
+      });
+      pmAnnounce(`Now posting as ${name}`);
+    }
+
     function pmAnnounce(msg) {
       let el = document.getElementById("pm-live");
       if (!el) {
@@ -7581,7 +7647,7 @@
               <textarea id="pm-note-draft" class="pm-note" placeholder="Private note, saved as you type\u2026" aria-label="Private note for permit ${esc(row.permit_number)}"
                 oninput="savePermitNote('${enc(row.permit_number)}', this.value)">${esc(state.userPermitNotes[num] || "")}</textarea>
               <div class="pm-post-row">
-                <span class="small">Posting as <strong>${esc((typeof localStorage !== "undefined" && localStorage.getItem("chi_permit_author")) || "anonymous")}</strong></span>
+                <span class="small">Posting as <button type="button" class="pm-author-edit" data-posting-as onclick="changePostingName()" aria-label="Change the name you post as, currently ${esc(postingName())}">${esc(postingName())}</button></span>
                 <span class="pm-post-btns">
                   <button type="button" onclick="openWalkthrough('${enc(row.permit_number)}')">Log walkthrough</button>
                   <button type="button" onclick="openPhotoCompose('${enc(row.permit_number)}')">Add photos</button>
