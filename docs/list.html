@@ -557,6 +557,37 @@
       font-size: 0.86rem;
     }
 
+    /* Unavailable-by-data state. The button keeps its place and its focus ring —
+       it is aria-disabled, not disabled, so it stays reachable and can explain
+       itself via #optimize-route-note.
+       Deliberately NOT `opacity`, the usual disabled treatment: fading the whole
+       button composites its text AND its fill against the surface, measured at
+       2.05:1 in light theme. WCAG exempts genuinely disabled controls from
+       contrast, but this one is still focusable and still has something to say,
+       so it drops the primary fill for muted tokens that stay legible instead. */
+    .user-list-toolbar button[aria-disabled="true"] {
+      background: var(--panel);
+      border-color: var(--line);
+      color: var(--muted);
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    .optimize-note {
+      margin: 6px 0 0;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--danger);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      /* px, not the inherited 0.7rem: that rendered at 11.2px, under the 12px
+         floor — and list.html and index.html disagree on what a rem is below
+         640px, so rem-sized copy drifts between the two pages. */
+      font-size: 12.5px;
+      line-height: 1.5;
+    }
+
     .subtle-danger {
       border-color: var(--danger-line);
       color: var(--danger);
@@ -3139,7 +3170,7 @@
             <button data-list-action onclick="openListDetails()">
               <span class="material-symbols-outlined" aria-hidden="true">edit</span><span id="list-details-label">Edit details</span>
             </button>
-            <button class="primary" data-list-action onclick="optimizeUserListRoute()">
+            <button id="optimize-route-btn" class="primary" data-list-action aria-describedby="optimize-route-note" onclick="optimizeUserListRoute()">
               <span class="material-symbols-outlined" aria-hidden="true">route</span>Optimize route
             </button>
             <button data-list-action onclick="shareUserList()">
@@ -3160,6 +3191,10 @@
           </div>
         </div>
       </div>
+      <!-- Directly under the toolbar, not further down the panel: on a phone the
+           buttons and the starting-location row are a full screen apart, and an
+           explanation that far from the control it describes reads as unrelated. -->
+      <div id="optimize-route-note" class="optimize-note" hidden></div>
       <div class="focal-row" role="group" aria-label="Starting location">
         <label class="focal-label" for="focal-input">Starting location</label>
         <div class="focal-controls">
@@ -5665,7 +5700,38 @@
       return order.map(index => rows[index]);
     }
 
+    // Show/hide the over-the-cap state on the Optimize route button.
+    //
+    // `aria-disabled`, not `disabled`: a disabled button leaves the tab order, so
+    // a keyboard or screen-reader user could never land on it to hear WHY it is
+    // unavailable — they would just find a control that had vanished. It stays
+    // focusable, names itself, and points at #optimize-route-note via
+    // aria-describedby. The real `disabled` property is left to
+    // setListActionBusy, which owns the transient in-flight state; the two must
+    // not fight over the same attribute.
+    function refreshOptimizeAvailability() {
+      const btn = $("optimize-route-btn");
+      const note = $("optimize-route-note");
+      if (!btn || !note) return;
+      const stopBudget = MAX_SORT_STOPS - (focalOriginRow() ? 1 : 0);
+      const mapped = routeRows().length;
+      const over = mapped > stopBudget;
+      btn.setAttribute("aria-disabled", String(over));
+      note.hidden = !over;
+      if (over) {
+        note.textContent = `Optimize route is unavailable: this list has ${fmt(mapped)} mapped permits and sorting handles ${fmt(stopBudget)} at a time. Remove some, or split them across lists.`;
+      }
+    }
+
     async function optimizeUserListRoute() {
+      const btn = $("optimize-route-btn");
+      if (btn && btn.getAttribute("aria-disabled") === "true") {
+        // Clicking or pressing Enter on an aria-disabled button still fires
+        // onclick, so refuse here and restate the reason rather than silently
+        // doing nothing.
+        announceListAction($("optimize-route-note").textContent);
+        return;
+      }
       await withListAction("Sorting by estimated driving time...", async () => {
         await ensurePermitMap();
         const rows = userListRows();
@@ -6622,6 +6688,9 @@
       await ensurePermitMap();
       $("user-list-note").value = state.userListNote;
       renderRouteSummary();
+      // Before the empty-list early return below, so the button state is never
+      // left stale from a previous list.
+      refreshOptimizeAvailability();
       const rows = userListRows();
       const permitCount = rows.filter(row => !row.is_custom).length;
       $("user-list-count").textContent = permitCount ? `${fmt(permitCount)} saved` : "";
