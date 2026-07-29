@@ -557,6 +557,37 @@
       font-size: 0.86rem;
     }
 
+    /* Unavailable-by-data state. The button keeps its place and its focus ring —
+       it is aria-disabled, not disabled, so it stays reachable and can explain
+       itself via #optimize-route-note.
+       Deliberately NOT `opacity`, the usual disabled treatment: fading the whole
+       button composites its text AND its fill against the surface, measured at
+       2.05:1 in light theme. WCAG exempts genuinely disabled controls from
+       contrast, but this one is still focusable and still has something to say,
+       so it drops the primary fill for muted tokens that stay legible instead. */
+    .user-list-toolbar button[aria-disabled="true"] {
+      background: var(--panel);
+      border-color: var(--line);
+      color: var(--muted);
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    .optimize-note {
+      margin: 6px 0 0;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--danger);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      /* px, not the inherited 0.7rem: that rendered at 11.2px, under the 12px
+         floor — and list.html and index.html disagree on what a rem is below
+         640px, so rem-sized copy drifts between the two pages. */
+      font-size: 12.5px;
+      line-height: 1.5;
+    }
+
     .subtle-danger {
       border-color: var(--danger-line);
       color: var(--danger);
@@ -3139,7 +3170,7 @@
             <button data-list-action onclick="openListDetails()">
               <span class="material-symbols-outlined" aria-hidden="true">edit</span><span id="list-details-label">Edit details</span>
             </button>
-            <button class="primary" data-list-action onclick="optimizeUserListRoute()">
+            <button id="optimize-route-btn" class="primary" data-list-action aria-describedby="optimize-route-note" onclick="optimizeUserListRoute()">
               <span class="material-symbols-outlined" aria-hidden="true">route</span>Optimize route
             </button>
             <button data-list-action onclick="shareUserList()">
@@ -3160,6 +3191,10 @@
           </div>
         </div>
       </div>
+      <!-- Directly under the toolbar, not further down the panel: on a phone the
+           buttons and the starting-location row are a full screen apart, and an
+           explanation that far from the control it describes reads as unrelated. -->
+      <div id="optimize-route-note" class="optimize-note" hidden></div>
       <div class="focal-row" role="group" aria-label="Starting location">
         <label class="focal-label" for="focal-input">Starting location</label>
         <div class="focal-controls">
@@ -5533,14 +5568,74 @@
       });
     }
 
-    async function fetchDurationMatrix(rows) {
-      const url = `https://router.project-osrm.org/table/v1/driving/${routeCoordinateText(rows)}?annotations=duration,distance`;
+    // OSRM's public Table service caps ONE request at 100 coordinates, which used
+    // to cap the whole sort. Above that the matrix is now assembled from tiles:
+    // each request carries two blocks of 50 and asks only for the
+    // block-A -> block-B corner via sources=/destinations=. 50/50 is the optimal
+    // split — it is the partition of the 100-coordinate budget that yields the
+    // most cells (2500) per request — so an n-stop list costs ceil(n/50)^2
+    // requests. Both (a,b) and (b,a) are fetched: driving durations are
+    // asymmetric, so the matrix is not mirror-symmetric.
+    const OSRM_TABLE_COORD_LIMIT = 100;
+    const MATRIX_TILE_SIZE = 50;
+    // A burst of 60+ parallel requests at a public demo server invites rate
+    // limiting, so tiles go out a few at a time.
+    const MATRIX_TILE_CONCURRENCY = 4;
+    // Practical ceiling. Not the matrix — that tiles indefinitely — but the local
+    // search in greedyRouteOrder, which is ~O(n^3) and blocks the main thread:
+    // measured 2.7s at 300 stops, 6.2s at 400, 12.5s at 500, 25s at 600. 400 also
+    // keeps the request count at 64. See FIX-004 on the board.
+    const MAX_SORT_STOPS = 400;
+
+    // One Table request. sourceCount splits `rows` into a leading source block
+    // and a trailing destination block; pass null to ask for the full square.
+    async function fetchTableChunk(rows, sourceCount) {
+      const params = new URLSearchParams({ annotations: "duration" });
+      if (sourceCount != null) {
+        const sources = [], destinations = [];
+        for (let i = 0; i < rows.length; i += 1) (i < sourceCount ? sources : destinations).push(i);
+        params.set("sources", sources.join(";"));
+        params.set("destinations", destinations.join(";"));
+      }
+      const url = `https://router.project-osrm.org/table/v1/driving/${routeCoordinateText(rows)}?${params}`;
       const payload = await fetch(url).then(response => {
         if (!response.ok) throw new Error("Routing service unavailable.");
         return response.json();
       });
-      if (!payload.durations || !payload.distances) throw new Error("No route matrix found for this list.");
-      return payload;
+      if (!payload.durations) throw new Error("No route matrix found for this list.");
+      return payload.durations;
+    }
+
+    async function fetchDurationMatrix(rows, onProgress) {
+      if (rows.length <= OSRM_TABLE_COORD_LIMIT) {
+        return { durations: await fetchTableChunk(rows, null) };
+      }
+      const n = rows.length;
+      const starts = [];
+      for (let s = 0; s < n; s += MATRIX_TILE_SIZE) starts.push(s);
+      const durations = Array.from({ length: n }, () => new Array(n).fill(null));
+      const jobs = [];
+      for (const a of starts) for (const b of starts) jobs.push([a, b]);
+      let next = 0;
+      let done = 0;
+      const worker = async () => {
+        while (next < jobs.length) {
+          const [a, b] = jobs[next];
+          next += 1;
+          const aRows = rows.slice(a, a + MATRIX_TILE_SIZE);
+          const bRows = rows.slice(b, b + MATRIX_TILE_SIZE);
+          const tile = a === b
+            ? await fetchTableChunk(aRows, null)
+            : await fetchTableChunk([...aRows, ...bRows], aRows.length);
+          for (let i = 0; i < tile.length; i += 1) {
+            for (let j = 0; j < tile[i].length; j += 1) durations[a + i][b + j] = tile[i][j];
+          }
+          done += 1;
+          if (onProgress) onProgress(done, jobs.length);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(MATRIX_TILE_CONCURRENCY, jobs.length) }, worker));
+      return { durations };
     }
 
     function greedyRouteOrder(rows, matrix) {
@@ -5605,7 +5700,38 @@
       return order.map(index => rows[index]);
     }
 
+    // Show/hide the over-the-cap state on the Optimize route button.
+    //
+    // `aria-disabled`, not `disabled`: a disabled button leaves the tab order, so
+    // a keyboard or screen-reader user could never land on it to hear WHY it is
+    // unavailable — they would just find a control that had vanished. It stays
+    // focusable, names itself, and points at #optimize-route-note via
+    // aria-describedby. The real `disabled` property is left to
+    // setListActionBusy, which owns the transient in-flight state; the two must
+    // not fight over the same attribute.
+    function refreshOptimizeAvailability() {
+      const btn = $("optimize-route-btn");
+      const note = $("optimize-route-note");
+      if (!btn || !note) return;
+      const stopBudget = MAX_SORT_STOPS - (focalOriginRow() ? 1 : 0);
+      const mapped = routeRows().length;
+      const over = mapped > stopBudget;
+      btn.setAttribute("aria-disabled", String(over));
+      note.hidden = !over;
+      if (over) {
+        note.textContent = `Optimize route is unavailable: this list has ${fmt(mapped)} mapped permits and sorting handles ${fmt(stopBudget)} at a time. Remove some, or split them across lists.`;
+      }
+    }
+
     async function optimizeUserListRoute() {
+      const btn = $("optimize-route-btn");
+      if (btn && btn.getAttribute("aria-disabled") === "true") {
+        // Clicking or pressing Enter on an aria-disabled button still fires
+        // onclick, so refuse here and restate the reason rather than silently
+        // doing nothing.
+        announceListAction($("optimize-route-note").textContent);
+        return;
+      }
       await withListAction("Sorting by estimated driving time...", async () => {
         await ensurePermitMap();
         const rows = userListRows();
@@ -5614,11 +5740,13 @@
           clearUserRoute("At least two saved permits need mapped coordinates to sort by driving time.");
           return;
         }
-        // OSRM's public Table service caps a request at 100 coordinates total;
-        // the focal-point origin (when set) counts as one of them.
-        const coordBudget = 100 - (focalOriginRow() ? 1 : 0);
-        if (routablePermits.length > coordBudget) {
-          clearUserRoute(`Sort by drive time is limited to ${coordBudget} mapped permits at a time.`);
+        // The matrix now tiles past OSRM's 100-coordinate request limit, so the
+        // sort covers the whole saved list. What remains is a CPU ceiling, not a
+        // routing one — see MAX_SORT_STOPS. The focal-point origin, when set,
+        // counts as one of the stops.
+        const stopBudget = MAX_SORT_STOPS - (focalOriginRow() ? 1 : 0);
+        if (routablePermits.length > stopBudget) {
+          clearUserRoute(`Sort by drive time handles up to ${fmt(stopBudget)} mapped permits at a time.`);
           return;
         }
         try {
@@ -5626,7 +5754,19 @@
           // Prepend the focal point so the greedy order stays anchored to it as
           // the fixed start; strip it back out before persisting the permit list.
           const routable = withFocalOrigin(routablePermits);
-          const matrix = await fetchDurationMatrix(routable);
+          // Tiled fetches report their own progress inside step 1 of 3, so a long
+          // list shows movement instead of sitting at 0% for half a minute.
+          // Throttled to ~1/s: #user-route-summary is an aria-live region, and a
+          // 400-stop list finishes 64 tiles — unthrottled that is a flood of
+          // announcements. 1s matches the elapsed-seconds ticker already
+          // repainting the same region. The final tile always paints.
+          let lastTilePaint = 0;
+          const matrix = await fetchDurationMatrix(routable, (tilesDone, tilesTotal) => {
+            const now = Date.now();
+            if (tilesDone < tilesTotal && now - lastTilePaint < 1000) return;
+            lastTilePaint = now;
+            setRouteProgress(tilesDone / tilesTotal, 3, `fetching drive times… (${fmt(tilesDone)}/${fmt(tilesTotal)})`);
+          });
           setRouteProgress(1, 3, "optimizing route order…");
           // Yield so the 33% state paints before the synchronous optimize (which
           // can block the thread for ~1s on a full 100-stop list).
@@ -6548,6 +6688,9 @@
       await ensurePermitMap();
       $("user-list-note").value = state.userListNote;
       renderRouteSummary();
+      // Before the empty-list early return below, so the button state is never
+      // left stale from a previous list.
+      refreshOptimizeAvailability();
       const rows = userListRows();
       const permitCount = rows.filter(row => !row.is_custom).length;
       $("user-list-count").textContent = permitCount ? `${fmt(permitCount)} saved` : "";
