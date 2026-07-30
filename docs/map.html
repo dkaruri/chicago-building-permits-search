@@ -2916,6 +2916,7 @@
         hoverCloseTimer: null,
         hoverPinnedPermitNumber: "",
         preserveResultScrollOnce: false,
+        skipRecentreOnce: false,
         loadingToken: 0
       }
     };
@@ -2939,6 +2940,12 @@
     const themeKey = "chi_permit_theme";
     const mapSettingsKey = "chi_permit_map_settings";
     const mapLayersKey = "chi_permit_map_layers";
+    const mapViewKey = "chi_permit_map_view";
+    // The map object is REBUILT on render, not just at page load, so the
+    // restore-time suppression below has to be armed once per page load rather
+    // than once per construction — otherwise every rebuild re-arms it and a
+    // genuine new address search stops flying to the address.
+    let mapViewRestorePending = true;
     const mapSearchHoverKey = "__search_location__";
     const userListLimit = 220;
     const appModes = ["general_contractors", "open_subs", "open_permits", "map"];
@@ -3376,6 +3383,38 @@
       try {
         localStorage.setItem(mapLayersKey, JSON.stringify(state.map.layers));
       } catch {}
+    }
+
+    // Where the user last left the map (FIX-008). Filters and layers already
+    // persisted; the viewport did not, so every reload threw you back to the
+    // whole-city default even though the filters were still applied.
+    //
+    // Validated on read rather than trusted: a corrupt or hand-edited value that
+    // reached maplibre as NaN would leave a blank canvas with no error, which is
+    // far worse than starting at the default.
+    function saveMapView() {
+      const map = state.map.map;
+      if (!map) return;
+      try {
+        const c = map.getCenter();
+        localStorage.setItem(mapViewKey, JSON.stringify({
+          lon: +c.lng.toFixed(5), lat: +c.lat.toFixed(5), zoom: +map.getZoom().toFixed(2),
+        }));
+      } catch { /* storage blocked or full */ }
+    }
+
+    function loadMapView() {
+      let saved = null;
+      try {
+        saved = JSON.parse(localStorage.getItem(mapViewKey) || "null");
+      } catch {
+        return null;
+      }
+      if (!saved || typeof saved !== "object") return null;
+      const { lon, lat, zoom } = saved;
+      const ok = [lon, lat, zoom].every(n => typeof n === "number" && Number.isFinite(n)) &&
+        lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180 && zoom >= 0 && zoom <= 24;
+      return ok ? { lon, lat, zoom } : null;
     }
 
     // Restore previously toggled layers over the defaults. Only known keys with
@@ -3832,10 +3871,21 @@
         state.map.map = null;
         state.map.sourceReady = false;
       }
+      // Start where they left off. Constructed with the saved view rather than
+      // jumped afterwards, so there is no visible lurch from the default.
+      // A search query still wins: the geocode easeTo runs later and should.
+      const savedView = loadMapView();
+      // Consumed by the first updateMapSource, so a restored view is not
+      // immediately overridden by re-geocoding the restored search query.
+      // Only on the first construction of this page load — see
+      // mapViewRestorePending. Later rebuilds still restore the saved centre,
+      // they just do not suppress a real search's re-centre.
+      state.map.skipRecentreOnce = !!savedView && mapViewRestorePending;
+      mapViewRestorePending = false;
       state.map.map = new maplibregl.Map({
         container: "permit-map",
-        center: [-87.6298, 41.8781],
-        zoom: 10,
+        center: savedView ? [savedView.lon, savedView.lat] : [-87.6298, 41.8781],
+        zoom: savedView ? savedView.zoom : 10,
         style: {
           version: 8,
           glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
@@ -4146,6 +4196,7 @@
           state.map.map.on("mouseleave", layer, () => { state.map.map.getCanvas().style.cursor = ""; });
         });
         state.map.map.on("moveend", updateVisibleMapRows);
+        state.map.map.on("moveend", saveMapView);
         state.map.sourceReady = true;
         updateMapLayerVisibility();
         updateMapSource();
@@ -4301,8 +4352,15 @@
       locationSource.setData(mapSearchLocationFeatureCollection());
       const circleSource = state.map.map.getSource("radius-circle");
       if (circleSource) circleSource.setData(radiusCircleFeatureCollection());
-      if (state.map.searchLocation) {
+      if (state.map.searchLocation && !state.map.skipRecentreOnce) {
         state.map.map.easeTo({ center: [state.map.searchLocation.lon, state.map.searchLocation.lat], zoom: 15, duration: 0 });
+      } else if (state.map.skipRecentreOnce) {
+        // First render after restoring a saved viewport. The saved query is
+        // re-geocoded on load, and without this it would yank the map back to
+        // the address every reload — so panning away from a searched address and
+        // reloading lost your position, which is the bug FIX-008 is about. A
+        // NEW search still re-centres: this only suppresses the restore-time one.
+        state.map.skipRecentreOnce = false;
       } else if (state.map.filteredRows.length) {
         const bounds = new maplibregl.LngLatBounds();
         const settings = loadMapSettings();
