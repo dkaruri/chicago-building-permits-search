@@ -11,7 +11,7 @@ import { writeFileSync, unlinkSync } from "fs";
 import { OPEN_STATUSES, OPEN_STATUS_CLAUSE, CONTACT_SLOTS, classifyContact } from "./src/socrata.js";
 import { normalizeLicenseName } from "./src/licenses.js";
 import { fetchBusinessOwners, buildPrincipalIndex, attachPrincipals } from "./src/principals.js";
-import { openAgeStats, departedPermits, closureAdditions, mergeClosureStats, attachClosureStats } from "./src/closure.js";
+import { openAgeStats, departedPermits, closureAdditions, mergeClosureStats, attachClosureStats, isKeyMissingError } from "./src/closure.js";
 
 const SOCRATA_DOMAIN = "data.cityofchicago.org";
 const DATASET_ID = "ydr8-5enu";
@@ -178,16 +178,28 @@ async function fetchLicenses() {
 // the local Miniflare simulation and every run would look like the first one,
 // silently never accumulating a single closure.
 function kvGetJson(key) {
+  let out;
   try {
-    const out = execSync(
+    out = execSync(
       `npx wrangler kv key get --remote --namespace-id ${KV_NAMESPACE_ID} "${key}"`,
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
     );
-    const start = out.indexOf("{");
-    return start === -1 ? null : JSON.parse(out.slice(start));
-  } catch {
-    return null; // absent on the first run, which is not an error
+  } catch (e) {
+    const text = `${e.stderr || ""}
+${e.stdout || ""}`;
+    // ONLY a genuine "key does not exist" counts as the first run. Every other
+    // failure must stop the seed: silently treating a read error as a first run
+    // re-baselines the closure log and wipes every observation accumulated so
+    // far, while reporting success. See isKeyMissingError.
+    if (isKeyMissingError(text)) return null;
+    throw new Error(
+      `KV read failed for "${key}". Refusing to continue, because carrying on ` +
+      `would re-baseline the closure log and discard its history.
+${text.trim().slice(0, 600)}`
+    );
   }
+  const start = out.indexOf("{");
+  return start === -1 ? null : JSON.parse(out.slice(start));
 }
 
 function kvPut(key, file) {

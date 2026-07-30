@@ -60,6 +60,27 @@ jobs:
         # bad data is already live and needs another run to undo.
         run: node --test "test/*.test.mjs"
 
+      - name: Check credentials are present
+        # Without this the run gets two minutes into a seed and then dies on a
+        # wrangler message about non-interactive environments, which reads like
+        # a wrangler bug rather than a missing secret. It also guards the case
+        # that actually happened: a token pasted as the secret NAME, leaving
+        # CLOUDFLARE_API_TOKEN unset while `gh secret list` looks populated.
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          missing=0
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+            if [ -z "${!v:-}" ]; then echo "::error::repo secret $v is not set"; missing=1; fi
+          done
+          if [ "$missing" = "1" ]; then
+            echo "Set them with:  gh secret set CLOUDFLARE_API_TOKEN --body \"<token>\""
+            echo "The token needs Account -> Workers KV Storage -> Edit."
+            exit 1
+          fi
+          echo "Both credentials present."
+
       - name: Seed production KV
         working-directory: worker
         env:
