@@ -5609,11 +5609,27 @@
       document.body.classList.remove("modal-open");
     }
 
+    // Cancel any in-flight momentum on the overlay's scroller before the overlay
+    // goes away. iOS keeps decelerating a fling after the finger lifts, and it
+    // keeps delivering that deceleration to the scroller it started on — so
+    // closing mid-momentum leaves the page underneath swallowing touches for the
+    // second or two the tail takes to run out, which reads as "the list is
+    // frozen". Flipping overflow off ends the scroll; openPermitModal puts it
+    // back. Reading offsetHeight forces the style change to land before the
+    // element is hidden, otherwise both flips coalesce into one recalc and
+    // nothing is ever cancelled.
+    function stopOverlayMomentum() {
+      const body = $("permit-modal-body");
+      body.style.overflowY = "hidden";
+      void body.offsetHeight;
+    }
+
     // Show the overlay shell. The body is filled by renderCard.
     function openPermitModal() {
       const modal = $("permit-modal");
       if (!modal.hidden) return;
       _permitModalPrevFocus = document.activeElement;
+      $("permit-modal-body").style.overflowY = "";
       modal.hidden = false;
       lockPageScroll();
     }
@@ -5624,6 +5640,7 @@
       // the lock would otherwise stay latched and the page could never scroll.
       if (modal.hidden) { releasePageScroll(); return; }
       const depth = _permitModalDepth;
+      stopOverlayMomentum();
       modal.hidden = true;
       $("permit-modal-body").innerHTML = "";
       releasePageScroll();
