@@ -2866,10 +2866,23 @@
       border: 1px solid var(--tc); color: var(--tc); background: transparent; white-space: nowrap;
     }
     .tag .swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--tc); }
-    button.tag { cursor: pointer; font-family: inherit; min-height: 44px; padding: .4rem .75rem; }
+    /* `width: auto` is load-bearing (FIX-013 / FIX-019). The global
+       `button, input, select, textarea { width: 100% }` rule at the top of this
+       file catches every <button class="tag">, so each filter chip rendered as a
+       full-width block — measured 1039px on desktop and 348px on mobile, one per
+       row. The sibling <span class="tag"> chips were never affected, which is
+       why only some tag pills looked wrong. Same trap as the inline "Posting as"
+       button in FIX-016: a button that is not a form control has to opt out of
+       BOTH width and min-height. */
+    button.tag { cursor: pointer; font-family: inherit; width: auto; min-height: 44px; padding: .4rem .75rem; }
     button.tag[aria-pressed="true"] { background: var(--tc); color: var(--panel); }
     button.tag[aria-pressed="true"] .swatch { display: none; }
-    button.tag[aria-pressed="true"]::before { content: "¹3"; font-size: .8em; }
+    /* Was the two literal characters U+00B9 then U+0033 (superscript-one
+       followed by a digit three), which painted visible garbage on every
+       selected tag — mojibake from an earlier encoding round-trip. Written as a
+       CSS escape now, so no future encoding step can corrupt it again. The
+       character itself is deliberately not repeated in this comment. */
+    button.tag[aria-pressed="true"]::before { content: "\2713"; font-size: .8em; }
     .tagrow { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
     .tagrow.tight { gap: .35rem; }
     .tagrow.tight .tag { min-height: auto; }
