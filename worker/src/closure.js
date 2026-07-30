@@ -137,3 +137,25 @@ export function attachClosureStats(profiles, stats, category) {
   }
   return matched;
 }
+
+/**
+ * Did a `wrangler kv key get` fail because the key does not exist yet, or for
+ * some other reason?
+ *
+ * This distinction is load-bearing and was originally missing. The seed read
+ * its previous snapshot inside a bare `catch { return null }`, so ANY failure —
+ * no credentials, a network blip, a permissions change — was indistinguishable
+ * from "first run ever". The first CI run proved it: with no API token the seed
+ * announced "no previous snapshot, this run establishes the baseline". Had the
+ * writes then succeeded, it would have overwritten closure:stats with an empty
+ * object and destroyed every closure observation ever recorded, reporting
+ * success the whole way.
+ */
+export function isKeyMissingError(text) {
+  const s = String(text || "");
+  if (/404/.test(s) && /not found/i.test(s)) return true;
+  // Wrangler has phrased this differently across versions; accept the explicit
+  // wording too, but never a bare "not found" on its own — an auth error can
+  // easily contain that phrase without meaning the key is absent.
+  return /key .*not found/i.test(s);
+}

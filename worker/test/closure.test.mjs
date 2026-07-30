@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   daysBetween, openAgeStats, departedPermits,
-  closureAdditions, mergeClosureStats, attachClosureStats,
+  closureAdditions, mergeClosureStats, attachClosureStats, isKeyMissingError,
 } from "../src/closure.js";
 
 test("daysBetween ignores time-of-day and rejects junk", () => {
@@ -86,4 +86,25 @@ test("a zero-sample entry is treated as no data", () => {
   const profiles = [{ contact_name: "ACME BUILDERS" }];
   attachClosureStats(profiles, { general_contractor: { "ACME BUILDERS": { n: 0, days: 0 } } }, "general_contractor");
   assert.ok(!("close_days_avg" in profiles[0]));
+});
+
+// The real 404 wrangler emits for an absent key, captured from a live run.
+const REAL_404 = `[31m✘ [ERROR] Failed to fetch https://api.cloudflare.com/client/v4/accounts/65d6.../storage/kv/namespaces/ef1c.../values/closure%3Adefinitely_not_a_key - 404: Not Found[0m`;
+// The real error when credentials are absent, captured from the first CI run.
+const REAL_NO_TOKEN = `✘ [ERROR] In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN environment variable for wrangler to work. Please go to https://developers.cloudflare.com/fundamentals/api/get-started/create-token/ for instructions.`;
+
+test("a missing key is a first run; anything else is not", () => {
+  assert.equal(isKeyMissingError(REAL_404), true);
+  // THE bug: without this returning false, the seed announces "no previous
+  // snapshot", re-baselines, and discards every closure ever observed.
+  assert.equal(isKeyMissingError(REAL_NO_TOKEN), false);
+  assert.equal(isKeyMissingError("Authentication error [code: 10000]"), false);
+  assert.equal(isKeyMissingError("getaddrinfo ENOTFOUND api.cloudflare.com"), false);
+  assert.equal(isKeyMissingError("403: Forbidden"), false);
+  assert.equal(isKeyMissingError(""), false);
+  assert.equal(isKeyMissingError(null), false);
+});
+
+test("a 403 mentioning 'not found' elsewhere is not treated as a missing key", () => {
+  assert.equal(isKeyMissingError("403: Forbidden - account not found in this scope"), false);
 });
