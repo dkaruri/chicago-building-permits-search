@@ -39,7 +39,7 @@ export async function handleLists(url, env, request) {
     const focal = sanitizeFocal(body && body.focal);
     const id = makeShareId();
     const now = Math.floor(Date.now() / 1000);
-    const value = { v: 2, p: permits, f: focal, desc: String(body.desc ?? "").slice(0, MAX_DESC), custom: sanitizeCustom(body.custom), ticks: {} };
+    const value = { v: 2, p: permits, f: focal, desc: String(body.desc ?? "").slice(0, MAX_DESC), custom: sanitizeCustom(body.custom), ticks: {}, fu: {} };
     const metadata = buildListMeta(value, body, now);
     await env.CACHE.put("list:" + id, JSON.stringify(value), { expirationTtl: LIST_TTL, metadata });
     return resp({ id }, 200);
@@ -64,13 +64,18 @@ export async function handleLists(url, env, request) {
       desc: data.desc,
       custom: data.custom,
       ticks: data.ticks,
+      fu: data.fu,
       meta: metadata || null,
     }, 200);
   }
   // More specific than the generic PUT below, so it must be tested first.
-  const tickMatch = url.pathname.match(/^\/api\/lists\/([A-Za-z0-9]{1,16})\/ticks\/?$/);
-  if (request.method === "PUT" && tickMatch) {
-    const id = tickMatch[1];
+  // `ticks` is the visited checkbox; `follow` is FEAT-034's follow-up flag.
+  // Both are per-key booleans on the same list document with identical rules,
+  // so they share one handler rather than two copies that could drift.
+  const flagMatch = url.pathname.match(/^\/api\/lists\/([A-Za-z0-9]{1,16})\/(ticks|follow)\/?$/);
+  if (request.method === "PUT" && flagMatch) {
+    const id = flagMatch[1];
+    const field = flagMatch[2] === "ticks" ? "ticks" : "fu";
     let body;
     try { body = JSON.parse(await request.text()); } catch { return resp({ error: "bad json" }, 400); }
     const current = await env.CACHE.getWithMetadata("list:" + id);
@@ -79,11 +84,11 @@ export async function handleLists(url, env, request) {
     const valid = new Set([...existing.p, ...existing.custom.map(c => c.id)]);
     const key = String((body && body.key) || "");
     if (!valid.has(key)) return resp({ error: "unknown key" }, 400);
-    const ticks = { ...existing.ticks };
-    if (body.on) ticks[key] = 1; else delete ticks[key];
+    const flags = { ...existing[field] };
+    if (body.on) flags[key] = 1; else delete flags[key];
     // Deliberately no revision: a checkbox tap is not an edit worth versioning,
     // and ticking through a 99-stop list would evict all 20 stored revisions.
-    await env.CACHE.put("list:" + id, JSON.stringify({ ...existing, ticks }),
+    await env.CACHE.put("list:" + id, JSON.stringify({ ...existing, [field]: flags }),
       { expirationTtl: LIST_TTL, metadata: current.metadata });
     return resp({ ok: true }, 200);
   }
@@ -115,6 +120,9 @@ export async function handleLists(url, env, request) {
       desc: body.desc === undefined ? existing.desc : String(body.desc).slice(0, MAX_DESC),
       custom: body.custom === undefined ? existing.custom : sanitizeCustom(body.custom),
       ticks: existing.ticks,
+      // Never taken from the body: follow-ups are toggled through their own
+      // endpoint, and a metadata edit must not be able to clear the team's flags.
+      fu: existing.fu,
     };
     const metadata = {
       ...buildListMeta(value, { ...current.metadata, ...body }, now),
@@ -249,6 +257,8 @@ export function readList(stored) {
     desc: typeof data.desc === "string" ? data.desc : "",
     custom: Array.isArray(data.custom) ? data.custom : [],
     ticks: data.ticks && typeof data.ticks === "object" ? data.ticks : {},
+    // FEAT-034. Defaults for every list written before follow-ups existed.
+    fu: data.fu && typeof data.fu === "object" ? data.fu : {},
   };
 }
 

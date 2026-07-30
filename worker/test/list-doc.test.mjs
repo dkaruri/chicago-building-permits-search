@@ -79,3 +79,48 @@ test("listValueFromDoc round-trips a doc to the v2 KV value shape", () => {
   assert.deepEqual(val.ticks, { "101082609": 1 });
   assert.equal(typeof val.desc, "string");
 });
+
+// ---- FEAT-034: follow-up flags ----
+
+test("emptyDoc starts with no follow-ups", () => {
+  assert.deepEqual(emptyDoc().fu, {});
+});
+
+test("applyOp fu sets and clears a follow-up flag", () => {
+  const on = applyOp(emptyDoc(), { f: "fu", k: "101082609", v: 1 });
+  assert.deepEqual(on.fu, { "101082609": 1 });
+  const off = applyOp(on, { f: "fu", k: "101082609", v: 0 });
+  assert.deepEqual(off.fu, {});
+});
+
+test("applyOp fu ignores an empty key", () => {
+  assert.deepEqual(applyOp(emptyDoc(), { f: "fu", k: "", v: 1 }).fu, {});
+});
+
+test("applyOp fu does not mutate the input doc", () => {
+  const before = emptyDoc();
+  applyOp(before, { f: "fu", k: "101082609", v: 1 });
+  assert.deepEqual(before.fu, {}, "applyOp must be pure");
+});
+
+test("applyOp fu and tick are independent", () => {
+  let d = applyOp(emptyDoc(), { f: "fu", k: "A", v: 1 });
+  d = applyOp(d, { f: "tick", k: "A", v: 1 });
+  d = applyOp(d, { f: "fu", k: "A", v: 0 });
+  assert.deepEqual(d.fu, {}, "clearing follow-up must not touch the tick");
+  assert.deepEqual(d.ticks, { A: 1 }, "the visited tick must survive");
+});
+
+test("a list stored before follow-ups existed reads back with an empty fu", () => {
+  const legacy = JSON.stringify({ v: 2, p: ["101082609"], f: null, desc: "", custom: [], ticks: { "101082609": 1 } });
+  const doc = docFromStored(legacy, null);
+  assert.deepEqual(doc.fu, {});
+  // and is still writable without throwing
+  assert.deepEqual(applyOp(doc, { f: "fu", k: "101082609", v: 1 }).fu, { "101082609": 1 });
+});
+
+test("listValueFromDoc persists follow-ups so they survive a round trip", () => {
+  const doc = applyOp(applyOp(emptyDoc(), { f: "p", v: ["101082609"] }), { f: "fu", k: "101082609", v: 1 });
+  const stored = JSON.stringify(listValueFromDoc(doc));
+  assert.deepEqual(docFromStored(stored, null).fu, { "101082609": 1 });
+});

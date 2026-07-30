@@ -183,3 +183,98 @@ test("a photo post with no valid photos and no text is rejected", async () => {
   const res = await handleNotes(new URL("https://w/api/notes/1"), ENV(), noteReq("1", "POST", { kind: "photo", text: "  ", photos: [{ id: "bad" }] }));
   assert.equal(res.status, 400);
 });
+
+// ---- FEAT-034: bulk thread read for the per-list notes feed ----
+
+test("bulk returns whole threads for many permits in one call", async () => {
+  const env = ENV();
+  await handleNotes(new URL("https://w/api/notes/101082609"), env, noteReq("101082609", "POST", { kind: "text", author: "Div", text: "Roof crew on site" }));
+  await handleNotes(new URL("https://w/api/notes/101082609"), env, noteReq("101082609", "POST", { kind: "text", author: "Div", text: "Second visit" }));
+  await handleNotes(new URL("https://w/api/notes/B200461632"), env, noteReq("B200461632", "POST", { kind: "text", author: "Sam", text: "Left a card" }));
+
+  const url = new URL("https://w/api/notes/bulk?p=101082609,B200461632,999NOPE");
+  const body = await (await handleNotes(url, env, new Request(url, { method: "GET" }))).json();
+
+  assert.equal(Object.keys(body.threads).length, 2);
+  assert.equal(body.threads["101082609"].length, 2);
+  assert.equal(body.threads["B200461632"][0].text, "Left a card");
+  assert.equal(body.truncated, false);
+  // A permit with no notes is simply absent, not an empty array.
+  assert.equal("999NOPE" in body.threads, false);
+});
+
+test("bulk only reads permits that were asked for", async () => {
+  const env = ENV();
+  await handleNotes(new URL("https://w/api/notes/AAA1"), env, noteReq("AAA1", "POST", { kind: "text", text: "mine" }));
+  await handleNotes(new URL("https://w/api/notes/BBB2"), env, noteReq("BBB2", "POST", { kind: "text", text: "not in my list" }));
+
+  const url = new URL("https://w/api/notes/bulk?p=AAA1");
+  const body = await (await handleNotes(url, env, new Request(url, { method: "GET" }))).json();
+  assert.deepEqual(Object.keys(body.threads), ["AAA1"]);
+});
+
+test("bulk with no permits asked for is an empty answer, not a scan", async () => {
+  const env = ENV();
+  await handleNotes(new URL("https://w/api/notes/AAA1"), env, noteReq("AAA1", "POST", { kind: "text", text: "x" }));
+  const url = new URL("https://w/api/notes/bulk?p=");
+  const body = await (await handleNotes(url, env, new Request(url, { method: "GET" }))).json();
+  assert.deepEqual(body.threads, {});
+  assert.equal(body.truncated, false);
+});
+
+test("bulk ignores permit keys that are not permit-shaped", async () => {
+  const env = ENV();
+  await handleNotes(new URL("https://w/api/notes/AAA1"), env, noteReq("AAA1", "POST", { kind: "text", text: "x" }));
+  const url = new URL("https://w/api/notes/bulk?p=AAA1, bad key ,../../etc");
+  const body = await (await handleNotes(url, env, new Request(url, { method: "GET" }))).json();
+  assert.deepEqual(Object.keys(body.threads), ["AAA1"]);
+});
+
+test("bulk is not swallowed by the /api/notes/:permit route", async () => {
+  // "bulk" is permit-shaped, so an ordering slip would treat it as a permit
+  // number and return {notes: []} instead of {threads}.
+  const env = ENV();
+  const url = new URL("https://w/api/notes/bulk?p=AAA1");
+  const body = await (await handleNotes(url, env, new Request(url, { method: "GET" }))).json();
+  assert.ok("threads" in body, "bulk must return {threads}, got " + JSON.stringify(body));
+});
+
+// A KV namespace that pages at 2 keys, the way production does at 1000.
+function pagingKV(pageSize = 2) {
+  const kv = fakeKV();
+  kv.list = async ({ prefix = "", cursor } = {}) => {
+    const all = [...kv.map.keys()].filter(k => k.startsWith(prefix)).sort();
+    const start = cursor ? Number(cursor) : 0;
+    const slice = all.slice(start, start + pageSize);
+    const end = start + pageSize;
+    return {
+      keys: slice.map(name => ({ name, metadata: kv.meta.get(name) ?? null })),
+      list_complete: end >= all.length,
+      cursor: end >= all.length ? null : String(end),
+    };
+  };
+  return kv;
+}
+
+test("bulk follows the list cursor instead of stopping at the first page", async () => {
+  const env = { CACHE: pagingKV(2) };
+  const permits = ["AAA1", "BBB2", "CCC3", "DDD4", "EEE5"];
+  for (const p of permits) {
+    await handleNotes(new URL(`https://w/api/notes/${p}`), env, noteReq(p, "POST", { kind: "text", text: "note for " + p }));
+  }
+  const url = new URL("https://w/api/notes/bulk?p=" + permits.join(","));
+  const body = await (await handleNotes(url, env, new Request(url, { method: "GET" }))).json();
+  // Without cursor-following this returns only the first 2.
+  assert.equal(Object.keys(body.threads).length, 5, "expected all 5 threads across 3 KV pages");
+});
+
+test("counts also follows the list cursor", async () => {
+  const env = { CACHE: pagingKV(2) };
+  const permits = ["AAA1", "BBB2", "CCC3", "DDD4", "EEE5"];
+  for (const p of permits) {
+    await handleNotes(new URL(`https://w/api/notes/${p}`), env, noteReq(p, "POST", { kind: "text", text: "x" }));
+  }
+  const url = new URL("https://w/api/notes/counts?p=" + permits.join(","));
+  const body = await (await handleNotes(url, env, new Request(url, { method: "GET" }))).json();
+  assert.equal(Object.keys(body.counts).length, 5);
+});

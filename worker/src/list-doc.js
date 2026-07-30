@@ -3,7 +3,7 @@ import { sanitizePermits, sanitizeFocal, sanitizeCustom, sanitizeMeta, readList 
 const MAX_DESC = 2000;
 
 export function emptyDoc() {
-  return { p: [], f: null, custom: [], ticks: {}, desc: "", meta: sanitizeMeta({}) };
+  return { p: [], f: null, custom: [], ticks: {}, fu: {}, desc: "", meta: sanitizeMeta({}) };
 }
 
 // value: the raw KV string (or null). metadata: the KV metadata object (or null).
@@ -15,6 +15,9 @@ export function docFromStored(value, metadata) {
     f: list.f || null,
     custom: Array.isArray(list.custom) ? list.custom : [],
     ticks: list.ticks && typeof list.ticks === "object" ? list.ticks : {},
+    // Follow-up flags (FEAT-034). Absent on every list stored before this
+    // shipped, so it must default rather than assume the key exists.
+    fu: list.fu && typeof list.fu === "object" ? list.fu : {},
     desc: typeof list.desc === "string" ? list.desc : "",
     // Metadata carries the directory-facing details; sanitizeMeta normalises them.
     meta: sanitizeMeta({
@@ -28,7 +31,7 @@ export function docFromStored(value, metadata) {
 
 // Pure: returns a new doc, never mutates the input.
 export function applyOp(doc, op) {
-  const next = { ...doc, ticks: { ...doc.ticks }, meta: { ...doc.meta } };
+  const next = { ...doc, ticks: { ...doc.ticks }, fu: { ...doc.fu }, meta: { ...doc.meta } };
   switch (op && op.f) {
     case "p":
       next.p = sanitizePermits(op.v);
@@ -43,6 +46,15 @@ export function applyOp(doc, op) {
       const key = String(op.k || "");
       if (!key) return next;
       if (op.v) next.ticks[key] = 1; else delete next.ticks[key];
+      return next;
+    }
+    // Follow-up flag (FEAT-034), keyed exactly like a tick: permit number, or
+    // custom_id for a custom stop. Shares the tick's sync path so the whole
+    // team sees who has been flagged.
+    case "fu": {
+      const key = String(op.k || "");
+      if (!key) return next;
+      if (op.v) next.fu[key] = 1; else delete next.fu[key];
       return next;
     }
     case "meta": {
@@ -63,5 +75,6 @@ export function listValueFromDoc(doc) {
     desc: String(doc.desc || "").slice(0, MAX_DESC),
     custom: Array.isArray(doc.custom) ? doc.custom : [],
     ticks: doc.ticks && typeof doc.ticks === "object" ? doc.ticks : {},
+    fu: doc.fu && typeof doc.fu === "object" ? doc.fu : {},
   };
 }

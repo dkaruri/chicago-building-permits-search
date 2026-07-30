@@ -3392,6 +3392,7 @@
       live: { ws: null, id: null, clock: 0, connected: false, applying: false, closing: false, presence: { count: 0, names: [] }, retry: 0, retryTimer: null },
       userListNote: "",
       userPermitNotes: {},
+      userNoteTs: {},
       focalPoint: null,
       draggedPermitNumber: "",
       userRouteLegs: [],
@@ -5275,16 +5276,25 @@
         const saved = JSON.parse(raw);
         state.userListNote = clean(saved.list);
         state.userPermitNotes = saved.permits && typeof saved.permits === "object" ? saved.permits : {};
+        // Edit times, kept BESIDE the notes rather than folded into them
+        // (FEAT-034). The note values stay plain strings, which every existing
+        // reader — the table cell, the CSV/KML exports, the overlay textarea —
+        // already assumes; changing that shape would have meant touching all of
+        // them. Notes written before this shipped simply have no entry here and
+        // are shown as undated.
+        state.userNoteTs = saved.noteTs && typeof saved.noteTs === "object" ? saved.noteTs : {};
       } catch (error) {
         state.userListNote = "";
         state.userPermitNotes = {};
+        state.userNoteTs = {};
       }
     }
 
     function saveUserNotes() {
       const payload = JSON.stringify({
         list: state.userListNote,
-        permits: state.userPermitNotes
+        permits: state.userPermitNotes,
+        noteTs: state.userNoteTs
       });
       try {
         localStorage.setItem(userNotesKey, payload);
@@ -5303,8 +5313,10 @@
       const note = clean(value);
       if (note) {
         state.userPermitNotes[number] = note;
+        state.userNoteTs[number] = Math.floor(Date.now() / 1000);
       } else {
         delete state.userPermitNotes[number];
+        delete state.userNoteTs[number];
       }
       saveUserNotes();
     }
@@ -6717,6 +6729,7 @@
       if (!window.confirm(`Remove permit ${number} from My Permit List?`)) return;
       state.userPermitNumbers = state.userPermitNumbers.filter(item => item !== number);
       delete state.userPermitNotes[number];
+      delete state.userNoteTs[number];
       saveUserListCookie();
       saveUserNotes();
       clearUserRoute("List changed. Recalculate driving distances when ready.");
@@ -6739,6 +6752,7 @@
       state.userPermitNumbers = [];
       state.userListNote = "";
       state.userPermitNotes = {};
+      state.userNoteTs = {};
       saveUserListCookie();
       saveUserNotes();
       clearUserRoute();
