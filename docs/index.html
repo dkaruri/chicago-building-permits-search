@@ -123,11 +123,11 @@
     html {
       background: var(--paper);
       overflow-x: hidden;
-      /* Reserve the scrollbar gutter permanently. body.modal-open takes body out
-         of flow, which removes the page scrollbar — on a desktop browser with
-         classic (space-taking) scrollbars that would shift all content ~15px
-         right on every overlay open. Overlay-scrollbar platforms (iOS, and the
-         headless build the suites run in) are unaffected either way. */
+      /* Reserve the scrollbar gutter permanently. html.modal-open hides the page
+         scrollbar — on a desktop browser with classic (space-taking) scrollbars
+         that would shift all content ~15px right on every overlay open.
+         Overlay-scrollbar platforms (iOS, and the headless build the suites run
+         in) are unaffected either way. */
       scrollbar-gutter: stable;
     }
 
@@ -2702,14 +2702,27 @@
        the whole document instead of the viewport, centering the card far below
        the fold. Dropping the finished animation while the modal is open
        restores the viewport as the containing block. */
-    /* The lock is `position: fixed` on body, not `overflow: hidden`. Because
-       `html { overflow-x: hidden }` propagates to the viewport, html — not body
-       — is the page scroller, so body's overflow never reached it and the page
-       scrolled behind the overlay. Taking body out of flow locks every engine
-       the same way, and releasing it forces the relayout WebKit needs to hand
-       touch scrolling back (FIX-010). openPermitModal pins body's `top` to the
-       saved scrollY so the page does not jump to 0 while open. */
-    body.modal-open { position: fixed; left: 0; right: 0; overflow: hidden; animation: none; }
+    /* Page-scroll lock, DESKTOP ONLY (FIX-010). Below 641px the card is an opaque
+       full-screen sheet, so there is nothing to see behind it and nothing to
+       lock — and a lock that mobile does not need is a lock mobile can get stuck
+       in, which is exactly what kept happening: the first attempt
+       (`body { overflow: hidden }`) never reached the page scroller at all,
+       because `html { overflow-x: hidden }` propagates to the viewport and makes
+       html the scroller; the second (`body { position: fixed }`) locked every
+       engine but left iOS Safari unable to hand touch scrolling back to the list
+       after close, with nothing wrong in the DOM afterwards to explain it.
+       Above 641px the card is a windowed dialog over a visible page, so the lock
+       is worth having — and there it goes on html, the actual scroller, which is
+       never removed from the layout and so has nothing to restore.
+       Scroll chaining out of the overlay is blocked by .permit-modal-body's
+       `overscroll-behavior: contain` on both. */
+    @media (min-width: 641px) {
+      html.modal-open { overflow: hidden; }
+    }
+    /* Unconditional: body's finished `pageIn` animation leaves a transform, and a
+       transformed ancestor becomes the containing block for the fixed-position
+       overlay — see the comment above. */
+    body.modal-open { animation: none; }
     .permit-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
     .permit-modal[hidden] { display: none; }
     .permit-modal-backdrop { position: absolute; inset: 0; background: rgba(16,26,40,0.55); }
@@ -2725,6 +2738,15 @@
     .permit-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
     @media (max-width: 640px) {
       .permit-modal-card { width: 100vw; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+      /* Mobile has no page lock (see html.modal-open), so stop the page panning
+         behind the sheet at the INPUT layer instead: a drag anywhere on the
+         overlay that is not the scrollable body does nothing. This keeps the
+         list exactly where the user left it without taking anything out of the
+         layout, so there is no scroller to tear down and none to restore.
+         `pinch-zoom` is kept in both values — `touch-action: none` would disable
+         zoom over the whole sheet. */
+      .permit-modal { touch-action: pinch-zoom; }
+      .permit-modal-body { touch-action: pan-y pinch-zoom; }
     }
     @media (prefers-reduced-motion: no-preference) {
       .permit-modal:not([hidden]) .permit-modal-card { animation: permitRise 0.24s ease; }
@@ -5543,7 +5565,6 @@
     }
 
     let _permitModalPrevFocus = null;
-    let _permitModalScrollY = 0;
     // How many history entries the open overlay owns — one per card pushed.
     let _permitModalDepth = 0;
     // Set while closePermitModal unwinds its own entries, so the popstate
@@ -5599,22 +5620,34 @@
       renderCard("none");
     }
 
-    // Lock the page behind the overlay by taking body out of flow, pinned at the
-    // current scroll offset. See the body.modal-open comment for why overflow
-    // could not do this job. Both halves are idempotent and keyed off the class,
-    // so fast repeat taps cannot double-save the offset or latch the lock.
+    // Lock the page behind the overlay at the root element — html is the page
+    // scroller here (see the html.modal-open comment). Body keeps its
+    // `animation: none` so the finished pageIn transform stops acting as the
+    // containing block for the fixed-position overlay. Plain class toggles:
+    // idempotent by construction, and the page never loses its scroll offset.
     function lockPageScroll() {
-      if (document.body.classList.contains("modal-open")) return;
-      _permitModalScrollY = window.scrollY;
-      document.body.style.top = `-${_permitModalScrollY}px`;
+      document.documentElement.classList.add("modal-open");
       document.body.classList.add("modal-open");
     }
 
     function releasePageScroll() {
-      if (!document.body.classList.contains("modal-open")) return;
+      document.documentElement.classList.remove("modal-open");
       document.body.classList.remove("modal-open");
-      document.body.style.top = "";
-      window.scrollTo(0, _permitModalScrollY);
+    }
+
+    // Cancel any in-flight momentum on the overlay's scroller before the overlay
+    // goes away. iOS keeps decelerating a fling after the finger lifts, and it
+    // keeps delivering that deceleration to the scroller it started on — so
+    // closing mid-momentum leaves the page underneath swallowing touches for the
+    // second or two the tail takes to run out, which reads as "the list is
+    // frozen". Flipping overflow off ends the scroll; openPermitModal puts it
+    // back. Reading offsetHeight forces the style change to land before the
+    // element is hidden, otherwise both flips coalesce into one recalc and
+    // nothing is ever cancelled.
+    function stopOverlayMomentum() {
+      const body = $("permit-modal-body");
+      body.style.overflowY = "hidden";
+      void body.offsetHeight;
     }
 
     // Show the overlay shell. The body is filled by renderCard.
@@ -5622,6 +5655,7 @@
       const modal = $("permit-modal");
       if (!modal.hidden) return;
       _permitModalPrevFocus = document.activeElement;
+      $("permit-modal-body").style.overflowY = "";
       modal.hidden = false;
       lockPageScroll();
     }
@@ -5632,6 +5666,7 @@
       // the lock would otherwise stay latched and the page could never scroll.
       if (modal.hidden) { releasePageScroll(); return; }
       const depth = _permitModalDepth;
+      stopOverlayMomentum();
       modal.hidden = true;
       $("permit-modal-body").innerHTML = "";
       releasePageScroll();
