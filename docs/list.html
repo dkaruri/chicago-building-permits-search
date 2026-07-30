@@ -2820,9 +2820,22 @@
     /* Specialties / associations chip lists — not covered by the existing .tag
        vocabulary, which belongs to the separate directory pane. */
     .pm-chiplist { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-    .pm-chiplist li { display: flex; }
-    .pm-chiplist li > span:first-child { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); border: 1px solid var(--line); color: var(--ink); font-size: 0.82rem; }
-    .assoc { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 44px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); border: 1px solid var(--line); color: var(--ink); font-size: 0.82rem; cursor: pointer; }
+    .pm-chiplist li { display: flex; max-width: 100%; }
+    /* ONE pill for both chip lists (FIX-014). Specialties used to be styled via
+       `li > span:first-child`, which is the NAME element only — its count is a
+       SIBLING span, so the number rendered outside the bubble. Associations
+       escaped because its name and count both sit inside a <button class="assoc">.
+       Both lists now wrap name+count in a single element that carries the pill,
+       so the two can never drift apart again.
+       Wrapping keeps a long specialty readable at 390px instead of forcing the
+       chip wider than the card. `align-items: center` matches .assoc — with
+       `baseline` the count sat on the FIRST line's baseline and floated alone in
+       the top-right of a two-line chip, which the geometry check passed and the
+       screenshot caught. */
+    .pm-chiplist .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); border: 1px solid var(--line); color: var(--ink); font-size: 0.82rem; }
+    .pm-chiplist .chip > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+    .assoc { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 44px; min-width: 44px; padding: 6px 12px; border-radius: 999px; background: var(--primary-soft); border: 1px solid var(--line); color: var(--ink); font-size: 0.82rem; cursor: pointer; }
+    .assoc > span:first-child { min-width: 0; overflow-wrap: anywhere; }
     .assoc:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
     .assoc-n { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; }
     @media (min-width: 721px) {
@@ -8266,7 +8279,7 @@
       const items = ((profile || {}).work_types || []).slice(0, 6);
       if (!items.length) return "";
       return `<section class="pm-block"><h3>Specialties</h3><ul class="pm-chiplist">${items.map(w =>
-        `<li><span>${esc(clean(w.work_type))}</span> <span class="assoc-n">${fmt(w.jobs)}</span></li>`).join("")}</ul></section>`;
+        `<li><span class="chip"><span>${esc(clean(w.work_type))}</span> <span class="assoc-n">${fmt(w.jobs)}</span></span></li>`).join("")}</ul></section>`;
     }
 
     // Contractors seen alongside this one on its permits, in the opposite role.
