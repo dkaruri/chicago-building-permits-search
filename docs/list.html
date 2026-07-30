@@ -7951,7 +7951,20 @@
       const pills = [];
       if (liveOpenJobs != null) pills.push({ text: `${fmt(liveOpenJobs)} open jobs`, num: false });
       if (p.total_jobs != null) pills.push({ text: `${fmt(p.total_jobs)} total jobs`, num: false });
-      if (p.avg_processing_days != null) pills.push({ text: `${Number(p.avg_processing_days).toFixed(1)} avg processing days`, num: false });
+      // How long their open work has been sitting. Exact, and the closest thing
+      // to "how long do they take" that the City's data can answer today.
+      if (p.open_age_avg_days != null) pills.push({ text: `open jobs avg ${fmt(p.open_age_avg_days)} days old`, num: false });
+      // Observed issue-to-close time. Absent until enough permits have closed
+      // while we were watching — the City never published a closure date, so
+      // this is measured across seeds rather than derived (FIX-012). The sample
+      // size rides along because early on it will be very small.
+      if (p.close_days_avg != null && p.close_sample) {
+        pills.push({ text: `closes in ~${fmt(p.close_days_avg)} days (${fmt(p.close_sample)} seen)`, num: false });
+      }
+      // Relabelled, not removed: this measures the permit desk's speed, not the
+      // builder's. Calling it "processing days" invited exactly the confusion
+      // this card was reported for.
+      if (p.avg_processing_days != null) pills.push({ text: `${Number(p.avg_processing_days).toFixed(1)} days to get issued`, num: false });
       if (p.usable_processing_jobs != null) pills.push({ text: `${fmt(p.usable_processing_jobs)} usable timing records`, num: false });
       if (p.reported_cost_total != null) pills.push({ text: `${money(p.reported_cost_total)} reported cost`, num: true });
       if (!pills.length) return "";

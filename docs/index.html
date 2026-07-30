@@ -3128,7 +3128,8 @@
           <select id="sort" onchange="clearColumnSort(); search()">
             <option value="open_jobs">Open jobs</option>
             <option value="total_jobs">Total jobs</option>
-            <option value="avg_processing_days">Avg processing days</option>
+            <option value="open_age_avg_days">Open job age</option>
+            <option value="avg_processing_days">Days to get issued</option>
             <option value="latest_issue_date">Latest issue date</option>
             <option value="reported_cost">Reported cost</option>
           </select>
@@ -3580,7 +3581,7 @@
     }
 
     function compareValues(a, b, key) {
-      const numericKeys = new Set(["open_jobs", "total_jobs", "avg_processing_days", "ward", "cost", "reported_cost", "processing_time", "total_fee"]);
+      const numericKeys = new Set(["open_jobs", "total_jobs", "avg_processing_days", "open_age_avg_days", "close_days_avg", "ward", "cost", "reported_cost", "processing_time", "total_fee"]);
       if (numericKeys.has(key)) {
         const left = Number(a);
         const right = Number(b);
@@ -5390,14 +5391,14 @@
       }
       $("results").innerHTML = `
         <table class="results-table contacts-table">
-          <thead><tr><th>${sortHeader("Name", "contact_name")}</th><th>${sortHeader("Type", "contact_type")}</th><th>${sortHeader("Public Contact", "public_contact")}</th><th>${sortHeader("Open Jobs", "open_jobs")}</th><th>${sortHeader("Avg Days", "avg_processing_days")}</th></tr></thead>
+          <thead><tr><th>${sortHeader("Name", "contact_name")}</th><th>${sortHeader("Type", "contact_type")}</th><th>${sortHeader("Public Contact", "public_contact")}</th><th>${sortHeader("Open Jobs", "open_jobs")}</th><th>${sortHeader("Open job age", "open_age_avg_days")}</th></tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr tabindex="0" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target.closest('tr')===this){event.preventDefault();this.click();}" onclick="openContactCard('${enc(row.contact_name)}', '${state.mode === "open_subs" ? "open_tech" : "general_contractor"}')">
               <td data-label="Name"><strong>${esc(row.contact_name)}</strong>${principalRowHtml(row)}<br><span class="small">${esc(specialtySummary(row))}</span></td>
               <td data-label="Type">${esc(row.sample_contact_type)}</td>
               <td data-label="Public contact">${esc([row.city, row.state, row.zipcode].filter(Boolean).join(", "))}</td>
               <td data-label="Open jobs">${fmt(row.open_jobs)}</td>
-              <td data-label="Avg days">${profileAvgDays(row)}</td>
+              <td data-label="Open job age">${profileOpenAge(row)}</td>
             </tr>`).join("")}</tbody>
         </table>`;
       $("results").scrollTop = 0;
@@ -5416,6 +5417,14 @@
       const number = Number(value);
       if (!Number.isFinite(number)) return "1.0";
       return Math.max(number, 1).toFixed(1);
+    }
+
+    // Age of this contractor's open permits, in days. An em dash when they have
+    // none — writing 0 would read as "closes same day", the exact confusion
+    // FIX-012 was raised about.
+    function profileOpenAge(row) {
+      const n = Number(row.open_age_avg_days);
+      return Number.isFinite(n) && n > 0 ? `${fmt(n)}d` : "—";
     }
 
     function profileAvgDays(row) {
@@ -6556,7 +6565,20 @@
       const pills = [];
       if (liveOpenJobs != null) pills.push({ text: `${fmt(liveOpenJobs)} open jobs`, num: false });
       if (p.total_jobs != null) pills.push({ text: `${fmt(p.total_jobs)} total jobs`, num: false });
-      if (p.avg_processing_days != null) pills.push({ text: `${Number(p.avg_processing_days).toFixed(1)} avg processing days`, num: false });
+      // How long their open work has been sitting. Exact, and the closest thing
+      // to "how long do they take" that the City's data can answer today.
+      if (p.open_age_avg_days != null) pills.push({ text: `open jobs avg ${fmt(p.open_age_avg_days)} days old`, num: false });
+      // Observed issue-to-close time. Absent until enough permits have closed
+      // while we were watching — the City never published a closure date, so
+      // this is measured across seeds rather than derived (FIX-012). The sample
+      // size rides along because early on it will be very small.
+      if (p.close_days_avg != null && p.close_sample) {
+        pills.push({ text: `closes in ~${fmt(p.close_days_avg)} days (${fmt(p.close_sample)} seen)`, num: false });
+      }
+      // Relabelled, not removed: this measures the permit desk's speed, not the
+      // builder's. Calling it "processing days" invited exactly the confusion
+      // this card was reported for.
+      if (p.avg_processing_days != null) pills.push({ text: `${Number(p.avg_processing_days).toFixed(1)} days to get issued`, num: false });
       if (p.usable_processing_jobs != null) pills.push({ text: `${fmt(p.usable_processing_jobs)} usable timing records`, num: false });
       if (p.reported_cost_total != null) pills.push({ text: `${money(p.reported_cost_total)} reported cost`, num: true });
       if (!pills.length) return "";

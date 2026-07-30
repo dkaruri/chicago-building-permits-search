@@ -11,6 +11,7 @@ import { writeFileSync, unlinkSync } from "fs";
 import { OPEN_STATUSES, OPEN_STATUS_CLAUSE, CONTACT_SLOTS, classifyContact } from "./src/socrata.js";
 import { normalizeLicenseName } from "./src/licenses.js";
 import { fetchBusinessOwners, buildPrincipalIndex, attachPrincipals } from "./src/principals.js";
+import { openAgeStats, departedPermits, closureAdditions, mergeClosureStats, attachClosureStats } from "./src/closure.js";
 
 const SOCRATA_DOMAIN = "data.cityofchicago.org";
 const DATASET_ID = "ydr8-5enu";
@@ -59,7 +60,7 @@ async function fetchOpenPermits() {
   return permits;
 }
 
-function buildProfiles(permits, category) {
+function buildProfiles(permits, category, asOf) {
   const byName = {};
   for (const row of permits) {
     for (const i of CONTACT_SLOTS) {
@@ -72,7 +73,7 @@ function buildProfiles(permits, category) {
           city: (row[`contact_${i}_city`] || "").trim(),
           state: (row[`contact_${i}_state`] || "").trim(),
           zipcode: (row[`contact_${i}_zipcode`] || "").trim(),
-          permits: new Set(), open_permits: new Set(),
+          permits: new Set(), open_permits: new Set(), open_issue_dates: [],
           processing_days: [], costs: 0, fees: 0,
           first_issue: null, latest_issue: null,
           work_types: {}, permit_types: {}, contact_types: {},
@@ -82,7 +83,13 @@ function buildProfiles(permits, category) {
       const pn = row.permit_;
       if (!pn) continue;
       p.permits.add(pn);
-      if (OPEN_STATUSES.includes(row.permit_status)) p.open_permits.add(pn);
+      if (OPEN_STATUSES.includes(row.permit_status)) {
+        if (!p.open_permits.has(pn)) {
+          const od = (row.issue_date || "").slice(0, 10);
+          if (od) p.open_issue_dates.push(od);
+        }
+        p.open_permits.add(pn);
+      }
       const pt = parseFloat(row.processing_time);
       if (pt > 0) p.processing_days.push(pt);
       const cost = parseFloat(row.reported_cost);
@@ -105,6 +112,12 @@ function buildProfiles(permits, category) {
     city: p.city, state: p.state, zipcode: p.zipcode,
     total_jobs: p.permits.size, open_jobs: p.open_permits.size,
     avg_processing_days: p.processing_days.length ? +(p.processing_days.reduce((a, b) => a + b, 0) / p.processing_days.length).toFixed(1) : 1.0,
+    // How long their CURRENTLY OPEN permits have been open. Exact, unlike time
+    // to close, which has to be observed over successive seeds (see closure.js).
+    ...(() => {
+      const s = openAgeStats(p.open_issue_dates, asOf);
+      return s ? { open_age_avg_days: s.avg, open_age_median_days: s.median, open_age_max_days: s.max } : {};
+    })(),
     first_issue_date: p.first_issue, latest_issue_date: p.latest_issue,
     reported_cost_total: Math.round(p.costs), total_fee_total: Math.round(p.fees),
     work_types: topN(p.work_types, 6, "work_type"),
@@ -160,6 +173,23 @@ async function fetchLicenses() {
 // worker/.wrangler/state/v3/kv/ and still prints "Production KV seeded" —
 // the deployed Worker never sees a byte of it. Caught 2026-07-28 when a full
 // seed reported success and /api/contact still returned no seeded_at.
+// The script has only ever WRITTEN to KV. The closure log has to read its own
+// previous state, and the same --remote rule applies: without it wrangler reads
+// the local Miniflare simulation and every run would look like the first one,
+// silently never accumulating a single closure.
+function kvGetJson(key) {
+  try {
+    const out = execSync(
+      `npx wrangler kv key get --remote --namespace-id ${KV_NAMESPACE_ID} "${key}"`,
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+    );
+    const start = out.indexOf("{");
+    return start === -1 ? null : JSON.parse(out.slice(start));
+  } catch {
+    return null; // absent on the first run, which is not an error
+  }
+}
+
 function kvPut(key, file) {
   execSync(`npx wrangler kv key put --remote --namespace-id ${KV_NAMESPACE_ID} "${key}" --path "${file}"`, { stdio: "inherit" });
 }
@@ -170,8 +200,9 @@ async function main() {
   console.log(`   ${permits.length} open permits`);
 
   console.log("2. Building profiles...");
-  const gc = buildProfiles(permits, "general_contractor");
-  const tech = buildProfiles(permits, "open_tech");
+  const today = new Date().toISOString().slice(0, 10);
+  const gc = buildProfiles(permits, "general_contractor", today);
+  const tech = buildProfiles(permits, "open_tech", today);
   console.log(`   ${gc.length} GC profiles, ${tech.length} tech profiles`);
 
   console.log("3. Scraping licenses...");
@@ -203,7 +234,46 @@ async function main() {
   console.log(`   ${owners.length} owner rows -> ${principalIndex.size} businesses`);
   console.log(`   matched ${gcMatched}/${gc.length} GCs, ${techMatched}/${tech.length} subs`);
 
-  console.log("5. Uploading to production KV...");
+  // Observe closures: anything that was open at the last seed and is no longer
+  // open may have finished. "No longer open" also covers EXPIRED/CANCELLED, so
+  // each departed permit's real status is checked before it is booked.
+  console.log("5. Observing permit closures since the last seed...");
+  const prevSnapshot = kvGetJson("closure:open_snapshot");
+  const openNow = {};
+  for (const row of permits) {
+    if (row.permit_ && OPEN_STATUSES.includes(row.permit_status)) {
+      openNow[row.permit_] = (row.issue_date || "").slice(0, 10);
+    }
+  }
+  let closureStats = kvGetJson("closure:stats") || { general_contractor: {}, open_tech: {} };
+  if (!prevSnapshot) {
+    console.log("   no previous snapshot — this run establishes the baseline");
+  } else {
+    const departed = departedPermits(prevSnapshot, Object.keys(openNow));
+    console.log(`   ${departed.length} permits left the open set since the last seed`);
+    const closedRows = [];
+    for (let i = 0; i < departed.length; i += 200) {
+      const chunk = departed.slice(i, i + 200);
+      const inList = chunk.map((n) => `'${String(n).replace(/'/g, "''")}'`).join(",");
+      const contactCols = CONTACT_SLOTS.map((s) => `contact_${s}_type,contact_${s}_name`).join(",");
+      const batch = await socrataQuery({
+        $select: `permit_,permit_status,issue_date,${contactCols}`,
+        $where: `permit_ in(${inList})`,
+        $limit: "200",
+      });
+      closedRows.push(...batch);
+    }
+    const additions = closureAdditions(closedRows, prevSnapshot, today);
+    const booked = Object.values(additions).reduce(
+      (sum, cat) => sum + Object.values(cat).reduce((s, v) => s + v.n, 0), 0);
+    console.log(`   booked ${booked} closure observations (COMPLETE only)`);
+    closureStats = mergeClosureStats(closureStats, additions);
+  }
+  const gcClosed = attachClosureStats(gc, closureStats, "general_contractor");
+  const techClosed = attachClosureStats(tech, closureStats, "open_tech");
+  console.log(`   close-time now known for ${gcClosed} GCs and ${techClosed} subs`);
+
+  console.log("6. Uploading to production KV...");
   const tmpGc = "tmp_gc.json", tmpTech = "tmp_tech.json", tmpMeta = "tmp_meta.json";
   writeFileSync(tmpGc, JSON.stringify(gc));
   writeFileSync(tmpTech, JSON.stringify(tech));
@@ -215,13 +285,22 @@ async function main() {
   const tmpSeeded = "tmp_seeded.json";
   writeFileSync(tmpSeeded, new Date().toISOString());
 
+  const tmpSnap = "tmp_snapshot.json", tmpClose = "tmp_closure.json";
+  writeFileSync(tmpSnap, JSON.stringify(openNow));
+  writeFileSync(tmpClose, JSON.stringify(closureStats));
+
   kvPut("profiles:general_contractor", tmpGc);
   kvPut("profiles:open_tech", tmpTech);
   kvPut("licenses:meta", tmpMeta);
   kvPut("profiles:general_contractor:seeded_at", tmpSeeded);
   kvPut("profiles:open_tech:seeded_at", tmpSeeded);
+  // Snapshot LAST: if an upload fails partway, the next run re-compares against
+  // the older snapshot and re-detects the same closures, rather than losing them.
+  kvPut("closure:stats", tmpClose);
+  kvPut("closure:open_snapshot", tmpSnap);
 
   unlinkSync(tmpGc); unlinkSync(tmpTech); unlinkSync(tmpMeta); unlinkSync(tmpSeeded);
+  unlinkSync(tmpSnap); unlinkSync(tmpClose);
 
   console.log("Done! Production KV seeded.");
 }
