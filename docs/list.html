@@ -2717,6 +2717,21 @@
     .pm-content { padding: 4px 18px 22px; }
     .pm-tagrow { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px 0 6px; }
     .pm-tag { font-size: 0.74rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--primary-soft); border: 1px solid var(--line); color: var(--primary); }
+    /* Person in charge (FIX-015). "Run by" is a label, not a link — the title
+       is muted so the NAME carries the emphasis, since that is what a user
+       scans for. Colour is never the only cue: the "Run by" key word stays. */
+    .cprincipal { margin-top: 2px; }
+    .cprincipal .dk { color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: 12px; margin-right: 4px; }
+    /* The NAME is the payload — the label, title and "+N more" are scaffolding.
+       Measured at 6.32:1 they were all identical to it, so the line had no
+       hierarchy at all; the name now carries ink + weight against the muted
+       rest. Hierarchy by contrast and weight, not by hue. */
+    .cprincipal .pname { color: var(--ink); font-weight: 650; }
+    .cprincipal .ptitle { color: var(--muted); }
+    .cprincipal .pmore { color: var(--muted); }
+    /* The owner's role sits beside the name, not inside .ci-meta, so it survives
+       the hydration that rewrites .ci-meta wholesale. */
+    .owner-line .owner-role { color: var(--muted); font-size: 12px; margin-left: 6px; }
     .pm-block { padding: 14px 0; border-top: 1px solid var(--line); }
     .pm-block h3 { margin: 0 0 10px; font-size: 0.72rem; letter-spacing: 0.11em; text-transform: uppercase; color: var(--primary); font-weight: 700; }
     .pm-facts { display: grid; grid-template-columns: minmax(96px, 34%) 1fr; gap: 7px 14px; }
@@ -5440,6 +5455,7 @@
         ["Permit type", row.permit_type],
         ["Work type", row.work_type],
         ["Reported cost", money(row.reported_cost)],
+        ["Unit owner", ownerContacts(row).map(c => clean(c.name)).filter(Boolean).join(" | ")],
         ["General contractors", row.general_contractors],
         ["Open subs", row.open_subs],
         ["Processing time", clean(row.processing_time) ? `${days(row.processing_time)} days` : ""],
@@ -5835,7 +5851,11 @@
       const nums = state.userPermitNumbers.filter(n => !state.userPermitMap.has(n));
       if (!nums.length) return;
       const SOCRATA = "https://data.cityofchicago.org/resource/ydr8-5enu.json";
-      const contactCols = Array.from({length: 15}, (_, i) => `contact_${i+1}_type,contact_${i+1}_name`).join(",");
+      // city/state/zipcode as well as type/name: the Unit owner block needs the
+      // owner's locality, and this is the ONLY hydration path for saved permits,
+      // so omitting them made every saved permit report "No owner named".
+      const contactCols = Array.from({length: 15}, (_, i) =>
+        `contact_${i+1}_type,contact_${i+1}_name,contact_${i+1}_city,contact_${i+1}_state,contact_${i+1}_zipcode`).join(",");
       const select = `permit_,permit_status,permit_type,review_type,issue_date,processing_time,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
       const inList = nums.map(n => `'${n}'`).join(",");
       const params = new URLSearchParams({ $select: select, $where: `permit_ in(${inList})`, $limit: "50000" });
@@ -5844,11 +5864,17 @@
         if (!res.ok) return;
         const rawRows = await res.json();
         for (const row of rawRows) {
-          const gcs = [], subs = [];
+          const gcs = [], subs = [], contacts = [];
           for (let i = 1; i <= 15; i++) {
             const type = (row[`contact_${i}_type`] || "").toUpperCase();
             const name = (row[`contact_${i}_name`] || "").trim();
             if (!name) continue;
+            contacts.push({
+              type: row[`contact_${i}_type`] || "", name,
+              city: row[`contact_${i}_city`] || "",
+              state: row[`contact_${i}_state`] || "",
+              zipcode: row[`contact_${i}_zipcode`] || "",
+            });
             if (type.includes("GENERAL CONTRACTOR")) gcs.push(name);
             else if (type.includes("CONTRACTOR") || type.includes("ARCHITECT") || type.includes("ENGINEER") || type.includes("EXPEDIT") || type.includes("MASON")) subs.push(name);
           }
@@ -5869,6 +5895,7 @@
             longitude: row.longitude ? parseFloat(row.longitude) : null,
             general_contractors: gcs.join(" | "),
             open_subs: subs.join(" | "),
+            contacts,
           };
           state.userPermitMap.set(clean(mapped.permit_number), mapped);
         }
@@ -7085,6 +7112,58 @@
       return names.map(name => `<div class="contractor-line" data-contractor="${esc(name)}" data-role="${role}"><span class="ci-name">${esc(name)}</span><span class="ci-meta"> · …</span></div>`).join("");
     }
 
+    // The unit's owner, straight from the permit's own contact slots. These are
+    // the ONLY person names the permits dataset carries, and they are the
+    // property owner — the contractor's customer, never the contractor's
+    // principal. (Naming them as the company's person-in-charge is exactly the
+    // mistake FIX-015's ticket invited; see worker/src/principals.js.)
+    function ownerContacts(row) {
+      return (row.contacts || []).filter(c => (c.type || "").toUpperCase().includes("OWNER"));
+    }
+
+    // "OWNER AS GENERAL CONTRACTOR" -> "Owner as general contractor".
+    function ownerRoleLabel(type) {
+      const t = clean(type);
+      return t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : "";
+    }
+
+    // Owner lines reuse .contractor-line so they go through the same hydration:
+    // an owner who is also a licensed contractor (the 'owner as general
+    // contractor' permits) then gets a real phone number. data-where carries the
+    // city/state/ZIP fallback, because that is all the permits dataset has for
+    // an owner who is not a contractor — no phone, no email.
+    function ownerLinesHtml(row) {
+      if (!Array.isArray(row.contacts)) {
+        // Rows from the map's bulk cache carry no contact slots by design —
+        // widening that query would add 45 mostly-empty columns to 50,000 rows.
+        return `<div class="pc-empty">Owner details not loaded for this permit</div>`;
+      }
+      const owners = ownerContacts(row);
+      if (!owners.length) return `<div class="pc-empty">No owner named on this permit</div>`;
+      return owners.map(c => {
+        const name = clean(c.name);
+        const where = [clean(c.city), clean(c.state), clean(c.zipcode)].filter(Boolean).join(", ");
+        const role = ownerRoleLabel(c.type);
+        return `<div class="contractor-line owner-line" data-contractor="${esc(name)}" data-role="general_contractor" data-owner="1" data-where="${esc(where)}">`
+          + `<span class="ci-name">${esc(name) || "—"}</span>`
+          + `${role ? `<span class="owner-role">${esc(role)}</span>` : ""}`
+          + `<span class="ci-meta"> · …</span></div>`;
+      }).join("");
+    }
+
+    // One "Run by …" line for a company's person in charge. `principals` is
+    // absent (not empty) when the join found nobody, so this renders nothing at
+    // all rather than a blank row — see attachPrincipals.
+    function principalLineHtml(info) {
+      if (!info || !info.principals || !info.principals.length) return "";
+      const lead = info.principals[0];
+      const extra = (info.principal_count || info.principals.length) - 1;
+      const title = clean(lead.title);
+      return `<div class="cprincipal"><span class="dk">Run by</span> <span class="pname">${esc(clean(lead.name))}</span>`
+        + `${title ? ` <span class="ptitle">${esc(title.toLowerCase())}</span>` : ""}`
+        + `${extra > 0 ? ` <span class="pmore">+${fmt(extra)} more</span>` : ""}</div>`;
+    }
+
     // Open a contractor's card on top of the current one.
     function openContactCard(encodedName, role) {
       pushCard({ type: "contact", name: decodeURIComponent(encodedName), role });
@@ -7126,7 +7205,10 @@
           const phone = (p.license_matches || []).map(m => clean(m.phone)).find(ph => ph && ph.toUpperCase() !== "NA") || "";
           const license_type = (p.license_matches || []).map(m => clean(m.license_type)).find(Boolean) || "";
           const does = (p.work_types || []).slice(0, 3).map(w => clean(w.work_type)).filter(Boolean);
-          info = { open_jobs: p.open_jobs, phone, license_type, does };
+          // principals ride along on the profile row — the seed joins them, so
+          // there is no second request and no endpoint of their own (FIX-015).
+          info = { open_jobs: p.open_jobs, phone, license_type, does,
+                   principals: p.principals || null, principal_count: p.principal_count || 0 };
         }
       } catch {}
       contractorInfoCache.set(key, info);
@@ -7142,9 +7224,19 @@
         line.setAttribute("data-filled", "1");
         const meta = line.querySelector(".ci-meta");
         const info = await fetchContractorInfo(line.getAttribute("data-contractor"), line.getAttribute("data-role"));
+        const isOwner = line.hasAttribute("data-owner");
         if (!info) {
           meta.textContent = "";
-          line.insertAdjacentHTML("beforeend", `<span class="ci-none">No profile on file</span>`);
+          if (isOwner) {
+            // An owner with no contractor profile is the normal case, not a
+            // gap: the permits dataset publishes owner name and city/state/ZIP
+            // and nothing else. Say which, rather than implying a lookup failed.
+            const where = line.getAttribute("data-where");
+            line.insertAdjacentHTML("beforeend",
+              `<span class="ci-none">${where ? esc(where) + " · " : ""}No phone published for owners</span>`);
+          } else {
+            line.insertAdjacentHTML("beforeend", `<span class="ci-none">No profile on file</span>`);
+          }
           return;
         }
         // A contractor we have a profile for becomes a button to its card. It
@@ -7168,8 +7260,13 @@
           const tel = info.phone.replace(/[^\d+]/g, "");
           bits.push(`<a href="tel:${esc(tel)}" onclick="event.stopPropagation()">${esc(info.phone)}</a>`);
         }
+        if (isOwner && !info.phone) {
+          const where = line.getAttribute("data-where");
+          if (where) bits.push(esc(where));
+        }
         meta.innerHTML =
           (chips.length ? `<div class="clic">${chips.join("")}</div>` : "") +
+          principalLineHtml(info) +
           (info.does && info.does.length ? `<div class="cdoes"><span class="dk">Does</span> ${info.does.map(esc).join(" · ")}</div>` : "") +
           (bits.length ? `<div class="cmeta-line">${bits.join(" · ")}</div>` : "");
       }));
@@ -7768,6 +7865,7 @@
             ["Zone", "", `<span class="geo-zone" data-permit="${esc(num)}">${geoZoneCache.has(num) ? esc(geoZoneCache.get(num) || "—") : "…"}</span>`],
             ["TIF district", "", `<span class="geo-tif" data-permit="${esc(num)}">${geoTifCache.has(num) ? esc(geoTifCache.get(num) || "—") : "…"}</span>`],
           ])}</section>`,
+        () => `<section class="pm-block"><h3>Unit owner</h3><div class="pm-contractors" data-role="owner">${ownerLinesHtml(row)}</div></section>`,
         () => `<section class="pm-block"><h3>Permit details</h3>${pmFacts([
             ["Issue date", clean(row.issue_date)],
             ["Permit type", clean(row.permit_type)],
@@ -7993,6 +8091,7 @@
               ? cardFiltersHtml(desc, rows) + cardPermitTableHtml(desc, name, rows)
               : `<p class="pm-empty">No open permits on file for this contractor.</p>`}
         </section>
+        ${principalsBlockHtml(desc.profile)}
         ${licenseBlockHtml(desc.profile)}
         ${specialtiesBlockHtml(desc.profile)}
         ${associationsBlockHtml(desc)}
@@ -8077,6 +8176,20 @@
       if (!desc || desc.type !== "contact") return;
       desc.loaded = false;
       renderCard("none");
+    }
+
+    // Everyone the City's Business Owners records name as an owner/officer of
+    // this company, best title first. Omitted entirely when the join found
+    // nobody — about four contractors in five, so an empty "—" here would be
+    // the most common thing on the card and would read as a broken lookup.
+    function principalsBlockHtml(profile) {
+      const people = (profile || {}).principals || [];
+      if (!people.length) return "";
+      const total = (profile || {}).principal_count || people.length;
+      return `<section class="pm-block"><h3>Person in charge</h3><dl class="pm-facts">${people.map(p =>
+        `<dt>${esc(clean(p.title) || "Owner")}</dt><dd>${esc(clean(p.name))}</dd>`).join("")}</dl>${
+        total > people.length ? `<p class="pm-empty">${fmt(total - people.length)} more named on the City's business licence records.</p>` : ""
+        }<p class="pm-empty">From the City's Business Owners records, matched by business name.</p></section>`;
     }
 
     function licenseBlockHtml(profile) {

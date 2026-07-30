@@ -10,6 +10,7 @@ import { execSync } from "child_process";
 import { writeFileSync, unlinkSync } from "fs";
 import { OPEN_STATUSES, OPEN_STATUS_CLAUSE, CONTACT_SLOTS, classifyContact } from "./src/socrata.js";
 import { normalizeLicenseName } from "./src/licenses.js";
+import { fetchBusinessOwners, buildPrincipalIndex, attachPrincipals } from "./src/principals.js";
 
 const SOCRATA_DOMAIN = "data.cityofchicago.org";
 const DATASET_ID = "ydr8-5enu";
@@ -191,7 +192,18 @@ async function main() {
     }
   }
 
-  console.log("4. Uploading to production KV...");
+  // Joined here rather than fetched per-request so EVERY surface that renders a
+  // profile row — directory, contractor card, permit overlay, CSV — gets the
+  // person in charge for free, with no extra client call anywhere (FIX-015).
+  console.log("4. Fetching business owners (person in charge)...");
+  const owners = await fetchBusinessOwners();
+  const principalIndex = buildPrincipalIndex(owners);
+  const gcMatched = attachPrincipals(gc, principalIndex);
+  const techMatched = attachPrincipals(tech, principalIndex);
+  console.log(`   ${owners.length} owner rows -> ${principalIndex.size} businesses`);
+  console.log(`   matched ${gcMatched}/${gc.length} GCs, ${techMatched}/${tech.length} subs`);
+
+  console.log("5. Uploading to production KV...");
   const tmpGc = "tmp_gc.json", tmpTech = "tmp_tech.json", tmpMeta = "tmp_meta.json";
   writeFileSync(tmpGc, JSON.stringify(gc));
   writeFileSync(tmpTech, JSON.stringify(tech));
