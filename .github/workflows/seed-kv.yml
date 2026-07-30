@@ -1,0 +1,89 @@
+name: Seed KV
+
+# Rebuilds contractor profiles, licence matches and person-in-charge data, and
+# advances the permit-closure observation log, straight into production KV.
+#
+# WHY NOT THE WORKER'S OWN CRON: wrangler.toml already declares
+# crons = ["0 6 * * *"], but the seed cannot run inside a Worker. It holds
+# ~40,000 permit rows and ~320,000 business-owner rows in memory at once, well
+# past the 128 MB Worker limit, and its paginated Socrata fetches plus the
+# six-category licence scrape and seven KV writes push against the subrequest
+# cap. It runs here instead, where neither limit applies.
+#
+# WHY DAILY MATTERS BEYOND FRESHNESS: closure times are OBSERVED by comparing
+# consecutive seeds (see worker/src/closure.js). The gap between runs IS the
+# precision of that metric — a permit that closes is booked as having closed on
+# the day we noticed. Daily keeps it accurate to a day; running it by hand every
+# few weeks would round every closure to weeks.
+
+on:
+  schedule:
+    # 10:00 UTC — after the City's overnight dataset refresh, before the
+    # working day in Chicago. Times here are always UTC and do not shift with
+    # daylight saving, so this drifts by an hour twice a year. Harmless: the
+    # closure log cares about the gap between runs, not the wall-clock time.
+    - cron: "0 10 * * *"
+  workflow_dispatch: {}
+
+# Two seeds must never overlap. Both read the previous closure snapshot, then
+# write a new one; interleaved, the second would overwrite the first's snapshot
+# while holding stale data, and every closure detected in between would be lost
+# with no error anywhere. Queue instead of cancelling — a half-finished seed
+# that gets killed mid-upload is exactly the partial state to avoid.
+concurrency:
+  group: seed-kv
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    # A full seed is several minutes; this is a ceiling for a hung fetch, not a
+    # target. Socrata occasionally stalls rather than failing outright.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install
+        working-directory: worker
+        run: npm ci
+
+      - name: Unit tests
+        working-directory: worker
+        # The seed writes to PRODUCTION KV. If the closure or principals logic
+        # is broken, failing here costs nothing; failing after the write means
+        # bad data is already live and needs another run to undo.
+        run: node --test "test/*.test.mjs"
+
+      - name: Seed production KV
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npm run seed
+
+      - name: Verify at the destination
+        # The seed script prints "Done! Production KV seeded" even when wrangler
+        # has written to a local simulation, which has bitten this project
+        # before. Read the deployed API back and fail loudly if the data did not
+        # actually land.
+        run: |
+          set -euo pipefail
+          url="https://chi-permits-api.divyam-c-karuri.workers.dev/api/contact/BEAR%20CONSTRUCTION%20COMPANY?category=general_contractor"
+          body=$(curl -sS --max-time 60 "$url")
+          echo "$body" | head -c 400; echo
+          node -e '
+            const r = JSON.parse(process.argv[1]);
+            const seeded = Date.parse(r.seeded_at || "");
+            if (!Number.isFinite(seeded)) throw new Error("no seeded_at in live response");
+            const ageMin = (Date.now() - seeded) / 60000;
+            if (ageMin > 90) throw new Error(`live seeded_at is ${ageMin.toFixed(0)} min old — the seed did not reach production`);
+            if (r.open_age_avg_days == null) throw new Error("open_age_avg_days missing from live response");
+            const close = r.close_days_avg == null ? "none yet" : `${r.close_days_avg}d over ${r.close_sample}`;
+            console.log(`OK — seeded ${ageMin.toFixed(0)} min ago, open age ${r.open_age_avg_days}d, close time: ${close}`);
+          ' "$body"

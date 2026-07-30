@@ -10,3 +10,5 @@ var/
 .env
 .DS_Store
 verify-tmp/
+worker/node_modules/
+worker/.wrangler/
