@@ -4163,7 +4163,6 @@
       if (!document.body.classList.contains("list-page")) {
         await search();
       }
-      document.body.dataset.ready = "1";
     }
 
     // Toolbar dropdowns behave like menus: only one open, and a click outside or
@@ -8349,6 +8348,14 @@
     init().catch(error => {
       $("results").innerHTML = `<div class="empty">${error.message}</div>`;
       console.error(error);
+    }).finally(() => {
+      // "init has FINISHED", not "init succeeded". On local preview the Worker
+      // is unreachable (CORS is locked to the Pages origin), so init's awaited
+      // search() rejects and the success-path assignment never ran — leaving
+      // data-ready undefined forever and every test that waited on it hanging.
+      // Setting it here means the flag answers the only question a caller
+      // actually has: is init still going to overwrite my state?
+      document.body.dataset.ready = "1";
     });
   </script>
 
