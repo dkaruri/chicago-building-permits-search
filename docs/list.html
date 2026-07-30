@@ -22,7 +22,7 @@
   <meta name="twitter:description" content="Review, reorder, route, annotate, and export saved Chicago building permits.">
   <meta name="twitter:image" content="https://dkaruri.github.io/chicago-building-permits-search/assets/search-directory-preview.png">
   <meta name="twitter:image:alt" content="Chicago Building Permits Search preview card by Divyam Karuri">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_photo_alternate,clear_all,csv,database_search,delete,edit,list,map_search,moon_stars,photo,policy,route,share,sunny" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_photo_alternate,clear_all,close,csv,database_search,delete,directions_walk,edit,group,list,lock,map_search,moon_stars,photo,policy,route,share,sticky_note_2,sunny" rel="stylesheet">
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
@@ -2969,6 +2969,109 @@
     .slotbtn i { display: block; width: 22px; height: 22px; border-radius: 5px; background: var(--tc); }
     .slotbtn[aria-pressed="true"] { border-color: var(--ink); border-width: 2px; }
 
+    /* ---- Per-list notes feed (FEAT-034) ---- */
+    #notes-feed {
+      border: 1px solid var(--line-strong); border-radius: 12px; padding: 0;
+      background: var(--panel); color: var(--ink);
+      max-width: 640px; width: calc(100vw - 2rem);
+      max-height: calc(100dvh - 3rem);
+      box-shadow: 0 12px 30px var(--shadow);
+      /* The dialog is the flex column; only the entry list scrolls, so the
+         search box and the count stay put while you page through results. */
+      display: none; flex-direction: column; overflow: hidden;
+    }
+    #notes-feed[open] { display: flex; }
+    #notes-feed::backdrop { background: rgba(6, 14, 26, 0.55); }
+    .feed-head { padding: .9rem 1rem .6rem; border-bottom: 1px solid var(--line); flex: none; }
+    .feed-title-row { display: flex; align-items: flex-start; gap: .6rem; }
+    .feed-head h3 { margin: 0; font-size: 1.05rem; }
+    .feed-scope { margin: .15rem 0 0; font-size: .8rem; color: var(--muted); }
+    /* Opts out of the global `button { width: 100% }` reset — without both of
+       these the close button becomes a full-width block and shoves the title
+       onto its own line. Same trap as FIX-013/FIX-016. */
+    .feed-close {
+      margin-left: auto; flex: none; width: 44px; min-width: 44px; height: 44px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--line); border-radius: 8px;
+      background: var(--surface-subtle); color: var(--ink); cursor: pointer; padding: 0;
+      overflow: hidden;
+    }
+    .feed-close:hover { border-color: var(--primary); }
+    .feed-search-row { margin-top: .7rem; }
+    .feed-search-row label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin-bottom: .3rem; }
+    .feed-search-wrap { display: flex; gap: .4rem; align-items: stretch; }
+    /* 1rem, never smaller: iOS zooms the whole page in on focus for any input
+       under 16px, and the feed would jump on every search. */
+    #feed-q {
+      font: inherit; font-size: 1rem; flex: 1; min-width: 0; min-height: 44px;
+      background: var(--field); color: var(--ink);
+      border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem;
+    }
+    .feed-clear {
+      flex: none; width: auto; min-width: 44px; min-height: 44px; padding: 0 .7rem;
+      border: 1px solid var(--line); border-radius: 8px;
+      background: var(--surface-subtle); color: var(--ink); cursor: pointer; font: inherit; font-size: .85rem;
+    }
+    .feed-clear:hover { border-color: var(--primary); }
+    .feed-count { margin: .5rem 0 0; font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    .feed-body { flex: 1; min-height: 0; overflow-y: auto; padding: .6rem 1rem 1rem; -webkit-overflow-scrolling: touch; }
+    .feed-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+    /* Full width IS what we want here, so the global button reset is left alone
+       — but min-height has to clear 44px for the whole row, not just the text. */
+    .feed-entry {
+      display: block; width: 100%; text-align: left; cursor: pointer; font: inherit;
+      border: 1px solid var(--line); border-radius: 10px; padding: .6rem .7rem;
+      background: var(--surface-subtle); color: var(--ink); min-height: 44px;
+    }
+    .feed-entry:hover { border-color: var(--primary); }
+    .feed-entry-top { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-bottom: .3rem; }
+    .feed-when { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .feed-author { font-size: .78rem; color: var(--muted); }
+    .feed-text { margin: 0; font-size: .95rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .feed-where { margin-top: .35rem; font-size: .8rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: .3rem .5rem; }
+    .feed-where .fp { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+    /* Source badges. Every one carries a WORD as well as a colour and a glyph —
+       "private" vs "shared" is the difference between a note only you can see
+       and one the whole team reads, which is far too consequential to signal by
+       hue alone (and invisible to a colourblind or greyscale reader). */
+    .feed-src {
+      display: inline-flex; align-items: center; gap: .25rem; flex: none;
+      font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+      padding: .12rem .45rem; border-radius: 4px; border: 1px solid currentColor;
+    }
+    /* Every icon here is a ligature: if the Material Symbols font does not load,
+       the glyph name renders as literal text ("close" measured 100px against a
+       44px button and pushed the header 12px wide). Boxing the icon means a
+       failed font degrades to a clipped word rather than a broken layout. */
+    .feed-src .material-symbols-outlined { font-size: 14px; max-width: 1em; overflow: hidden; }
+    .feed-src.private { background: var(--warning-soft); color: var(--warning); }
+    .feed-src.shared { background: var(--accent-soft); color: var(--accent); }
+    .feed-empty { color: var(--muted); font-size: .9rem; margin: 1rem 0; text-align: center; }
+    .feed-empty p { margin: 0 0 .5rem; }
+    .feed-more { width: 100%; min-height: 44px; margin-top: .6rem; }
+    .feed-error { color: var(--danger); font-size: .85rem; font-weight: 600; margin: .4rem 0; }
+    /* Reserve the row height while the bulk fetch is in flight so the list does
+       not jump when it lands. */
+    .feed-skel { border: 1px solid var(--line); border-radius: 10px; padding: .6rem .7rem; background: var(--surface-subtle); }
+    .feed-skel span { display: block; height: 10px; border-radius: 4px; background: var(--line); margin-bottom: .45rem; animation: feedPulse 1.4s ease-in-out infinite; }
+    .feed-skel span:last-child { width: 55%; margin-bottom: 0; }
+    @keyframes feedPulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+    @media (max-width: 640px) {
+      /* Full-screen on a phone: a 640px card inside a 390px viewport is just a
+         cramped box with a backdrop nobody can reach around. dvh, not vh — vh
+         is the pre-toolbar height on iOS and cuts the last row off. */
+      #notes-feed {
+        max-width: none; width: 100vw; max-height: 100dvh; height: 100dvh;
+        border: 0; border-radius: 0; margin: 0; top: 0; left: 0;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .feed-skel span { animation: none; }
+    }
+
     .back-to-dir { font-size: .85rem; text-decoration: none; color: var(--primary); margin-right: .2rem; }
     .back-to-dir:hover { text-decoration: underline; }
     .list-details-btn { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; }
@@ -2978,6 +3081,14 @@
       font-size: 20px; line-height: 1;
     }
     .toolbar-primary button { display: inline-flex; align-items: center; gap: .4rem; }
+    /* Count riding on the Notes button. Hidden entirely at zero rather than
+       shown as "0" — a zero badge reads as an unread counter that never clears. */
+    .btn-count {
+      font-size: .75rem; font-weight: 700; font-variant-numeric: tabular-nums;
+      padding: .05rem .35rem; border-radius: 999px;
+      background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);
+    }
+    .btn-count:empty { display: none; }
 
     .use {
       display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap;
@@ -3030,6 +3141,17 @@
     }
     .added.warn { color: var(--warning); border-color: var(--warning); }
 
+    .pm-feed-link { margin: 0 0 .6rem; }
+    /* Opts out of the global `button { width: 100% }` — this reads as a link in
+       running text, and full-width would make it a slab across the card. */
+    .pm-feed-btn {
+      width: auto; min-height: 44px; display: inline-flex; align-items: center; gap: .35rem;
+      font: inherit; font-size: .88rem; cursor: pointer; padding: .3rem .6rem;
+      border: 1px solid var(--line); border-radius: 8px;
+      background: var(--surface-subtle); color: var(--primary);
+    }
+    .pm-feed-btn:hover { border-color: var(--primary); }
+    .pm-feed-btn .material-symbols-outlined { font-size: 18px; }
     .pm-note-draft { border: 1px solid var(--line); border-radius: 8px; padding: .6rem; background: var(--surface-subtle); margin-bottom: .8rem; }
     .pm-draft-label { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); margin-bottom: .35rem; }
     .pm-lock { font-weight: 600; }
@@ -3260,6 +3382,9 @@
             <button id="optimize-route-btn" class="primary" data-list-action aria-describedby="optimize-route-note" onclick="optimizeUserListRoute()">
               <span class="material-symbols-outlined" aria-hidden="true">route</span>Optimize route
             </button>
+            <button id="notes-feed-btn" data-list-action onclick="openNotesFeed()">
+              <span class="material-symbols-outlined" aria-hidden="true">sticky_note_2</span>Notes<span id="notes-feed-count" class="btn-count"></span>
+            </button>
             <button data-list-action onclick="shareUserList()">
               <span class="material-symbols-outlined" aria-hidden="true">share</span>Share
             </button>
@@ -3393,6 +3518,14 @@
       userListNote: "",
       userPermitNotes: {},
       userNoteTs: {},
+      // Per-list notes feed (FEAT-034). `loadedFor` is the list id the cached
+      // threads belong to, so switching lists refetches rather than showing the
+      // previous list's notes. `returnTo` remembers where the feed was when a
+      // permit was opened from it.
+      feed: {
+        q: "", entries: [], threads: {}, loading: false, error: "",
+        loadedFor: "", shown: 0, permit: "", returnTo: null,
+      },
       focalPoint: null,
       draggedPermitNumber: "",
       userRouteLegs: [],
@@ -4093,6 +4226,9 @@
         history.go(-unwind);
         setTimeout(() => { _permitModalClosing = false; }, 0);
       }
+      // Page-specific tail. On My Permit List this returns to the notes feed
+      // when the permit was opened from it; elsewhere it does nothing.
+      afterPermitModalClose();
     }
 
     window.addEventListener("popstate", () => {
@@ -6835,6 +6971,7 @@
         el.classList.toggle("zero", label === "0");
         if (publicCount > 0) el.title = publicCount + " public note" + (publicCount === 1 ? "" : "s");
       });
+      refreshNotesFeedCount();
     }
 
     function fillListGeoCells(rows) {
@@ -6879,6 +7016,10 @@
         emptyText: "No permits added yet."
       });
       fillListGeoCells(rows);
+      // Paint the Notes button from what is already known locally, then let the
+      // count fetch refine it — otherwise the button sits blank until the
+      // network answers, on a list whose private notes we can count instantly.
+      refreshNotesFeedCount();
       fetchNoteCounts(rows.filter(r => !r.is_custom).map(r => clean(r.permit_number)));
     }
 
@@ -7598,6 +7739,379 @@
         : `<p class="tp-empty">No public notes yet. Post one above.</p>`;
     }
 
+    // ==== Per-list notes feed (FEAT-034) ====================================
+    // Every note attached to the permits in the list you are currently viewing,
+    // newest first, searchable. Scope is always the active list — a different
+    // list has a different feed, and nothing outside the list can appear.
+
+    // Entries are rendered in pages so a list with thousands of notes does not
+    // build thousands of DOM nodes on open.
+    const FEED_PAGE = 50;
+
+    function walkFeedSummary(post) {
+      const { gc, sub } = walkParties(post);
+      const job = post.job === "new" ? "New construction" : "Remodel";
+      const who = [];
+      if (gc && gc.name) who.push(`GC ${gc.name}`);
+      if (sub && sub.name) who.push(`sub ${sub.name}`);
+      return `Walkthrough — ${job}, ${who.length ? who.join(" and ") : "nobody on site"}`;
+    }
+
+    function feedPostText(post) {
+      if (post.kind === "walk") return walkFeedSummary(post);
+      if (post.kind === "photo") {
+        const n = Array.isArray(post.photos) ? post.photos.length : 0;
+        const caption = clean(post.text).trim();
+        const label = n === 1 ? "1 photo" : `${n} photos`;
+        return caption ? `${label} — ${caption}` : label;
+      }
+      return clean(post.text).trim();
+    }
+
+    // Assemble the feed from the list's rows plus whatever /api/notes/bulk gave
+    // us. A private note with no recorded time (written before FEAT-034) gets
+    // ts null and shows as undated — inventing a time would be a lie about when
+    // the work happened.
+    function buildFeedEntries(rows) {
+      const entries = [];
+      for (const row of rows || []) {
+        const permit = clean(row.permit_number);
+        if (!permit) continue;
+        const address = clean(row.address);
+        const mine = clean(state.userPermitNotes[permit]).trim();
+        if (mine) {
+          const ts = Number(state.userNoteTs[permit]);
+          entries.push({
+            id: `private:${permit}`, permit, address, text: mine,
+            ts: Number.isFinite(ts) ? ts : null, author: "", kind: "private", shared: false,
+          });
+        }
+        for (const post of state.feed.threads[permit] || []) {
+          const text = feedPostText(post);
+          if (!text) continue;
+          const ts = Number(post.ts);
+          entries.push({
+            id: `post:${permit}:${post.id}`, permit, address, text,
+            ts: Number.isFinite(ts) ? ts : null,
+            author: clean(post.author).trim(),
+            kind: post.kind === "walk" || post.kind === "photo" ? post.kind : "note",
+            shared: true, edited: !!post.editedTs,
+          });
+        }
+      }
+      return sortFeedEntries(entries);
+    }
+
+    // Newest first, undated last — an old note with no timestamp floated to the
+    // top would read as the most recent thing in the list. Ties break on id so
+    // the order does not shuffle between renders.
+    function sortFeedEntries(entries) {
+      return entries.slice().sort((a, b) => {
+        if (a.ts == null && b.ts == null) return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+        if (a.ts == null) return 1;
+        if (b.ts == null) return -1;
+        if (b.ts !== a.ts) return b.ts - a.ts;
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+      });
+    }
+
+    // Every term must match, so a second word narrows the result instead of
+    // widening it. Covers the note text, permit number, address and author.
+    function filterFeedEntries(entries, query) {
+      const terms = norm(query).split(/\s+/).filter(Boolean);
+      if (!terms.length) return entries;
+      return entries.filter(entry => {
+        const hay = norm(`${entry.text} ${entry.permit} ${entry.address} ${entry.author}`);
+        return terms.every(term => hay.includes(term));
+      });
+    }
+
+    function chunkPermits(permits, size = 200) {
+      const out = [];
+      const seen = new Set();
+      for (const p of permits) {
+        const permit = clean(p);
+        if (!permit || seen.has(permit)) continue;
+        seen.add(permit);
+        if (!out.length || out[out.length - 1].length >= size) out.push([]);
+        out[out.length - 1].push(permit);
+      }
+      return out;
+    }
+
+    function feedCountLabel(shown, total, searching) {
+      if (!total) return "No notes";
+      if (searching) return `${fmt(shown)} of ${fmt(total)} ${total === 1 ? "note" : "notes"}`;
+      return `${fmt(total)} ${total === 1 ? "note" : "notes"}`;
+    }
+
+    function feedRows() {
+      // Custom stops have no permit number, so they can carry neither a private
+      // note nor a public thread — they are simply not part of the feed.
+      return (state.userPermitNumbers || [])
+        .map(number => state.userPermitMap.get(clean(number)))
+        .filter(Boolean);
+    }
+
+    // One request per 200 permits instead of one per permit.
+    async function loadFeedThreads() {
+      const listId = state.activeListId;
+      const permits = (state.userPermitNumbers || []).map(clean).filter(Boolean);
+      state.feed.loading = true;
+      state.feed.error = "";
+      renderNotesFeed();
+      const threads = {};
+      try {
+        for (const chunk of chunkPermits(permits)) {
+          const res = await fetch(`${API_BASE}/api/notes/bulk?p=${encodeURIComponent(chunk.join(","))}`);
+          if (!res.ok) throw new Error("bulk unavailable");
+          const data = await res.json();
+          Object.assign(threads, data.threads || {});
+        }
+        state.feed.threads = threads;
+        state.feed.loadedFor = listId;
+      } catch {
+        // The private half of the feed still works offline, so this is a
+        // partial failure and says so rather than showing an empty feed.
+        state.feed.threads = {};
+        state.feed.loadedFor = listId;
+        state.feed.error = "Shared notes could not be loaded. Your private notes are still listed.";
+      }
+      state.feed.loading = false;
+      renderNotesFeed();
+    }
+
+    function feedSrcBadge(entry) {
+      // Word first, colour second: "private" and "shared" differ in who can
+      // read the note, which must not be signalled by hue alone.
+      if (!entry.shared) {
+        return `<span class="feed-src private"><span class="material-symbols-outlined" aria-hidden="true">lock</span>Private</span>`;
+      }
+      const label = entry.kind === "walk" ? "Walkthrough" : entry.kind === "photo" ? "Photo" : "Shared";
+      const icon = entry.kind === "walk" ? "directions_walk" : entry.kind === "photo" ? "photo_camera" : "group";
+      return `<span class="feed-src shared"><span class="material-symbols-outlined" aria-hidden="true">${icon}</span>${label}</span>`;
+    }
+
+    function feedEntryHtml(entry) {
+      const when = entry.ts == null
+        ? `<span class="feed-when">Date not recorded</span>`
+        : `<time class="feed-when" datetime="${new Date(entry.ts * 1000).toISOString()}">${esc(dateStampLabel(entry.ts))}${entry.edited ? " · edited" : ""}</time>`;
+      const who = entry.author ? `<span class="feed-author">${esc(entry.author)}</span>` : "";
+      const where = `<span class="fp">${esc(entry.permit)}</span>${entry.address ? `<span>${esc(entry.address)}</span>` : ""}`;
+      const label = `${entry.shared ? "Shared" : "Private"} note on permit ${entry.permit}${entry.address ? `, ${entry.address}` : ""}. Open this permit.`;
+      return `<li><button type="button" class="feed-entry" aria-label="${esc(label)}" onclick="openPermitFromFeed('${enc(entry.permit)}')">
+        <span class="feed-entry-top">${feedSrcBadge(entry)}${when}${who}</span>
+        <p class="feed-text">${esc(entry.text)}</p>
+        <span class="feed-where">${where}</span>
+      </button></li>`;
+    }
+
+    function renderNotesFeed() {
+      const dlg = $("notes-feed");
+      if (!dlg || !dlg.open) return;
+      const body = dlg.querySelector(".feed-body");
+      const count = dlg.querySelector(".feed-count");
+      if (!body || !count) return;
+
+      if (state.feed.loading) {
+        body.innerHTML = `<div class="feed-list" aria-hidden="true">${
+          `<div class="feed-skel"><span></span><span></span></div>`.repeat(3)}</div>`;
+        count.textContent = "Loading notes…";
+        return;
+      }
+
+      const all = state.feed.entries;
+      const scoped = state.feed.permit ? all.filter(e => e.permit === state.feed.permit) : all;
+      const matched = filterFeedEntries(scoped, state.feed.q);
+      const shown = matched.slice(0, state.feed.shown);
+      const searching = !!state.feed.q.trim();
+      count.textContent = feedCountLabel(matched.length, scoped.length, searching);
+
+      const err = state.feed.error ? `<p class="feed-error">${esc(state.feed.error)}</p>` : "";
+
+      if (!scoped.length) {
+        // No notes at all is a different situation from a search that matched
+        // nothing, and telling someone "no results" when they have never
+        // written a note sends them hunting for a filter to clear.
+        body.innerHTML = `${err}<div class="feed-empty">
+          <p>${state.feed.permit ? "No notes on this permit yet." : "No notes in this list yet."}</p>
+          <p>Open a permit and add a private note, or post one to share with the team.</p>
+        </div>`;
+        return;
+      }
+      if (!matched.length) {
+        body.innerHTML = `${err}<div class="feed-empty">
+          <p>No notes match “${esc(state.feed.q.trim())}”.</p>
+          <button type="button" class="feed-more" onclick="clearFeedSearch()">Clear search</button>
+        </div>`;
+        return;
+      }
+
+      const more = matched.length > shown.length
+        ? `<button type="button" class="feed-more" onclick="showMoreFeed()">Show ${fmt(Math.min(FEED_PAGE, matched.length - shown.length))} more</button>`
+        : "";
+      body.innerHTML = `${err}<ol class="feed-list">${shown.map(feedEntryHtml).join("")}</ol>${more}`;
+    }
+
+    function feedSearchInput(value) {
+      state.feed.q = clean(value);
+      state.feed.shown = FEED_PAGE;
+      renderNotesFeed();
+    }
+
+    function clearFeedSearch() {
+      state.feed.q = "";
+      state.feed.shown = FEED_PAGE;
+      const box = $("feed-q");
+      if (box) { box.value = ""; box.focus(); }
+      renderNotesFeed();
+    }
+
+    function showMoreFeed() {
+      state.feed.shown += FEED_PAGE;
+      renderNotesFeed();
+    }
+
+    // opts.permit  — open filtered to one permit's notes
+    // opts.restore — coming back from a permit; reuse the remembered search and
+    //                scroll rather than resetting the view the user built.
+    async function openNotesFeed(opts = {}) {
+      const dlg = $("notes-feed");
+      if (!dlg || dlg.open) return;
+      const list = activeList();
+      const back = opts.restore ? state.feed.returnTo : null;
+      state.feed.permit = opts.permit ? clean(opts.permit) : (back ? back.permit : "");
+      state.feed.q = back ? back.q : "";
+      state.feed.shown = back ? back.shown : FEED_PAGE;
+
+      const scopeNote = state.feed.permit
+        ? `Notes on permit ${state.feed.permit}`
+        : `Notes on the ${fmt((state.userPermitNumbers || []).length)} permits in ${clean(list && list.name) || "this list"}`;
+
+      dlg.innerHTML = `<div class="feed-head">
+          <div class="feed-title-row">
+            <div>
+              <h3 id="feed-title">Notes${state.feed.permit ? " for this permit" : ""}</h3>
+              <p class="feed-scope">${esc(scopeNote)}</p>
+            </div>
+            <button type="button" class="feed-close" onclick="closeNotesFeed()" aria-label="Close notes">
+              <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+          </div>
+          <div class="feed-search-row">
+            <label for="feed-q">Search these notes</label>
+            <div class="feed-search-wrap">
+              <input id="feed-q" type="search" autocomplete="off" placeholder="Note text, permit number or address"
+                value="${esc(state.feed.q)}" oninput="feedSearchInput(this.value)">
+              <button type="button" class="feed-clear" onclick="clearFeedSearch()">Clear</button>
+            </div>
+          </div>
+          <p class="feed-count" role="status" aria-live="polite"></p>
+        </div>
+        <div class="feed-body"></div>`;
+
+      dlg.addEventListener("close", onNotesFeedClose, { once: true });
+      dlg.showModal();
+
+      // Cached threads are keyed to the list they came from, so switching lists
+      // refetches instead of showing the previous list's notes.
+      if (state.feed.loadedFor !== state.activeListId) {
+        state.feed.entries = buildFeedEntries(feedRows());
+        renderNotesFeed();
+        await loadFeedThreads();
+      }
+      state.feed.entries = buildFeedEntries(feedRows());
+      renderNotesFeed();
+
+      const body = dlg.querySelector(".feed-body");
+      if (body && back) body.scrollTop = back.scrollTop;
+      // Focus the search box on a fresh open so typing just works; on a restore
+      // leave focus alone so returning does not yank the page around.
+      if (!back) { const q = $("feed-q"); if (q) q.focus(); }
+    }
+
+    function onNotesFeedClose() {
+      // Only a deliberate close clears the return point. Opening a permit sets
+      // it immediately before calling close(), so it survives to the trip back.
+      if (!_feedOpeningPermit) state.feed.returnTo = null;
+      _feedOpeningPermit = false;
+    }
+
+    let _feedOpeningPermit = false;
+
+    function closeNotesFeed() {
+      const dlg = $("notes-feed");
+      if (dlg && dlg.open) dlg.close();
+    }
+
+    // Feed -> permit. The feed is a native <dialog> in the top layer and the
+    // permit overlay is not, so the two cannot be shown at once — the feed has
+    // to close, which is why its position is captured first.
+    function openPermitFromFeed(encodedPermit) {
+      const permit = decodeURIComponent(encodedPermit);
+      const row = state.userPermitMap.get(permit);
+      if (!row) { announceListAction(`Permit ${permit} is no longer in this list.`); return; }
+      const dlg = $("notes-feed");
+      const body = dlg && dlg.querySelector(".feed-body");
+      state.feed.returnTo = {
+        q: state.feed.q,
+        shown: state.feed.shown,
+        permit: state.feed.permit,
+        scrollTop: body ? body.scrollTop : 0,
+      };
+      _feedOpeningPermit = true;
+      closeNotesFeed();
+      openPermitDetail(row);
+    }
+
+    // Permit -> feed, filtered to that permit (the card's "see the notes for
+    // this permit" link). Closes the overlay first, same top-layer reason.
+    function openFeedForPermit(encodedPermit) {
+      const permit = decodeURIComponent(encodedPermit);
+      state.feed.returnTo = null;
+      closePermitModal();
+      openNotesFeed({ permit });
+    }
+
+    // Called by closePermitModal on every close path. Returns to the feed only
+    // if this permit was opened FROM the feed, so an ordinary close still just
+    // closes.
+    function afterPermitModalClose() {
+      if (!state.feed.returnTo) return;
+      // The overlay unwinds its history entries on close; reopening on the next
+      // task lets that settle first, otherwise the popstate handler races the
+      // dialog and the feed reopens only to be closed again.
+      setTimeout(() => { openNotesFeed({ restore: true }); }, 0);
+    }
+
+    function notesFeedAvailable() {
+      return true;
+    }
+
+    // The count on the toolbar button. Private notes are known locally; the
+    // shared count reuses `state.noteCounts`, which the table chips already
+    // fetch, so the button is accurate before the feed has ever been opened
+    // and costs no extra request.
+    function refreshNotesFeedCount() {
+      const el = $("notes-feed-count");
+      if (!el) return;
+      const counts = state.noteCounts || {};
+      let n = 0;
+      for (const number of state.userPermitNumbers || []) {
+        const permit = clean(number);
+        if (!permit) continue;
+        if (clean(state.userPermitNotes[permit]).trim()) n += 1;
+        n += Number(counts[permit]) || 0;
+      }
+      el.textContent = n ? fmt(n) : "";
+      const btn = $("notes-feed-btn");
+      if (btn) {
+        btn.setAttribute("aria-label", n
+          ? `Notes — ${fmt(n)} in this list`
+          : "Notes — none in this list yet");
+      }
+    }
+
     async function postNoteText(permit) {
       const box = document.getElementById("pm-note-draft");
       const text = (box && box.value || "").trim();
@@ -7989,6 +8503,9 @@
         () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div></section>`,
         () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div><div class="pm-reported" id="pm-reported"></div></section>`,
         () => `<section class="pm-block"><h3>Notes</h3>
+            ${notesFeedAvailable() ? `<p class="pm-feed-link"><button type="button" class="pm-feed-btn" onclick="openFeedForPermit('${enc(row.permit_number)}')">
+              <span class="material-symbols-outlined" aria-hidden="true">sticky_note_2</span>See this permit's notes in the list feed
+            </button></p>` : ""}
             <div class="pm-note-draft">
               <label class="pm-draft-label" for="pm-note-draft">My note <span class="pm-lock">\ud83d\udd12 private to this browser</span></label>
               <textarea id="pm-note-draft" class="pm-note" placeholder="Private note, saved as you type\u2026" aria-label="Private note for permit ${esc(row.permit_number)}"
@@ -8440,6 +8957,7 @@
   <dialog id="list-picker" aria-modal="true"></dialog>
   <dialog id="list-details" aria-modal="true"></dialog>
   <dialog id="add-address" aria-modal="true"></dialog>
+  <dialog id="notes-feed" aria-modal="true" aria-labelledby="feed-title"></dialog>
   <dialog id="walkthrough" aria-modal="true"></dialog>
   <dialog id="photo-compose" aria-modal="true"></dialog>
 </body>

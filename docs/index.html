@@ -5758,6 +5758,9 @@
         history.go(-unwind);
         setTimeout(() => { _permitModalClosing = false; }, 0);
       }
+      // Page-specific tail. On My Permit List this returns to the notes feed
+      // when the permit was opened from it; elsewhere it does nothing.
+      afterPermitModalClose();
     }
 
     window.addEventListener("popstate", () => {
@@ -6598,6 +6601,9 @@
         () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div></section>`,
         () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div><div class="pm-reported" id="pm-reported"></div></section>`,
         () => `<section class="pm-block"><h3>Notes</h3>
+            ${notesFeedAvailable() ? `<p class="pm-feed-link"><button type="button" class="pm-feed-btn" onclick="openFeedForPermit('${enc(row.permit_number)}')">
+              <span class="material-symbols-outlined" aria-hidden="true">sticky_note_2</span>See this permit's notes in the list feed
+            </button></p>` : ""}
             <div class="pm-note-draft">
               <label class="pm-draft-label" for="pm-note-draft">My note <span class="pm-lock">\ud83d\udd12 private to this browser</span></label>
               <textarea id="pm-note-draft" class="pm-note" placeholder="Private note, saved as you type\u2026" aria-label="Private note for permit ${esc(row.permit_number)}"
@@ -6987,6 +6993,24 @@
     // stack when the overlay is closed; pushes a card when it is already open.
     function openPermitDetail(row) {
       pushCard({ type: "permit", row });
+    }
+
+    // ---- Notes-feed hooks (FEAT-034) ----
+    // The per-list notes feed is a My Permit List feature: it is scoped to the
+    // permits in a saved list, and this page is the search directory, which has
+    // no list open. The overlay code that calls these is byte-identical across
+    // both pages by design, so the hooks exist here and do nothing rather than
+    // the shared block being forked.
+    function notesFeedAvailable() {
+      return false;
+    }
+
+    function afterPermitModalClose() {
+      /* no feed to return to on this page */
+    }
+
+    function openFeedForPermit() {
+      /* unreachable: notesFeedAvailable() is false, so the link is never drawn */
     }
 
     function openPermitDetailFromEncoded(encoded) {
