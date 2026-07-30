@@ -25,6 +25,30 @@ test("title rank orders officers, unknown titles sort last", () => {
   assert.equal(titleRank(null), titleRank("ANYTHING UNLISTED"));
 });
 
+// These four came straight off the first production seed. The synthetic
+// fixtures never produced a generational suffix or a pre-punctuated initial,
+// so "Allan E. Bulley, Iii" and "Michael W..D.. Sudol" shipped and were only
+// caught by reading the live API back.
+test("real names from the live registry survive formatting", () => {
+  assert.equal(formatPersonName("ALLAN", "E", "BULLEY, III"), "Allan E. Bulley, III");
+  assert.equal(formatPersonName("MICHAEL", "W.D.", "SUDOL"), "Michael W.D. Sudol");
+  assert.equal(formatPersonName("GEORGE", "H", "WIENOLD"), "George H. Wienold");
+  assert.equal(formatPersonName("BONNIE", "E", "FRACKIEL"), "Bonnie E. Frackiel");
+});
+
+test("hyphens and apostrophes keep their inner capital", () => {
+  assert.equal(formatPersonName("MARGUERITE", null, "VANDERBILT-HOLLINGSWORTH"), "Marguerite Vanderbilt-Hollingsworth");
+  assert.equal(formatPersonName("SEAN", null, "O'BRIEN"), "Sean O'Brien");
+  assert.equal(formatPersonName("MARIA", null, "DE LA CRUZ"), "Maria De La Cruz");
+});
+
+test("suffixes are not mistaken for initials, and vice versa", () => {
+  assert.equal(formatPersonName("JOHN", null, "SMITH JR"), "John Smith JR");
+  assert.equal(formatPersonName("ANNA", "V", "REYES"), "Anna V. Reyes");
+  // "V" as a middle initial is an initial; "V" as a trailing suffix is not.
+  assert.equal(formatPersonName("HENRY", null, "TUDOR V"), "Henry Tudor V");
+});
+
 test("shouted names are title-cased, mixed-case names are left alone", () => {
   assert.equal(formatPersonName("MAREK", null, "MIETKA"), "Marek Mietka");
   assert.equal(formatPersonName("Ron", "M", "Anderson"), "Ron M Anderson");

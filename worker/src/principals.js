@@ -52,15 +52,33 @@ export function titleRank(title) {
  * ones so a card does not look like it is yelling one name and not the next;
  * leave already-mixed-case names alone rather than mangling "McLennan".
  */
+const NAME_SUFFIXES = new Set(["II", "III", "IV", "V", "VI", "VII", "JR", "SR"]);
+
+function formatWord(word, isLast) {
+  const bare = word.replace(/[.,]/g, "");
+  // Generational suffixes stay upper: "III" must not become "Iii". Only the
+  // LAST word can be one — "V" is a suffix in "Henry Tudor V" and a middle
+  // initial in "Anna V. Reyes", and position is the only thing separating them.
+  if (isLast && NAME_SUFFIXES.has(bare)) return word.replace(bare, bare.toUpperCase());
+  // Already-punctuated initials keep their own dots: "W.D." must not become
+  // "W..D.." by having a period appended to each letter.
+  if (/^(?:[A-Z]\.)+,?$/.test(word)) return word;
+  // A bare single letter is an initial and gains one period.
+  if (/^[A-Z],?$/.test(word)) return word.replace(/^([A-Z])/, "$1.");
+  // Title-case across internal punctuation so hyphenated and O'/D' names keep
+  // their inner capital: VANDERBILT-HOLLINGSWORTH, O'BRIEN.
+  return word
+    .toLowerCase()
+    .replace(/(^|[-'’])([a-z])/g, (_, sep, c) => sep + c.toUpperCase());
+}
+
 export function formatPersonName(first, middle, last) {
   const raw = [first, middle, last].map((p) => (p || "").trim()).filter(Boolean).join(" ");
   if (!raw) return "";
   const collapsed = raw.replace(/\s+/g, " ");
   if (collapsed !== collapsed.toUpperCase()) return collapsed;
-  return collapsed
-    .toLowerCase()
-    .replace(/\b[a-z]/g, (c) => c.toUpperCase())
-    .replace(/\b([A-Z])\b/g, "$1."); // lone initials read as "J." not "J"
+  const words = collapsed.split(" ");
+  return words.map((w, i) => formatWord(w, i === words.length - 1)).join(" ");
 }
 
 /**
