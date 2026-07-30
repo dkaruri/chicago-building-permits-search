@@ -5851,7 +5851,11 @@
       const nums = state.userPermitNumbers.filter(n => !state.userPermitMap.has(n));
       if (!nums.length) return;
       const SOCRATA = "https://data.cityofchicago.org/resource/ydr8-5enu.json";
-      const contactCols = Array.from({length: 15}, (_, i) => `contact_${i+1}_type,contact_${i+1}_name`).join(",");
+      // city/state/zipcode as well as type/name: the Unit owner block needs the
+      // owner's locality, and this is the ONLY hydration path for saved permits,
+      // so omitting them made every saved permit report "No owner named".
+      const contactCols = Array.from({length: 15}, (_, i) =>
+        `contact_${i+1}_type,contact_${i+1}_name,contact_${i+1}_city,contact_${i+1}_state,contact_${i+1}_zipcode`).join(",");
       const select = `permit_,permit_status,permit_type,review_type,issue_date,processing_time,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
       const inList = nums.map(n => `'${n}'`).join(",");
       const params = new URLSearchParams({ $select: select, $where: `permit_ in(${inList})`, $limit: "50000" });
@@ -5860,11 +5864,17 @@
         if (!res.ok) return;
         const rawRows = await res.json();
         for (const row of rawRows) {
-          const gcs = [], subs = [];
+          const gcs = [], subs = [], contacts = [];
           for (let i = 1; i <= 15; i++) {
             const type = (row[`contact_${i}_type`] || "").toUpperCase();
             const name = (row[`contact_${i}_name`] || "").trim();
             if (!name) continue;
+            contacts.push({
+              type: row[`contact_${i}_type`] || "", name,
+              city: row[`contact_${i}_city`] || "",
+              state: row[`contact_${i}_state`] || "",
+              zipcode: row[`contact_${i}_zipcode`] || "",
+            });
             if (type.includes("GENERAL CONTRACTOR")) gcs.push(name);
             else if (type.includes("CONTRACTOR") || type.includes("ARCHITECT") || type.includes("ENGINEER") || type.includes("EXPEDIT") || type.includes("MASON")) subs.push(name);
           }
@@ -5885,6 +5895,7 @@
             longitude: row.longitude ? parseFloat(row.longitude) : null,
             general_contractors: gcs.join(" | "),
             open_subs: subs.join(" | "),
+            contacts,
           };
           state.userPermitMap.set(clean(mapped.permit_number), mapped);
         }
@@ -7122,6 +7133,11 @@
     // city/state/ZIP fallback, because that is all the permits dataset has for
     // an owner who is not a contractor — no phone, no email.
     function ownerLinesHtml(row) {
+      if (!Array.isArray(row.contacts)) {
+        // Rows from the map's bulk cache carry no contact slots by design —
+        // widening that query would add 45 mostly-empty columns to 50,000 rows.
+        return `<div class="pc-empty">Owner details not loaded for this permit</div>`;
+      }
       const owners = ownerContacts(row);
       if (!owners.length) return `<div class="pc-empty">No owner named on this permit</div>`;
       return owners.map(c => {
