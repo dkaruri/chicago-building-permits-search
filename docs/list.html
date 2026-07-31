@@ -3414,7 +3414,12 @@
     #photo-compose .dlg-sub { margin: .2rem 0 .8rem; font-size: .84rem; color: var(--muted); }
     #photo-compose .dlg-field { margin: .8rem 0 0; }
     #photo-compose .dlg-field label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin-bottom: .3rem; }
-    #photo-compose .dlg-field input { font: inherit; font-size: 1rem; width: 100%; box-sizing: border-box; min-height: 44px; background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem; }
+    /* 16px not 1rem (FIX-025): this selector is id-scoped (1-1-2), so it
+       outranks the iOS text-size floor at the end of this sheet. 1rem happens
+       to be 16px on this page (only `body` shrinks here, not `html`), but the
+       byte-identical rule on index.html resolves to 15px — keep them the same
+       and keep them in px. */
+    #photo-compose .dlg-field input { font: inherit; font-size: 16px; width: 100%; box-sizing: border-box; min-height: 44px; background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem; }
     .pc-file { font: inherit; margin-bottom: .8rem; }
     .pc-list { display: grid; gap: .6rem; }
     .pc-item { display: flex; gap: .6rem; align-items: center; }
@@ -3474,6 +3479,36 @@
     .toolbar-manage button { display: inline-flex; align-items: center; gap: .4rem; }
     .danger-solid { color: var(--white); background: var(--danger); border-color: var(--danger); }
     .danger-solid:hover { background: var(--danger); filter: brightness(0.94); }
+
+    /* FIX-025 — iOS text-size floor for form controls.
+       Safari auto-zooms the whole page when a focused control's font is under
+       16px, and leaves it zoomed; you have to pinch back out after every edit.
+       PX on purpose — `body` is 15px below 640px here, so a rem would land back
+       under the floor, and a rem is a DIFFERENT unit on index.html (which
+       shrinks `html` instead of `body`). Never express this one in rem.
+
+       Applied here even though most of this page's sub-16px controls sit in the
+       hidden search directory (`body.list-page .layout { display: none }`): the
+       focal-point input and the note/caption dialogs are reachable, and leaving
+       one of the three pages without the floor is how these copies drift apart.
+
+       Checkbox/radio excluded — no text, and sizing them here would break the
+       visited-tick hit targets (FIX-018).
+
+       The `:is()` is load-bearing: this must outrank existing 0-2-2 selectors
+       without !important, and as three plain selectors `html body select`
+       scores only 0-0-3 and loses. `:is()` takes the specificity of its most
+       specific argument, so every arm inherits the input's 0-2-1 and the rule
+       lands at 0-2-3. Measure after touching it. */
+    @media (max-width: 640px) {
+      html body :is(
+        input:not([type="checkbox"]):not([type="radio"]),
+        select,
+        textarea
+      ) {
+        font-size: 16px;
+      }
+    }
   </style>
 </head>
 <body class="list-page">
