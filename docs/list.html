@@ -6691,10 +6691,15 @@
 
     // The GC this follow-up is about. Permits can name several; the first is
     // the one the row and the card both lead with, so they agree.
+    // `general_contractors` is a PIPE-DELIMITED STRING, exactly as the Worker
+    // and Socrata publish it — the same shape contractorLinesHtml parses. This
+    // read once assumed an array of {name}, a shape that exists nowhere in the
+    // product, and threw on every real permit that named a GC, which emptied
+    // the whole permit overlay (the section thunks are joined, so one throw
+    // takes the card down).
     function followUpGcName(row) {
-      const gcs = (row && row.general_contractors) || [];
-      const first = gcs.find(gc => clean(gc && gc.name));
-      return first ? clean(first.name) : "";
+      const first = clean(row && row.general_contractors).split("|")[0];
+      return clean(first);
     }
 
     function toggleFollowUp(encodedKey, on) {
