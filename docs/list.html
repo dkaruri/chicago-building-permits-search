@@ -4013,6 +4013,9 @@
 
     async function showList(id) {
       if (id && state.lists[id]) {
+        // A view filter belongs to the list you set it on. Carried across, it
+        // shows the next list as empty for a filter you never set there.
+        if (id !== state.activeListId) state.listFilters = { followUp: false };
         state.activeListId = id;
         state.userPermitNumbers = [...state.lists[id].permits];
         saveUserLists();
