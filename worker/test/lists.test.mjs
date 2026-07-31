@@ -458,3 +458,82 @@ test("the trash key carries a 30-day TTL", async () => {
   await handleLists(new URL(`https://w/api/lists/${id}`), env, new Request(`https://w/api/lists/${id}`, { method: "DELETE" }));
   assert.equal(ttl, 2592000);
 });
+
+// ---- FEAT-034: follow-up flags over the REST path ----
+
+test("PUT /follow flips a follow-up without touching permits or ticks", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234", "100987"], title: "T" }))).json();
+  const tickUrl = new URL(`https://w/api/lists/${id}/ticks`);
+  await handleLists(tickUrl, env, new Request(tickUrl, { method: "PUT", body: JSON.stringify({ key: "100234", on: true }) }));
+
+  const url = new URL(`https://w/api/lists/${id}/follow`);
+  const res = await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "100987", on: true }) }));
+  assert.equal(res.status, 200);
+
+  const body = await (await handleLists(new URL(`https://w/api/lists/${id}`), env, get(id))).json();
+  assert.deepEqual(body.fu, { "100987": 1 });
+  assert.deepEqual(body.ticks, { "100234": 1 }, "the visited tick must be untouched");
+  assert.deepEqual(body.permits, ["100234", "100987"], "permits must be untouched");
+});
+
+test("PUT /follow can clear a follow-up", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "T" }))).json();
+  const url = new URL(`https://w/api/lists/${id}/follow`);
+  await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "100234", on: true }) }));
+  await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "100234", on: false }) }));
+  const body = await (await handleLists(new URL(`https://w/api/lists/${id}`), env, get(id))).json();
+  assert.deepEqual(body.fu, {});
+});
+
+test("PUT /follow refuses a key that is not in the list", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "T" }))).json();
+  const url = new URL(`https://w/api/lists/${id}/follow`);
+  const res = await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "999999", on: true }) }));
+  assert.equal(res.status, 400);
+});
+
+test("PUT /follow does NOT write a revision", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "T" }))).json();
+  const url = new URL(`https://w/api/lists/${id}/follow`);
+  await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "100234", on: true }) }));
+  assert.equal([...env.CACHE.map.keys()].filter(k => k.startsWith("listrev:")).length, 0);
+});
+
+test("a metadata-only PUT cannot clear the team's follow-ups", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "T" }))).json();
+  const follow = new URL(`https://w/api/lists/${id}/follow`);
+  await handleLists(follow, env, new Request(follow, { method: "PUT", body: JSON.stringify({ key: "100234", on: true }) }));
+
+  const edit = new URL(`https://w/api/lists/${id}`);
+  await handleLists(edit, env, new Request(edit, { method: "PUT", body: JSON.stringify({ title: "Renamed", fu: {} }) }));
+
+  const body = await (await handleLists(edit, env, get(id))).json();
+  assert.deepEqual(body.fu, { "100234": 1 }, "fu is never taken from the PUT body");
+});
+
+test("a list created before follow-ups existed reads back with an empty fu", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "T" }))).json();
+  // Rewrite the stored value the way a pre-FEAT-034 Worker left it.
+  const stored = JSON.parse(env.CACHE.map.get("list:" + id));
+  delete stored.fu;
+  env.CACHE.map.set("list:" + id, JSON.stringify(stored));
+
+  const body = await (await handleLists(new URL(`https://w/api/lists/${id}`), env, get(id))).json();
+  assert.deepEqual(body.fu, {});
+
+  const url = new URL(`https://w/api/lists/${id}/follow`);
+  const res = await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "100234", on: true }) }));
+  assert.equal(res.status, 200, "flagging a legacy list must not fault");
+});

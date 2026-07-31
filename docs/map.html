@@ -4402,7 +4402,7 @@
       if (circleSource) circleSource.setData(radiusCircleFeatureCollection());
       if (state.map.searchLocation && !state.map.skipRecentreOnce) {
         state.map.map.easeTo({ center: [state.map.searchLocation.lon, state.map.searchLocation.lat], zoom: 15, duration: 0 });
-      } else if (state.map.skipRecentreOnce) {
+      } else if (state.map.searchLocation && state.map.skipRecentreOnce) {
         // First render after restoring a saved viewport. The saved query is
         // re-geocoded on load, and without this it would yank the map back to
         // the address every reload — so panning away from a searched address and

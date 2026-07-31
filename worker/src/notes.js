@@ -3,6 +3,11 @@ const NOTE_ID_RE = /^n_[0-9a-f]{8}$/;
 const MAX_TEXT = 2000;
 const MAX_NAME = 120;
 const MAX_POSTS = 200;
+// FEAT-035 caps a list at 1000 permits; the feed asks in chunks under this.
+const MAX_BULK_PERMITS = 250;
+// Ceiling on KV reads for one bulk call. Only permits that actually have notes
+// are read, so a list would have to be almost entirely noted to reach this.
+const MAX_BULK_THREADS = 120;
 const JOBS = new Set(["new", "remodel"]);
 const ESTIMATES = new Set(["same-day", "1-3d", "week", "longer", "unknown"]);
 const PHOTO_ID_RE = /^p_[0-9a-f]{8}$/;
@@ -74,18 +79,58 @@ async function writeThread(env, permit, thread) {
   await env.CACHE.put("note:" + permit, JSON.stringify(capped), { metadata: { n: capped.length } });
 }
 
+// Every "note:" key, following the cursor. KV list() returns at most 1000 keys
+// per page and silently stops there — without this loop both /counts and /bulk
+// would start under-reporting once the site passes 1000 noted permits, and the
+// failure would look like "some permits lost their notes" rather than an error.
+async function listNoteKeys(env) {
+  const keys = [];
+  let cursor;
+  for (;;) {
+    const page = await env.CACHE.list({ prefix: "note:", cursor });
+    keys.push(...page.keys);
+    if (page.list_complete || !page.cursor) break;
+    cursor = page.cursor;
+  }
+  return keys;
+}
+
+function requestedPermits(url) {
+  return (url.searchParams.get("p") || "").split(",").map(s => s.trim()).filter(Boolean);
+}
+
 export async function handleNotes(url, env, request) {
   // GET /api/notes/counts?p=a,b,c — one list() covers every noted permit.
   if (url.pathname === "/api/notes/counts") {
-    const want = new Set((url.searchParams.get("p") || "").split(",").filter(Boolean));
-    const listed = await env.CACHE.list({ prefix: "note:" });
+    const want = new Set(requestedPermits(url));
     const counts = {};
-    for (const key of listed.keys) {
+    for (const key of await listNoteKeys(env)) {
       const permit = key.name.slice(5);
       const n = Number(key.metadata && key.metadata.n);
       if (want.has(permit) && n > 0) counts[permit] = n;
     }
     return resp({ counts }, 200);
+  }
+
+  // GET /api/notes/bulk?p=a,b,c — whole threads for many permits at once, for
+  // the per-list notes feed (FEAT-034). Fetching these one permit at a time
+  // meant one request per row, so opening the feed on a 99-permit list fired 99
+  // round trips. One list() narrows the set to permits that actually HAVE
+  // notes — usually a small fraction — and only those get read.
+  if (url.pathname === "/api/notes/bulk") {
+    const want = requestedPermits(url).slice(0, MAX_BULK_PERMITS);
+    if (!want.length) return resp({ threads: {}, truncated: false }, 200);
+    const wanted = new Set(want.filter(p => PERMIT_RE.test(p)));
+    const noted = (await listNoteKeys(env))
+      .map(key => key.name.slice(5))
+      .filter(permit => wanted.has(permit));
+    // Bound the reads. A caller past the cap gets a correct partial answer and
+    // is told so, rather than an opaque subrequest-limit failure mid-flight.
+    const take = noted.slice(0, MAX_BULK_THREADS);
+    const threads = {};
+    const loaded = await Promise.all(take.map(async permit => [permit, await readThread(env, permit)]));
+    for (const [permit, posts] of loaded) if (posts.length) threads[permit] = posts;
+    return resp({ threads, truncated: noted.length > take.length }, 200);
   }
 
   const m = url.pathname.match(/^\/api\/notes\/([^/]+)(?:\/([^/]+))?$/);

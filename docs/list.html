@@ -22,7 +22,7 @@
   <meta name="twitter:description" content="Review, reorder, route, annotate, and export saved Chicago building permits.">
   <meta name="twitter:image" content="https://dkaruri.github.io/chicago-building-permits-search/assets/search-directory-preview.png">
   <meta name="twitter:image:alt" content="Chicago Building Permits Search preview card by Divyam Karuri">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_photo_alternate,clear_all,csv,database_search,delete,edit,list,map_search,moon_stars,photo,policy,route,share,sunny" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_photo_alternate,clear_all,close,csv,database_search,delete,directions_walk,edit,flag,group,list,lock,map_search,moon_stars,photo,policy,route,share,sticky_note_2,sunny" rel="stylesheet">
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
@@ -586,6 +586,111 @@
          640px, so rem-sized copy drifts between the two pages. */
       font-size: 12.5px;
       line-height: 1.5;
+    }
+
+    /* ---- Follow-up flag + list filters (FEAT-034) ---- */
+    .list-filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 8px 0 0;
+    }
+
+    /* The directory's button.tag rules already do the work — 44px target, the
+       inverted pressed fill, and a ✓ glyph so the state is not colour alone.
+       They are driven entirely by --tc, so this chip only has to name a colour;
+       without one --tc is unset and the chip renders panel-on-panel. */
+    #filter-followup {
+      --tc: var(--warning);
+      width: auto;
+    }
+
+    #filter-followup .material-symbols-outlined {
+      font-size: 16px;
+      max-width: 1em;
+      overflow: hidden;
+    }
+
+    .list-filter-status {
+      color: var(--muted);
+      font-size: 12.5px;
+    }
+
+    .fu-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      margin-left: 6px;
+      padding: 1px 7px;
+      border: 1px solid var(--warning);
+      border-radius: 999px;
+      color: var(--warning);
+      font-size: 11.5px;
+      font-weight: 800;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+
+    .fu-badge .material-symbols-outlined {
+      font-size: 14px;
+      max-width: 1em;
+      overflow: hidden;
+    }
+
+    .pm-fu-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 10px 0 0;
+    }
+
+    .pm-fu {
+      width: auto;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .pm-fu[aria-pressed="true"] {
+      border-color: var(--warning);
+      border-width: 2px;
+      color: var(--warning);
+    }
+
+    .pm-fu .material-symbols-outlined {
+      font-size: 18px;
+      max-width: 1em;
+      overflow: hidden;
+    }
+
+    .pm-fu-state {
+      color: var(--muted);
+      font-size: 12.5px;
+    }
+
+    /* An inline "undo" inside a sentence, not a form control. */
+    .linkish {
+      width: auto;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--primary);
+      font: inherit;
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: pointer;
     }
 
     .subtle-danger {
@@ -2982,6 +3087,109 @@
     .slotbtn i { display: block; width: 22px; height: 22px; border-radius: 5px; background: var(--tc); }
     .slotbtn[aria-pressed="true"] { border-color: var(--ink); border-width: 2px; }
 
+    /* ---- Per-list notes feed (FEAT-034) ---- */
+    #notes-feed {
+      border: 1px solid var(--line-strong); border-radius: 12px; padding: 0;
+      background: var(--panel); color: var(--ink);
+      max-width: 640px; width: calc(100vw - 2rem);
+      max-height: calc(100dvh - 3rem);
+      box-shadow: 0 12px 30px var(--shadow);
+      /* The dialog is the flex column; only the entry list scrolls, so the
+         search box and the count stay put while you page through results. */
+      display: none; flex-direction: column; overflow: hidden;
+    }
+    #notes-feed[open] { display: flex; }
+    #notes-feed::backdrop { background: rgba(6, 14, 26, 0.55); }
+    .feed-head { padding: .9rem 1rem .6rem; border-bottom: 1px solid var(--line); flex: none; }
+    .feed-title-row { display: flex; align-items: flex-start; gap: .6rem; }
+    .feed-head h3 { margin: 0; font-size: 1.05rem; }
+    .feed-scope { margin: .15rem 0 0; font-size: .8rem; color: var(--muted); }
+    /* Opts out of the global `button { width: 100% }` reset — without both of
+       these the close button becomes a full-width block and shoves the title
+       onto its own line. Same trap as FIX-013/FIX-016. */
+    .feed-close {
+      margin-left: auto; flex: none; width: 44px; min-width: 44px; height: 44px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--line); border-radius: 8px;
+      background: var(--surface-subtle); color: var(--ink); cursor: pointer; padding: 0;
+      overflow: hidden;
+    }
+    .feed-close:hover { border-color: var(--primary); }
+    .feed-search-row { margin-top: .7rem; }
+    .feed-search-row label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin-bottom: .3rem; }
+    .feed-search-wrap { display: flex; gap: .4rem; align-items: stretch; }
+    /* 1rem, never smaller: iOS zooms the whole page in on focus for any input
+       under 16px, and the feed would jump on every search. */
+    #feed-q {
+      font: inherit; font-size: 1rem; flex: 1; min-width: 0; min-height: 44px;
+      background: var(--field); color: var(--ink);
+      border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem;
+    }
+    .feed-clear {
+      flex: none; width: auto; min-width: 44px; min-height: 44px; padding: 0 .7rem;
+      border: 1px solid var(--line); border-radius: 8px;
+      background: var(--surface-subtle); color: var(--ink); cursor: pointer; font: inherit; font-size: .85rem;
+    }
+    .feed-clear:hover { border-color: var(--primary); }
+    .feed-count { margin: .5rem 0 0; font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    .feed-body { flex: 1; min-height: 0; overflow-y: auto; padding: .6rem 1rem 1rem; -webkit-overflow-scrolling: touch; }
+    .feed-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+    /* Full width IS what we want here, so the global button reset is left alone
+       — but min-height has to clear 44px for the whole row, not just the text. */
+    .feed-entry {
+      display: block; width: 100%; text-align: left; cursor: pointer; font: inherit;
+      border: 1px solid var(--line); border-radius: 10px; padding: .6rem .7rem;
+      background: var(--surface-subtle); color: var(--ink); min-height: 44px;
+    }
+    .feed-entry:hover { border-color: var(--primary); }
+    .feed-entry-top { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-bottom: .3rem; }
+    .feed-when { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .feed-author { font-size: .78rem; color: var(--muted); }
+    .feed-text { margin: 0; font-size: .95rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .feed-where { margin-top: .35rem; font-size: .8rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: .3rem .5rem; }
+    .feed-where .fp { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+    /* Source badges. Every one carries a WORD as well as a colour and a glyph —
+       "private" vs "shared" is the difference between a note only you can see
+       and one the whole team reads, which is far too consequential to signal by
+       hue alone (and invisible to a colourblind or greyscale reader). */
+    .feed-src {
+      display: inline-flex; align-items: center; gap: .25rem; flex: none;
+      font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+      padding: .12rem .45rem; border-radius: 4px; border: 1px solid currentColor;
+    }
+    /* Every icon here is a ligature: if the Material Symbols font does not load,
+       the glyph name renders as literal text ("close" measured 100px against a
+       44px button and pushed the header 12px wide). Boxing the icon means a
+       failed font degrades to a clipped word rather than a broken layout. */
+    .feed-src .material-symbols-outlined { font-size: 14px; max-width: 1em; overflow: hidden; }
+    .feed-src.private { background: var(--warning-soft); color: var(--warning); }
+    .feed-src.shared { background: var(--accent-soft); color: var(--accent); }
+    .feed-empty { color: var(--muted); font-size: .9rem; margin: 1rem 0; text-align: center; }
+    .feed-empty p { margin: 0 0 .5rem; }
+    .feed-more { width: 100%; min-height: 44px; margin-top: .6rem; }
+    .feed-error { color: var(--danger); font-size: .85rem; font-weight: 600; margin: .4rem 0; }
+    /* Reserve the row height while the bulk fetch is in flight so the list does
+       not jump when it lands. */
+    .feed-skel { border: 1px solid var(--line); border-radius: 10px; padding: .6rem .7rem; background: var(--surface-subtle); }
+    .feed-skel span { display: block; height: 10px; border-radius: 4px; background: var(--line); margin-bottom: .45rem; animation: feedPulse 1.4s ease-in-out infinite; }
+    .feed-skel span:last-child { width: 55%; margin-bottom: 0; }
+    @keyframes feedPulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+    @media (max-width: 640px) {
+      /* Full-screen on a phone: a 640px card inside a 390px viewport is just a
+         cramped box with a backdrop nobody can reach around. dvh, not vh — vh
+         is the pre-toolbar height on iOS and cuts the last row off. */
+      #notes-feed {
+        max-width: none; width: 100vw; max-height: 100dvh; height: 100dvh;
+        border: 0; border-radius: 0; margin: 0; top: 0; left: 0;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .feed-skel span { animation: none; }
+    }
+
     .back-to-dir { font-size: .85rem; text-decoration: none; color: var(--primary); margin-right: .2rem; }
     .back-to-dir:hover { text-decoration: underline; }
     .list-details-btn { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; }
@@ -2991,6 +3199,14 @@
       font-size: 20px; line-height: 1;
     }
     .toolbar-primary button { display: inline-flex; align-items: center; gap: .4rem; }
+    /* Count riding on the Notes button. Hidden entirely at zero rather than
+       shown as "0" — a zero badge reads as an unread counter that never clears. */
+    .btn-count {
+      font-size: .75rem; font-weight: 700; font-variant-numeric: tabular-nums;
+      padding: .05rem .35rem; border-radius: 999px;
+      background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);
+    }
+    .btn-count:empty { display: none; }
 
     .use {
       display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap;
@@ -3043,6 +3259,17 @@
     }
     .added.warn { color: var(--warning); border-color: var(--warning); }
 
+    .pm-feed-link { margin: 0 0 .6rem; }
+    /* Opts out of the global `button { width: 100% }` — this reads as a link in
+       running text, and full-width would make it a slab across the card. */
+    .pm-feed-btn {
+      width: auto; min-height: 44px; display: inline-flex; align-items: center; gap: .35rem;
+      font: inherit; font-size: .88rem; cursor: pointer; padding: .3rem .6rem;
+      border: 1px solid var(--line); border-radius: 8px;
+      background: var(--surface-subtle); color: var(--primary);
+    }
+    .pm-feed-btn:hover { border-color: var(--primary); }
+    .pm-feed-btn .material-symbols-outlined { font-size: 18px; }
     .pm-note-draft { border: 1px solid var(--line); border-radius: 8px; padding: .6rem; background: var(--surface-subtle); margin-bottom: .8rem; }
     .pm-draft-label { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); margin-bottom: .35rem; }
     .pm-lock { font-weight: 600; }
@@ -3273,6 +3500,9 @@
             <button id="optimize-route-btn" class="primary" data-list-action aria-describedby="optimize-route-note" onclick="optimizeUserListRoute()">
               <span class="material-symbols-outlined" aria-hidden="true">route</span>Optimize route
             </button>
+            <button id="notes-feed-btn" data-list-action onclick="openNotesFeed()">
+              <span class="material-symbols-outlined" aria-hidden="true">sticky_note_2</span>Notes<span id="notes-feed-count" class="btn-count"></span>
+            </button>
             <button data-list-action onclick="shareUserList()">
               <span class="material-symbols-outlined" aria-hidden="true">share</span>Share
             </button>
@@ -3295,6 +3525,14 @@
            buttons and the starting-location row are a full screen apart, and an
            explanation that far from the control it describes reads as unrelated. -->
       <div id="optimize-route-note" class="optimize-note" hidden></div>
+      <!-- Row filters. Built as a group so FEAT-031's visited/called chips join
+           this row rather than starting a second, competing filter bar. -->
+      <div id="list-filters" class="list-filters" role="group" aria-label="Filter permits in this list" hidden>
+        <button type="button" id="filter-followup" class="tag" aria-pressed="false" onclick="toggleFollowUpFilter()">
+          <span class="material-symbols-outlined" aria-hidden="true">flag</span>Follow-up only
+        </button>
+        <span id="list-filter-status" class="list-filter-status small" role="status" aria-live="polite"></span>
+      </div>
       <div class="focal-row" role="group" aria-label="Starting location">
         <label class="focal-label" for="focal-input">Starting location</label>
         <div class="focal-controls">
@@ -3405,6 +3643,18 @@
       live: { ws: null, id: null, clock: 0, connected: false, applying: false, closing: false, presence: { count: 0, names: [] }, retry: 0, retryTimer: null },
       userListNote: "",
       userPermitNotes: {},
+      userNoteTs: {},
+      // Per-list notes feed (FEAT-034). `loadedFor` is the list id the cached
+      // threads belong to, so switching lists refetches rather than showing the
+      // previous list's notes. `returnTo` remembers where the feed was when a
+      // permit was opened from it.
+      feed: {
+        q: "", entries: [], threads: {}, loading: false, error: "",
+        loadedFor: "", shown: 0, permit: "", returnTo: null,
+      },
+      // View filters for the saved list. Deliberately NOT persisted: a filter
+      // you forgot you set is how a list looks half-empty after a reload.
+      listFilters: { followUp: false },
       focalPoint: null,
       draggedPermitNumber: "",
       userRouteLegs: [],
@@ -3585,6 +3835,7 @@
           focal: data.focal || null,
           sharedId: id,
           ticks: data.ticks || {},
+          fu: data.fu || {},
           desc: (data.meta && data.meta.blurb) || "",
           author: (data.meta && data.meta.author) || "",
           tags: (data.meta && data.meta.tags) || [],
@@ -3775,6 +4026,9 @@
 
     async function showList(id) {
       if (id && state.lists[id]) {
+        // A view filter belongs to the list you set it on. Carried across, it
+        // shows the next list as empty for a filter you never set there.
+        if (id !== state.activeListId) state.listFilters = { followUp: false };
         state.activeListId = id;
         state.userPermitNumbers = [...state.lists[id].permits];
         saveUserLists();
@@ -3836,6 +4090,7 @@
       if (localId) {
         state.lists[localId].permits = permits;
         state.lists[localId].ticks = data.ticks || {};
+        state.lists[localId].fu = data.fu || {};
       } else {
         localId = `local_${Date.now().toString(36)}`;
         state.lists[localId] = {
@@ -3844,6 +4099,7 @@
           focal: data.focal || null,
           sharedId: shareId,
           ticks: data.ticks || {},
+          fu: data.fu || {},
         };
       }
       state.activeListId = localId;
@@ -4105,6 +4361,9 @@
         history.go(-unwind);
         setTimeout(() => { _permitModalClosing = false; }, 0);
       }
+      // Page-specific tail. On My Permit List this returns to the notes feed
+      // when the permit was opened from it; elsewhere it does nothing.
+      afterPermitModalClose();
     }
 
     window.addEventListener("popstate", () => {
@@ -5288,16 +5547,25 @@
         const saved = JSON.parse(raw);
         state.userListNote = clean(saved.list);
         state.userPermitNotes = saved.permits && typeof saved.permits === "object" ? saved.permits : {};
+        // Edit times, kept BESIDE the notes rather than folded into them
+        // (FEAT-034). The note values stay plain strings, which every existing
+        // reader — the table cell, the CSV/KML exports, the overlay textarea —
+        // already assumes; changing that shape would have meant touching all of
+        // them. Notes written before this shipped simply have no entry here and
+        // are shown as undated.
+        state.userNoteTs = saved.noteTs && typeof saved.noteTs === "object" ? saved.noteTs : {};
       } catch (error) {
         state.userListNote = "";
         state.userPermitNotes = {};
+        state.userNoteTs = {};
       }
     }
 
     function saveUserNotes() {
       const payload = JSON.stringify({
         list: state.userListNote,
-        permits: state.userPermitNotes
+        permits: state.userPermitNotes,
+        noteTs: state.userNoteTs
       });
       try {
         localStorage.setItem(userNotesKey, payload);
@@ -5316,8 +5584,10 @@
       const note = clean(value);
       if (note) {
         state.userPermitNotes[number] = note;
+        state.userNoteTs[number] = Math.floor(Date.now() / 1000);
       } else {
         delete state.userPermitNotes[number];
+        delete state.userNoteTs[number];
       }
       saveUserNotes();
     }
@@ -6319,29 +6589,37 @@
       return [...seen.entries()].map(([key, on]) => [key, on]);
     }
 
-    let tickQueue = [];
-    let tickTimer = null;
+    // Visited ticks and follow-up flags are the same shape over the wire — a
+    // key and a boolean on the same list — so they share one queue keyed by
+    // endpoint rather than two copies free to drift. The Worker's handler is
+    // shared for the same reason.
+    const flagQueues = { ticks: [], follow: [] };
+    const flagTimers = { ticks: null, follow: null };
 
-    function queueTickSync() {
+    function queueFlagSync(endpoint) {
       const list = activeList();
-      if (!list || !list.sharedId) { tickQueue = []; return; }
-      clearTimeout(tickTimer);
-      tickTimer = setTimeout(async () => {
-        const batch = coalesceTicks(tickQueue);
-        tickQueue = [];
+      if (!list || !list.sharedId) { flagQueues[endpoint] = []; return; }
+      clearTimeout(flagTimers[endpoint]);
+      flagTimers[endpoint] = setTimeout(async () => {
+        const batch = coalesceTicks(flagQueues[endpoint]);
+        flagQueues[endpoint] = [];
         for (const [key, on] of batch) {
           try {
-            await fetch(`${API_BASE}/api/lists/${encodeURIComponent(list.sharedId)}/ticks`, {
+            await fetch(`${API_BASE}/api/lists/${encodeURIComponent(list.sharedId)}/${endpoint}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ key, on }),
             });
           } catch {
-            // Offline or Worker unreachable. The tick is already stored
+            // Offline or Worker unreachable. The flag is already stored
             // locally and resyncs next time this list is opened.
           }
         }
       }, 800);
+    }
+
+    function queueTickSync() {
+      queueFlagSync("ticks");
     }
 
     function toggleTick(encodedKey, on) {
@@ -6356,7 +6634,7 @@
       if (state.live.connected && activeList() && activeList().sharedId === state.live.id) {
         sendListOp({ f: "tick", k: key, v: on ? 1 : 0 });
       } else {
-        tickQueue.push([key, !!on]);
+        flagQueues.ticks.push([key, !!on]);
         queueTickSync();
       }
     }
@@ -6371,6 +6649,117 @@
       return !!(list && list.ticks && key && list.ticks[key]);
     }
 
+    // The toggle, rendered directly under the general contractors it applies to
+    // so "follow up" is never ambiguous about who. Only on a page with a list
+    // open — the flag lives on the list, so there is nowhere to store it on the
+    // search directory, and a control that silently does nothing is worse than
+    // no control.
+    function followUpToggleHtml(row) {
+      if (!notesFeedAvailable()) return "";
+      const list = activeList();
+      const key = tickKeyFor(row);
+      if (!list || !key || !isInUserList(row.permit_number)) return "";
+      const on = isFollowedUp(row);
+      const who = followUpGcName(row);
+      const what = who ? `Follow up with ${who}` : "Follow up on this permit";
+      return `<p class="pm-fu-row"><button type="button" class="pm-fu" aria-pressed="${on ? "true" : "false"}"
+        aria-label="${esc(what)}${on ? " — flagged, press to clear" : ""}"
+        onclick="toggleFollowUp('${enc(key)}', ${on ? "false" : "true"})">
+        <span class="material-symbols-outlined" aria-hidden="true">flag</span>${esc(what)}</button>
+        <span class="pm-fu-state">${on ? "Flagged for follow-up" : "Not flagged"}</span></p>`;
+    }
+
+    // Row badge, so a flagged permit is obvious WITHOUT opening it. Carries the
+    // word "Follow up" and a flag glyph, never colour alone, and names the GC in
+    // its title so the badge answers "follow up with whom".
+    function followUpBadgeHtml(row) {
+      const who = followUpGcName(row);
+      const label = who ? `Follow up with ${who}` : "Follow up";
+      return `<span class="fu-badge" title="${esc(label)}"><span class="material-symbols-outlined" aria-hidden="true">flag</span>Follow up</span>`;
+    }
+
+    // ---- Follow-up flag (FEAT-034) ----
+    // Attached to the PERMIT, keyed exactly like a visited tick, and labelled
+    // with the general contractor it is about. Flagging the contractor company
+    // itself would mark every one of its permits at once, which is a different
+    // and much larger feature — this is "chase this job", not "chase this firm".
+    function isFollowedUp(row) {
+      const list = activeList();
+      const key = tickKeyFor(row);
+      return !!(list && list.fu && key && list.fu[key]);
+    }
+
+    // The GC this follow-up is about. Permits can name several; the first is
+    // the one the row and the card both lead with, so they agree.
+    function followUpGcName(row) {
+      const gcs = (row && row.general_contractors) || [];
+      const first = gcs.find(gc => clean(gc && gc.name));
+      return first ? clean(first.name) : "";
+    }
+
+    function toggleFollowUp(encodedKey, on) {
+      const key = decodeURIComponent(encodedKey);
+      const list = activeList();
+      if (!list) return;
+      list.fu = list.fu || {};
+      if (on) list.fu[key] = 1; else delete list.fu[key];
+      saveUserLists();
+      if (state.live.connected && activeList().sharedId === state.live.id) {
+        sendListOp({ f: "fu", k: key, v: on ? 1 : 0 });
+      } else {
+        flagQueues.follow.push([key, !!on]);
+        queueFlagSync("follow");
+      }
+      const row = state.userPermitMap.get(key);
+      const who = followUpGcName(row);
+      announceListAction(on
+        ? `Flagged ${who ? who + " on " : ""}permit ${key} for follow-up.`
+        : `Cleared the follow-up flag on permit ${key}.`);
+      // Repaint the row badge and, if the permit card is open, its toggle.
+      renderUserList();
+      if (activeCard()?.type === "permit") refreshCardPreservingFocus();
+    }
+
+    // ---- List view filters (FEAT-034) ----
+    // One flag today; kept as an object and a shared group in the markup so
+    // FEAT-031's visited/called chips compose here instead of starting a second
+    // filter bar.
+    function isListFiltered() {
+      return !!state.listFilters.followUp;
+    }
+
+    function visibleListRows(rows) {
+      return state.listFilters.followUp ? rows.filter(isFollowedUp) : rows;
+    }
+
+    function toggleFollowUpFilter() {
+      state.listFilters.followUp = !state.listFilters.followUp;
+      renderUserList();
+      announceListAction(state.listFilters.followUp
+        ? "Showing only permits flagged for follow-up."
+        : "Showing all permits in this list.");
+    }
+
+    function clearListFilters() {
+      state.listFilters.followUp = false;
+      renderUserList();
+      announceListAction("Showing all permits in this list.");
+    }
+
+    // The bar hides itself when nothing is flagged AND no filter is on: a
+    // filter for a state that cannot occur yet is just a dead control.
+    function renderListFilters(rows, filtered) {
+      const flagged = rows.filter(isFollowedUp).length;
+      const bar = $("list-filters");
+      const btn = $("filter-followup");
+      if (!bar || !btn) return;
+      bar.hidden = !flagged && !isListFiltered();
+      btn.setAttribute("aria-pressed", state.listFilters.followUp ? "true" : "false");
+      $("list-filter-status").textContent = isListFiltered()
+        ? `Showing ${fmt(filtered.length)} of ${fmt(rows.length)}`
+        : (flagged ? `${fmt(flagged)} flagged for follow-up` : "");
+    }
+
     // ---- Live sync (Phase B) ----
     // Applies a server op to a local list object. Mirrors the Worker's applyOp;
     // incoming ops are already server-validated, so this applies them directly.
@@ -6382,6 +6771,10 @@
         case "tick":
           list.ticks = list.ticks || {};
           if (op.k) { if (op.v) list.ticks[op.k] = 1; else delete list.ticks[op.k]; }
+          break;
+        case "fu":
+          list.fu = list.fu || {};
+          if (op.k) { if (op.v) list.fu[op.k] = 1; else delete list.fu[op.k]; }
           break;
         case "meta": {
           const m = op.v || {};
@@ -6474,6 +6867,7 @@
           list.focal = d.f || null;
           list.custom = Array.isArray(d.custom) ? d.custom.slice() : [];
           list.ticks = d.ticks && typeof d.ticks === "object" ? d.ticks : {};
+          list.fu = d.fu && typeof d.fu === "object" ? d.fu : {};
           if (d.meta) { list.name = d.meta.title || list.name; list.desc = d.meta.blurb != null ? d.meta.blurb : list.desc; list.author = d.meta.author != null ? d.meta.author : list.author; list.tags = d.meta.tags != null ? d.meta.tags : list.tags; }
           live.clock = msg.clock || 0;
           if (msg.presence) live.presence = msg.presence;
@@ -6730,6 +7124,7 @@
       if (!window.confirm(`Remove permit ${number} from My Permit List?`)) return;
       state.userPermitNumbers = state.userPermitNumbers.filter(item => item !== number);
       delete state.userPermitNotes[number];
+      delete state.userNoteTs[number];
       saveUserListCookie();
       saveUserNotes();
       clearUserRoute("List changed. Recalculate driving distances when ready.");
@@ -6752,6 +7147,7 @@
       state.userPermitNumbers = [];
       state.userListNote = "";
       state.userPermitNotes = {};
+      state.userNoteTs = {};
       saveUserListCookie();
       saveUserNotes();
       clearUserRoute();
@@ -6834,6 +7230,7 @@
         el.classList.toggle("zero", label === "0");
         if (publicCount > 0) el.title = publicCount + " public note" + (publicCount === 1 ? "" : "s");
       });
+      refreshNotesFeedCount();
     }
 
     function fillListGeoCells(rows) {
@@ -6867,17 +7264,34 @@
         $("user-list").innerHTML = `<div class="empty">No permits added yet.</div>`;
         return;
       }
-      $("user-list").innerHTML = permitTable(rows, {
+      // The filter is a VIEW filter and nothing more. Exports, drive distances
+      // and Optimize route all keep reading userListRows(), so narrowing the
+      // view can never quietly narrow what gets exported or routed.
+      const filtered = visibleListRows(rows);
+      renderListFilters(rows, filtered);
+      if (!filtered.length) {
+        $("user-list").innerHTML = `<div class="empty">No permits in this list are flagged for follow-up. <button type="button" class="linkish" onclick="clearListFilters()">Show all ${fmt(rows.length)}</button></div>`;
+        return;
+      }
+      $("user-list").innerHTML = permitTable(filtered, {
         select: false,
         remove: true,
         notes: true,
-        reorder: true,
+        // Reordering a filtered view moves a row within the FULL list, so the
+        // row often would not appear to move at all. Locked while filtered,
+        // with the reason stated rather than the buttons silently misbehaving.
+        reorder: !isListFiltered(),
+        moveLocked: isListFiltered(),
         move: true,
         geo: true,
         sortable: false,
         emptyText: "No permits added yet."
       });
-      fillListGeoCells(rows);
+      fillListGeoCells(filtered);
+      // Paint the Notes button from what is already known locally, then let the
+      // count fetch refine it — otherwise the button sits blank until the
+      // network answers, on a list whose private notes we can count instantly.
+      refreshNotesFeedCount();
       fetchNoteCounts(rows.filter(r => !r.is_custom).map(r => clean(r.permit_number)));
     }
 
@@ -7113,7 +7527,7 @@
               ${options.remove ? `<td class="select-cell" data-label="Remove"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell" data-label="Select" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
               ${options.move ? (() => { const tk = tickKeyFor(row); return `<td class="tick-cell" data-label="Visited"><input type="checkbox" class="tick" ${isTicked(row) ? "checked" : ""} aria-label="Mark ${esc(row.address || row.permit_number || "this stop")} visited" onclick="event.stopPropagation()" onchange="toggleTick('${enc(tk)}', this.checked)"></td>`; })() : ""}
-              <td data-label="Permit">${options.move ? `<span class="list-ordinal" aria-label="Stop ${i + 1}">${i + 1}</span>` : ""}<strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
+              <td data-label="Permit">${options.move ? `<span class="list-ordinal" aria-label="Stop ${i + 1}">${i + 1}</span>` : ""}<strong>${esc(row.permit_number)}</strong>${options.move && isFollowedUp(row) ? followUpBadgeHtml(row) : ""}<br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
               <td data-label="Status">${esc(row.permit_status)}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
               <td data-label="Address">${options.move && clean(row.address) ? (() => { const u = mapsUrls(row.address); return `<span class="maps-picker"><button type="button" class="address-open" aria-haspopup="true" aria-expanded="false" aria-controls="maps-menu-${i}" onclick="event.stopPropagation(); toggleMapsMenu(this)">${esc(row.address)}<span class="chev" aria-hidden="true">▾</span></button><span class="maps-menu" id="maps-menu-${i}" role="menu"><span class="maps-menu-label">Open in</span><a role="menuitem" href="${esc(u.apple)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Apple Maps</a><a role="menuitem" href="${esc(u.google)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Google Maps</a><a role="menuitem" href="${esc(u.waze)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Waze</a></span></span>`; })() : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span>${row.is_custom ? (row.no_geo ? `<span class="added warn" title="Could not be placed on the map">\u26A0 No location</span>` : `<span class="added" title="Typed by hand, not matched to a city permit">\u270E Added by hand</span>`) : ""}</td>
@@ -7122,7 +7536,16 @@
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
               ${options.geo ? `<td data-label="Zone" class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</td><td data-label="TIF district" class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</td>` : ""}
               ${options.notes ? (() => { const pn = clean(row.permit_number); const nt = state.userPermitNotes[pn] || ""; const attr = row.is_custom ? "" : ` data-permit="${esc(pn)}"`; return `<td class="note-count-cell" data-label="Notes"><span class="notecount${nt ? "" : " zero"}"${attr}${nt ? ' title="You have a private note on this permit"' : ""}>${nt ? "✎" : "0"}</span></td>`; })() : ""}
-              ${options.move ? `<td class="move-cell" data-label="Move"><div class="move-controls"><button class="icon-button" title="Move up" aria-label="Move ${esc(row.permit_number)} up" ${i === 0 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', -1)">&uarr;</button><button class="icon-button" title="Move down" aria-label="Move ${esc(row.permit_number)} down" ${i >= rows.length - 1 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', 1)">&darr;</button></div></td>` : ""}
+              ${options.move ? (() => {
+                // Locked while filtered: the offset moves the row within the
+                // FULL list, so from a filtered view it would often not appear
+                // to move at all. aria-disabled, not disabled, so the button
+                // stays focusable and can say why when pressed.
+                const btn = (glyph, dir, edge) => options.moveLocked
+                  ? `<button class="icon-button" aria-disabled="true" title="Clear the follow-up filter to reorder stops" aria-label="Move ${esc(row.permit_number)} ${dir < 0 ? "up" : "down"} — unavailable while the list is filtered" onclick="event.stopPropagation(); announceListAction('Clear the follow-up filter to reorder stops.')">${glyph}</button>`
+                  : `<button class="icon-button" title="Move ${dir < 0 ? "up" : "down"}" aria-label="Move ${esc(row.permit_number)} ${dir < 0 ? "up" : "down"}" ${edge ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', ${dir})">${glyph}</button>`;
+                return `<td class="move-cell" data-label="Move"><div class="move-controls">${btn("&uarr;", -1, i === 0)}${btn("&darr;", 1, i >= rows.length - 1)}</div></td>`;
+              })() : ""}
             </tr>`).join("")}</tbody>
         </table>`;
     }
@@ -7597,6 +8020,379 @@
         : `<p class="tp-empty">No public notes yet. Post one above.</p>`;
     }
 
+    // ==== Per-list notes feed (FEAT-034) ====================================
+    // Every note attached to the permits in the list you are currently viewing,
+    // newest first, searchable. Scope is always the active list — a different
+    // list has a different feed, and nothing outside the list can appear.
+
+    // Entries are rendered in pages so a list with thousands of notes does not
+    // build thousands of DOM nodes on open.
+    const FEED_PAGE = 50;
+
+    function walkFeedSummary(post) {
+      const { gc, sub } = walkParties(post);
+      const job = post.job === "new" ? "New construction" : "Remodel";
+      const who = [];
+      if (gc && gc.name) who.push(`GC ${gc.name}`);
+      if (sub && sub.name) who.push(`sub ${sub.name}`);
+      return `Walkthrough — ${job}, ${who.length ? who.join(" and ") : "nobody on site"}`;
+    }
+
+    function feedPostText(post) {
+      if (post.kind === "walk") return walkFeedSummary(post);
+      if (post.kind === "photo") {
+        const n = Array.isArray(post.photos) ? post.photos.length : 0;
+        const caption = clean(post.text).trim();
+        const label = n === 1 ? "1 photo" : `${n} photos`;
+        return caption ? `${label} — ${caption}` : label;
+      }
+      return clean(post.text).trim();
+    }
+
+    // Assemble the feed from the list's rows plus whatever /api/notes/bulk gave
+    // us. A private note with no recorded time (written before FEAT-034) gets
+    // ts null and shows as undated — inventing a time would be a lie about when
+    // the work happened.
+    function buildFeedEntries(rows) {
+      const entries = [];
+      for (const row of rows || []) {
+        const permit = clean(row.permit_number);
+        if (!permit) continue;
+        const address = clean(row.address);
+        const mine = clean(state.userPermitNotes[permit]).trim();
+        if (mine) {
+          const ts = Number(state.userNoteTs[permit]);
+          entries.push({
+            id: `private:${permit}`, permit, address, text: mine,
+            ts: Number.isFinite(ts) ? ts : null, author: "", kind: "private", shared: false,
+          });
+        }
+        for (const post of state.feed.threads[permit] || []) {
+          const text = feedPostText(post);
+          if (!text) continue;
+          const ts = Number(post.ts);
+          entries.push({
+            id: `post:${permit}:${post.id}`, permit, address, text,
+            ts: Number.isFinite(ts) ? ts : null,
+            author: clean(post.author).trim(),
+            kind: post.kind === "walk" || post.kind === "photo" ? post.kind : "note",
+            shared: true, edited: !!post.editedTs,
+          });
+        }
+      }
+      return sortFeedEntries(entries);
+    }
+
+    // Newest first, undated last — an old note with no timestamp floated to the
+    // top would read as the most recent thing in the list. Ties break on id so
+    // the order does not shuffle between renders.
+    function sortFeedEntries(entries) {
+      return entries.slice().sort((a, b) => {
+        if (a.ts == null && b.ts == null) return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+        if (a.ts == null) return 1;
+        if (b.ts == null) return -1;
+        if (b.ts !== a.ts) return b.ts - a.ts;
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+      });
+    }
+
+    // Every term must match, so a second word narrows the result instead of
+    // widening it. Covers the note text, permit number, address and author.
+    function filterFeedEntries(entries, query) {
+      const terms = norm(query).split(/\s+/).filter(Boolean);
+      if (!terms.length) return entries;
+      return entries.filter(entry => {
+        const hay = norm(`${entry.text} ${entry.permit} ${entry.address} ${entry.author}`);
+        return terms.every(term => hay.includes(term));
+      });
+    }
+
+    function chunkPermits(permits, size = 200) {
+      const out = [];
+      const seen = new Set();
+      for (const p of permits) {
+        const permit = clean(p);
+        if (!permit || seen.has(permit)) continue;
+        seen.add(permit);
+        if (!out.length || out[out.length - 1].length >= size) out.push([]);
+        out[out.length - 1].push(permit);
+      }
+      return out;
+    }
+
+    function feedCountLabel(shown, total, searching) {
+      if (!total) return "No notes";
+      if (searching) return `${fmt(shown)} of ${fmt(total)} ${total === 1 ? "note" : "notes"}`;
+      return `${fmt(total)} ${total === 1 ? "note" : "notes"}`;
+    }
+
+    function feedRows() {
+      // Custom stops have no permit number, so they can carry neither a private
+      // note nor a public thread — they are simply not part of the feed.
+      return (state.userPermitNumbers || [])
+        .map(number => state.userPermitMap.get(clean(number)))
+        .filter(Boolean);
+    }
+
+    // One request per 200 permits instead of one per permit.
+    async function loadFeedThreads() {
+      const listId = state.activeListId;
+      const permits = (state.userPermitNumbers || []).map(clean).filter(Boolean);
+      state.feed.loading = true;
+      state.feed.error = "";
+      renderNotesFeed();
+      const threads = {};
+      try {
+        for (const chunk of chunkPermits(permits)) {
+          const res = await fetch(`${API_BASE}/api/notes/bulk?p=${encodeURIComponent(chunk.join(","))}`);
+          if (!res.ok) throw new Error("bulk unavailable");
+          const data = await res.json();
+          Object.assign(threads, data.threads || {});
+        }
+        state.feed.threads = threads;
+        state.feed.loadedFor = listId;
+      } catch {
+        // The private half of the feed still works offline, so this is a
+        // partial failure and says so rather than showing an empty feed.
+        state.feed.threads = {};
+        state.feed.loadedFor = listId;
+        state.feed.error = "Shared notes could not be loaded. Your private notes are still listed.";
+      }
+      state.feed.loading = false;
+      renderNotesFeed();
+    }
+
+    function feedSrcBadge(entry) {
+      // Word first, colour second: "private" and "shared" differ in who can
+      // read the note, which must not be signalled by hue alone.
+      if (!entry.shared) {
+        return `<span class="feed-src private"><span class="material-symbols-outlined" aria-hidden="true">lock</span>Private</span>`;
+      }
+      const label = entry.kind === "walk" ? "Walkthrough" : entry.kind === "photo" ? "Photo" : "Shared";
+      const icon = entry.kind === "walk" ? "directions_walk" : entry.kind === "photo" ? "photo_camera" : "group";
+      return `<span class="feed-src shared"><span class="material-symbols-outlined" aria-hidden="true">${icon}</span>${label}</span>`;
+    }
+
+    function feedEntryHtml(entry) {
+      const when = entry.ts == null
+        ? `<span class="feed-when">Date not recorded</span>`
+        : `<time class="feed-when" datetime="${new Date(entry.ts * 1000).toISOString()}">${esc(dateStampLabel(entry.ts))}${entry.edited ? " · edited" : ""}</time>`;
+      const who = entry.author ? `<span class="feed-author">${esc(entry.author)}</span>` : "";
+      const where = `<span class="fp">${esc(entry.permit)}</span>${entry.address ? `<span>${esc(entry.address)}</span>` : ""}`;
+      const label = `${entry.shared ? "Shared" : "Private"} note on permit ${entry.permit}${entry.address ? `, ${entry.address}` : ""}. Open this permit.`;
+      return `<li><button type="button" class="feed-entry" aria-label="${esc(label)}" onclick="openPermitFromFeed('${enc(entry.permit)}')">
+        <span class="feed-entry-top">${feedSrcBadge(entry)}${when}${who}</span>
+        <p class="feed-text">${esc(entry.text)}</p>
+        <span class="feed-where">${where}</span>
+      </button></li>`;
+    }
+
+    function renderNotesFeed() {
+      const dlg = $("notes-feed");
+      if (!dlg || !dlg.open) return;
+      const body = dlg.querySelector(".feed-body");
+      const count = dlg.querySelector(".feed-count");
+      if (!body || !count) return;
+
+      if (state.feed.loading) {
+        body.innerHTML = `<div class="feed-list" aria-hidden="true">${
+          `<div class="feed-skel"><span></span><span></span></div>`.repeat(3)}</div>`;
+        count.textContent = "Loading notes…";
+        return;
+      }
+
+      const all = state.feed.entries;
+      const scoped = state.feed.permit ? all.filter(e => e.permit === state.feed.permit) : all;
+      const matched = filterFeedEntries(scoped, state.feed.q);
+      const shown = matched.slice(0, state.feed.shown);
+      const searching = !!state.feed.q.trim();
+      count.textContent = feedCountLabel(matched.length, scoped.length, searching);
+
+      const err = state.feed.error ? `<p class="feed-error">${esc(state.feed.error)}</p>` : "";
+
+      if (!scoped.length) {
+        // No notes at all is a different situation from a search that matched
+        // nothing, and telling someone "no results" when they have never
+        // written a note sends them hunting for a filter to clear.
+        body.innerHTML = `${err}<div class="feed-empty">
+          <p>${state.feed.permit ? "No notes on this permit yet." : "No notes in this list yet."}</p>
+          <p>Open a permit and add a private note, or post one to share with the team.</p>
+        </div>`;
+        return;
+      }
+      if (!matched.length) {
+        body.innerHTML = `${err}<div class="feed-empty">
+          <p>No notes match “${esc(state.feed.q.trim())}”.</p>
+          <button type="button" class="feed-more" onclick="clearFeedSearch()">Clear search</button>
+        </div>`;
+        return;
+      }
+
+      const more = matched.length > shown.length
+        ? `<button type="button" class="feed-more" onclick="showMoreFeed()">Show ${fmt(Math.min(FEED_PAGE, matched.length - shown.length))} more</button>`
+        : "";
+      body.innerHTML = `${err}<ol class="feed-list">${shown.map(feedEntryHtml).join("")}</ol>${more}`;
+    }
+
+    function feedSearchInput(value) {
+      state.feed.q = clean(value);
+      state.feed.shown = FEED_PAGE;
+      renderNotesFeed();
+    }
+
+    function clearFeedSearch() {
+      state.feed.q = "";
+      state.feed.shown = FEED_PAGE;
+      const box = $("feed-q");
+      if (box) { box.value = ""; box.focus(); }
+      renderNotesFeed();
+    }
+
+    function showMoreFeed() {
+      state.feed.shown += FEED_PAGE;
+      renderNotesFeed();
+    }
+
+    // opts.permit  — open filtered to one permit's notes
+    // opts.restore — coming back from a permit; reuse the remembered search and
+    //                scroll rather than resetting the view the user built.
+    async function openNotesFeed(opts = {}) {
+      const dlg = $("notes-feed");
+      if (!dlg || dlg.open) return;
+      const list = activeList();
+      const back = opts.restore ? state.feed.returnTo : null;
+      state.feed.permit = opts.permit ? clean(opts.permit) : (back ? back.permit : "");
+      state.feed.q = back ? back.q : "";
+      state.feed.shown = back ? back.shown : FEED_PAGE;
+
+      const scopeNote = state.feed.permit
+        ? `Notes on permit ${state.feed.permit}`
+        : `Notes on the ${fmt((state.userPermitNumbers || []).length)} permits in ${clean(list && list.name) || "this list"}`;
+
+      dlg.innerHTML = `<div class="feed-head">
+          <div class="feed-title-row">
+            <div>
+              <h3 id="feed-title">Notes${state.feed.permit ? " for this permit" : ""}</h3>
+              <p class="feed-scope">${esc(scopeNote)}</p>
+            </div>
+            <button type="button" class="feed-close" onclick="closeNotesFeed()" aria-label="Close notes">
+              <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+          </div>
+          <div class="feed-search-row">
+            <label for="feed-q">Search these notes</label>
+            <div class="feed-search-wrap">
+              <input id="feed-q" type="search" autocomplete="off" placeholder="Note text, permit number or address"
+                value="${esc(state.feed.q)}" oninput="feedSearchInput(this.value)">
+              <button type="button" class="feed-clear" onclick="clearFeedSearch()">Clear</button>
+            </div>
+          </div>
+          <p class="feed-count" role="status" aria-live="polite"></p>
+        </div>
+        <div class="feed-body"></div>`;
+
+      dlg.addEventListener("close", onNotesFeedClose, { once: true });
+      dlg.showModal();
+
+      // Cached threads are keyed to the list they came from, so switching lists
+      // refetches instead of showing the previous list's notes.
+      if (state.feed.loadedFor !== state.activeListId) {
+        state.feed.entries = buildFeedEntries(feedRows());
+        renderNotesFeed();
+        await loadFeedThreads();
+      }
+      state.feed.entries = buildFeedEntries(feedRows());
+      renderNotesFeed();
+
+      const body = dlg.querySelector(".feed-body");
+      if (body && back) body.scrollTop = back.scrollTop;
+      // Focus the search box on a fresh open so typing just works; on a restore
+      // leave focus alone so returning does not yank the page around.
+      if (!back) { const q = $("feed-q"); if (q) q.focus(); }
+    }
+
+    function onNotesFeedClose() {
+      // Only a deliberate close clears the return point. Opening a permit sets
+      // it immediately before calling close(), so it survives to the trip back.
+      if (!_feedOpeningPermit) state.feed.returnTo = null;
+      _feedOpeningPermit = false;
+    }
+
+    let _feedOpeningPermit = false;
+
+    function closeNotesFeed() {
+      const dlg = $("notes-feed");
+      if (dlg && dlg.open) dlg.close();
+    }
+
+    // Feed -> permit. The feed is a native <dialog> in the top layer and the
+    // permit overlay is not, so the two cannot be shown at once — the feed has
+    // to close, which is why its position is captured first.
+    function openPermitFromFeed(encodedPermit) {
+      const permit = decodeURIComponent(encodedPermit);
+      const row = state.userPermitMap.get(permit);
+      if (!row) { announceListAction(`Permit ${permit} is no longer in this list.`); return; }
+      const dlg = $("notes-feed");
+      const body = dlg && dlg.querySelector(".feed-body");
+      state.feed.returnTo = {
+        q: state.feed.q,
+        shown: state.feed.shown,
+        permit: state.feed.permit,
+        scrollTop: body ? body.scrollTop : 0,
+      };
+      _feedOpeningPermit = true;
+      closeNotesFeed();
+      openPermitDetail(row);
+    }
+
+    // Permit -> feed, filtered to that permit (the card's "see the notes for
+    // this permit" link). Closes the overlay first, same top-layer reason.
+    function openFeedForPermit(encodedPermit) {
+      const permit = decodeURIComponent(encodedPermit);
+      state.feed.returnTo = null;
+      closePermitModal();
+      openNotesFeed({ permit });
+    }
+
+    // Called by closePermitModal on every close path. Returns to the feed only
+    // if this permit was opened FROM the feed, so an ordinary close still just
+    // closes.
+    function afterPermitModalClose() {
+      if (!state.feed.returnTo) return;
+      // The overlay unwinds its history entries on close; reopening on the next
+      // task lets that settle first, otherwise the popstate handler races the
+      // dialog and the feed reopens only to be closed again.
+      setTimeout(() => { openNotesFeed({ restore: true }); }, 0);
+    }
+
+    function notesFeedAvailable() {
+      return true;
+    }
+
+    // The count on the toolbar button. Private notes are known locally; the
+    // shared count reuses `state.noteCounts`, which the table chips already
+    // fetch, so the button is accurate before the feed has ever been opened
+    // and costs no extra request.
+    function refreshNotesFeedCount() {
+      const el = $("notes-feed-count");
+      if (!el) return;
+      const counts = state.noteCounts || {};
+      let n = 0;
+      for (const number of state.userPermitNumbers || []) {
+        const permit = clean(number);
+        if (!permit) continue;
+        if (clean(state.userPermitNotes[permit]).trim()) n += 1;
+        n += Number(counts[permit]) || 0;
+      }
+      el.textContent = n ? fmt(n) : "";
+      const btn = $("notes-feed-btn");
+      if (btn) {
+        btn.setAttribute("aria-label", n
+          ? `Notes — ${fmt(n)} in this list`
+          : "Notes — none in this list yet");
+      }
+    }
+
     async function postNoteText(permit) {
       const box = document.getElementById("pm-note-draft");
       const text = (box && box.value || "").trim();
@@ -7985,9 +8781,12 @@
             ["Reported cost", money(row.reported_cost)],
             ["Total fee", money(row.total_fee)],
           ])}</section>`,
-        () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div></section>`,
+        () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div>${followUpToggleHtml(row)}</section>`,
         () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div><div class="pm-reported" id="pm-reported"></div></section>`,
         () => `<section class="pm-block"><h3>Notes</h3>
+            ${notesFeedAvailable() ? `<p class="pm-feed-link"><button type="button" class="pm-feed-btn" onclick="openFeedForPermit('${enc(row.permit_number)}')">
+              <span class="material-symbols-outlined" aria-hidden="true">sticky_note_2</span>See this permit's notes in the list feed
+            </button></p>` : ""}
             <div class="pm-note-draft">
               <label class="pm-draft-label" for="pm-note-draft">My note <span class="pm-lock">\ud83d\udd12 private to this browser</span></label>
               <textarea id="pm-note-draft" class="pm-note" placeholder="Private note, saved as you type\u2026" aria-label="Private note for permit ${esc(row.permit_number)}"
@@ -8439,6 +9238,7 @@
   <dialog id="list-picker" aria-modal="true"></dialog>
   <dialog id="list-details" aria-modal="true"></dialog>
   <dialog id="add-address" aria-modal="true"></dialog>
+  <dialog id="notes-feed" aria-modal="true" aria-labelledby="feed-title"></dialog>
   <dialog id="walkthrough" aria-modal="true"></dialog>
   <dialog id="photo-compose" aria-modal="true"></dialog>
 </body>
