@@ -3254,7 +3254,10 @@
     }
     .notecount.zero { color: var(--muted); border-color: var(--line); font-weight: 500; }
 
-    .tick-cell { white-space: nowrap; }
+    td.tick-cell { white-space: nowrap; }
+    /* The header is two words over a 22px column: it must wrap at its
+       <wbr> instead of inheriting the table's nowrap and overflowing. */
+    .saved-permits-table th.tick-cell { white-space: normal; }
     .tick { width: 22px; height: 22px; accent-color: var(--accent); cursor: pointer; margin: .5rem; }
     /* State is dimming + strike-through as well as the box, so it never rests
        on colour alone. */
@@ -7534,14 +7537,14 @@
       const removeHead = options.remove ? "<th class=\"select-cell\" aria-label=\"Remove permits\"></th>" : "";
       const notesHead = options.notes ? "<th>Notes</th>" : "";
       const useHead = options.move ? "<th>Use</th>" : "";
-      const tickHead = options.move ? `<th class="tick-cell"><span aria-hidden="true">\u2713</span><span class="sr-only">Visited</span></th>` : "";
+      const tickHead = options.move ? `<th class="tick-cell">Visited/<wbr>Called</th>` : "";
       const geoHead = options.geo ? "<th>Zone</th><th>TIF district</th>" : "";
       const moveHead = options.move ? "<th class=\"move-cell\" aria-label=\"Move permits\"></th>" : "";
       const head = (label, key) => options.sortable === false ? esc(label) : sortHeader(label, key);
       const tableClass = options.select ? "results-table permits-table" : options.notes ? "saved-permits-table" : "";
       return `
         <table class="${tableClass}">
-          <thead><tr>${tickHead}${removeHead}${selectHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th>${options.move ? "" : `<th>${head("Ward", "ward")}</th>`}${useHead}<th>${head("Cost", "cost")}</th>${geoHead}${notesHead}${moveHead}</tr></thead>
+          <thead><tr>${removeHead}${selectHead}${tickHead}<th>${head("Permit", "permit_number")}</th><th>${head("Status", "permit_status")}</th><th>${head("Issued", "issued")}</th><th>${head("Address", "address")}</th>${options.move ? "" : `<th>${head("Ward", "ward")}</th>`}${useHead}<th>${head("Cost", "cost")}</th>${geoHead}${notesHead}${moveHead}</tr></thead>
           <tbody>${rows.map((row, i) => `
             <tr
               ${options.move ? `data-tick-row="${esc(tickKeyFor(row))}"` : ""}
@@ -7554,7 +7557,7 @@
             >
               ${options.remove ? `<td class="select-cell" data-label="Remove"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell" data-label="Select" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
-              ${options.move ? (() => { const tk = tickKeyFor(row); return `<td class="tick-cell" data-label="Visited"><input type="checkbox" class="tick" ${isTicked(row) ? "checked" : ""} aria-label="Mark ${esc(row.address || row.permit_number || "this stop")} visited" onclick="event.stopPropagation()" onchange="toggleTick('${enc(tk)}', this.checked)"></td>`; })() : ""}
+              ${options.move ? (() => { const tk = tickKeyFor(row); return `<td class="tick-cell" data-label="Visited/Called"><input type="checkbox" class="tick" ${isTicked(row) ? "checked" : ""} aria-label="Mark ${esc(row.address || row.permit_number || "this stop")} visited/called" onclick="event.stopPropagation()" onchange="toggleTick('${enc(tk)}', this.checked)"></td>`; })() : ""}
               <td data-label="Permit">${options.move ? `<span class="list-ordinal" aria-label="Stop ${i + 1}">${i + 1}</span>` : ""}<strong>${esc(row.permit_number)}</strong>${options.move && isFollowedUp(row) ? followUpBadgeHtml(row) : ""}<br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
               <td data-label="Status">${esc(row.permit_status)}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
