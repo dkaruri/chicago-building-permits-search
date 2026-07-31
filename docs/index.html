@@ -328,6 +328,28 @@
       gap: 12px;
     }
 
+    /* FEAT-021. Message text states the problem on its own — the colour is
+       reinforcement, never the only signal. */
+    .field-error {
+      margin: -4px 0 0;
+      padding: 8px 10px;
+      border: 1px solid var(--danger-line);
+      border-radius: 8px;
+      background: var(--danger-field);
+      color: var(--danger);
+      font-size: 0.82rem;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .field-error[hidden] {
+      display: none;
+    }
+
+    input[aria-invalid="true"] {
+      border-color: var(--danger-line);
+    }
+
     .tabs,
     .mode-select {
       display: grid;
@@ -393,6 +415,11 @@
       font-weight: 800;
       letter-spacing: 0.08em;
       text-transform: uppercase;
+    }
+
+    /* display:grid above outranks the hidden attribute on its own. */
+    label[hidden] {
+      display: none;
     }
 
     input, select, textarea {
@@ -2317,12 +2344,20 @@
       body.directory-page .directory-search-field,
       body.directory-page .search-mode-field,
       body.directory-page .directory-processing-field,
+      body.directory-page .field-error,
       body.directory-page .controls > p {
         grid-column: 1 / -1;
       }
 
       body.directory-page .directory-search-field { order: 1; }
       body.directory-page .search-mode-field { order: 2; }
+      /* The min/max pair shares one row: two cells at the same order. */
+      body.directory-page .directory-cost-field { order: 3; }
+      /* `> .field-error`, not `.field-error`: the error IS a <p> child of
+         .controls, and `.controls > p { order: 8 }` below outranks a plain
+         class selector — which parked the message under the Search button,
+         a screen away from the fields it describes. */
+      body.directory-page .controls > .field-error { order: 3; }
       body.directory-page .directory-sort-field { order: 4; }
       body.directory-page .directory-processing-field { order: 5; }
       body.directory-page .directory-search-action { order: 6; }
@@ -3165,6 +3200,16 @@
              "Ward N" tag click in a permit detail, the ?ward= URL param, and the
              reset/filter code keep working without touching every $("ward") site. -->
         <input id="ward" type="hidden">
+        <!-- FEAT-021 permit value range. Open Permits only: a contractor profile's
+             only money field is reported_cost_total (a lifetime sum), which is a
+             different number from a permit's value, so setMode() hides these. -->
+        <label class="directory-cost-field" id="cost-min-field" hidden>Min value ($)
+          <input id="cost-min" type="number" min="0" step="1000" inputmode="numeric" placeholder="0" aria-describedby="cost-error" oninput="scheduleSearch()">
+        </label>
+        <label class="directory-cost-field" id="cost-max-field" hidden>Max value ($)
+          <input id="cost-max" type="number" min="0" step="1000" inputmode="numeric" placeholder="Any" aria-describedby="cost-error" oninput="scheduleSearch()">
+        </label>
+        <p id="cost-error" class="field-error" role="alert" hidden>Min value is higher than max value &mdash; no permit can match.</p>
         <label class="check-row directory-processing-field">
           <input id="usable-processing" type="checkbox" onchange="search()">
           <span>Only usable processing times</span>
@@ -3571,6 +3616,7 @@
       const lastView = restoreLastView();
       renderStatus();
       await renderUserList();
+      showCostRangeFields(state.mode === "open_permits");
       await search();
       await restoreLastViewPosition(lastView);
     }
@@ -3595,13 +3641,53 @@
       $("tab-" + mode)?.classList.add("active");
       if ($("mode-select")) $("mode-select").value = mode;
       if ($("sort")) $("sort").value = mode === "open_permits" ? "latest_issue_date" : "open_jobs";
+      showCostRangeFields(mode === "open_permits");
       search();
+    }
+
+    // FEAT-021. Hidden outside Open Permits: contractor profiles carry only a
+    // lifetime reported_cost_total, so a per-permit range would answer a
+    // different question than the one the field asks.
+    function showCostRangeFields(show) {
+      ["cost-min-field", "cost-max-field"].forEach(id => {
+        const field = $(id);
+        if (field) field.hidden = !show;
+      });
+      if (!show) setCostError("");
+    }
+
+    function setCostError(message) {
+      const box = $("cost-error");
+      if (!box) return;
+      box.textContent = message;
+      box.hidden = !message;
+      ["cost-min", "cost-max"].forEach(id => {
+        $(id)?.setAttribute("aria-invalid", message ? "true" : "false");
+      });
+    }
+
+    // Returns { min, max, invalid }. Blank means unbounded on that end.
+    function costRange() {
+      const read = id => {
+        const raw = ($(id)?.value || "").trim();
+        if (!raw) return null;
+        const value = Number(raw);
+        return Number.isFinite(value) && value >= 0 ? value : null;
+      };
+      const min = read("cost-min");
+      const max = read("cost-max");
+      const invalid = min != null && max != null && min > max;
+      setCostError(invalid ? "Min value is higher than max value — no permit can match." : "");
+      return { min, max, invalid };
     }
 
     function clearSearch() {
       $("q").value = "";
       $("ward").value = "";
       $("usable-processing").checked = false;
+      if ($("cost-min")) $("cost-min").value = "";
+      if ($("cost-max")) $("cost-max").value = "";
+      setCostError("");
       state.resultSort = { key: null, direction: null };
       state.selectedPermitNumbers.clear();
       if (state.mode === "map") {
@@ -3723,9 +3809,18 @@
       if (state.mode === "open_permits") {
         const q = ($("q")?.value || "").trim();
         const ward = ($("ward")?.value || "").trim();
+        const cost = costRange();
+        if (cost.invalid) {
+          state.filteredRows = [];
+          renderPermits();
+          clearBusy(token);
+          return;
+        }
         const params = new URLSearchParams();
         if (q) params.set("q", q);
         if (ward) params.set("ward", ward);
+        if (cost.min != null) params.set("cost_min", String(cost.min));
+        if (cost.max != null) params.set("cost_max", String(cost.max));
         params.set("limit", "1000");
         const res = await fetch(`${API_BASE}/api/permits?${params}`);
         const data = await res.json();
