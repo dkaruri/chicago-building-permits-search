@@ -3943,6 +3943,13 @@
         }
       });
       state.map.map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+      // Attached at CONSTRUCTION, deliberately not inside the load handler below.
+      // Everything in there runs only once the style and sources have loaded,
+      // which needs network tiles — so a pan before that completed was silently
+      // never saved and the position was lost on reload. Rare for a person with
+      // a warm cache, but it is exactly why t40 failed 4 runs in 6.
+      state.map.map.on("moveend", saveMapView);
+
       state.map.map.on("load", () => {
         addMapSearchPinImage();
         // Zoning overlay: added first so it renders beneath every permit layer.
@@ -4238,7 +4245,6 @@
           state.map.map.on("mouseleave", layer, () => { state.map.map.getCanvas().style.cursor = ""; });
         });
         state.map.map.on("moveend", updateVisibleMapRows);
-        state.map.map.on("moveend", saveMapView);
         state.map.sourceReady = true;
         updateMapLayerVisibility();
         updateMapSource();
