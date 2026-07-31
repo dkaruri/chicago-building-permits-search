@@ -3617,6 +3617,7 @@
       renderStatus();
       await renderUserList();
       showCostRangeFields(state.mode === "open_permits");
+      relabelCostSortOption();
       await search();
       await restoreLastViewPosition(lastView);
     }
@@ -3642,6 +3643,7 @@
       if ($("mode-select")) $("mode-select").value = mode;
       if ($("sort")) $("sort").value = mode === "open_permits" ? "latest_issue_date" : "open_jobs";
       showCostRangeFields(mode === "open_permits");
+      relabelCostSortOption();
       search();
     }
 
@@ -3728,8 +3730,28 @@
       return terms.every(term => haystack.includes(term));
     }
 
+    // FIX-026. The Sort dropdown's value is a PERMIT field name, but the two
+    // profile modes hold contractor rows with a different money field: permits
+    // have `reported_cost`, profiles have `reported_cost_total` (that
+    // contractor's lifetime sum) and no `reported_cost` at all. Sorting a
+    // profile list on the raw value made every row read as 0, so the comparator
+    // called every pair equal and the list silently did not reorder — no error,
+    // no visible change, just a dead control.
+    function sortFieldFor(key) {
+      if (key === "reported_cost" && state.mode !== "open_permits") return "reported_cost_total";
+      return key;
+    }
+
+    // The two fields answer different questions, so the option has to say which
+    // one it is doing — "Reported cost" over a lifetime sum is the same
+    // confusion in a different place.
+    function relabelCostSortOption() {
+      const option = $("sort")?.querySelector('option[value="reported_cost"]');
+      if (option) option.textContent = state.mode === "open_permits" ? "Reported cost" : "Total reported cost";
+    }
+
     function sortRows(rows) {
-      const key = $("sort").value;
+      const key = sortFieldFor($("sort").value);
       const copy = rows.slice();
       if (state.resultSort.key) {
         const direction = state.resultSort.direction === "asc" ? 1 : -1;
