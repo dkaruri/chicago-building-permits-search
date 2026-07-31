@@ -22,7 +22,7 @@
   <meta name="twitter:description" content="Review, reorder, route, annotate, and export saved Chicago building permits.">
   <meta name="twitter:image" content="https://dkaruri.github.io/chicago-building-permits-search/assets/search-directory-preview.png">
   <meta name="twitter:image:alt" content="Chicago Building Permits Search preview card by Divyam Karuri">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_photo_alternate,clear_all,close,csv,database_search,delete,directions_walk,edit,group,list,lock,map_search,moon_stars,photo,policy,route,share,sticky_note_2,sunny" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_photo_alternate,clear_all,close,csv,database_search,delete,directions_walk,edit,flag,group,list,lock,map_search,moon_stars,photo,policy,route,share,sticky_note_2,sunny" rel="stylesheet">
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
@@ -586,6 +586,111 @@
          640px, so rem-sized copy drifts between the two pages. */
       font-size: 12.5px;
       line-height: 1.5;
+    }
+
+    /* ---- Follow-up flag + list filters (FEAT-034) ---- */
+    .list-filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 8px 0 0;
+    }
+
+    /* The directory's button.tag rules already do the work — 44px target, the
+       inverted pressed fill, and a ✓ glyph so the state is not colour alone.
+       They are driven entirely by --tc, so this chip only has to name a colour;
+       without one --tc is unset and the chip renders panel-on-panel. */
+    #filter-followup {
+      --tc: var(--warning);
+      width: auto;
+    }
+
+    #filter-followup .material-symbols-outlined {
+      font-size: 16px;
+      max-width: 1em;
+      overflow: hidden;
+    }
+
+    .list-filter-status {
+      color: var(--muted);
+      font-size: 12.5px;
+    }
+
+    .fu-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      margin-left: 6px;
+      padding: 1px 7px;
+      border: 1px solid var(--warning);
+      border-radius: 999px;
+      color: var(--warning);
+      font-size: 11.5px;
+      font-weight: 800;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+
+    .fu-badge .material-symbols-outlined {
+      font-size: 14px;
+      max-width: 1em;
+      overflow: hidden;
+    }
+
+    .pm-fu-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 10px 0 0;
+    }
+
+    .pm-fu {
+      width: auto;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .pm-fu[aria-pressed="true"] {
+      border-color: var(--warning);
+      border-width: 2px;
+      color: var(--warning);
+    }
+
+    .pm-fu .material-symbols-outlined {
+      font-size: 18px;
+      max-width: 1em;
+      overflow: hidden;
+    }
+
+    .pm-fu-state {
+      color: var(--muted);
+      font-size: 12.5px;
+    }
+
+    /* An inline "undo" inside a sentence, not a form control. */
+    .linkish {
+      width: auto;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--primary);
+      font: inherit;
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: pointer;
     }
 
     .subtle-danger {
@@ -3407,6 +3512,14 @@
            buttons and the starting-location row are a full screen apart, and an
            explanation that far from the control it describes reads as unrelated. -->
       <div id="optimize-route-note" class="optimize-note" hidden></div>
+      <!-- Row filters. Built as a group so FEAT-031's visited/called chips join
+           this row rather than starting a second, competing filter bar. -->
+      <div id="list-filters" class="list-filters" role="group" aria-label="Filter permits in this list" hidden>
+        <button type="button" id="filter-followup" class="tag" aria-pressed="false" onclick="toggleFollowUpFilter()">
+          <span class="material-symbols-outlined" aria-hidden="true">flag</span>Follow-up only
+        </button>
+        <span id="list-filter-status" class="list-filter-status small" role="status" aria-live="polite"></span>
+      </div>
       <div class="focal-row" role="group" aria-label="Starting location">
         <label class="focal-label" for="focal-input">Starting location</label>
         <div class="focal-controls">
@@ -3526,6 +3639,9 @@
         q: "", entries: [], threads: {}, loading: false, error: "",
         loadedFor: "", shown: 0, permit: "", returnTo: null,
       },
+      // View filters for the saved list. Deliberately NOT persisted: a filter
+      // you forgot you set is how a list looks half-empty after a reload.
+      listFilters: { followUp: false },
       focalPoint: null,
       draggedPermitNumber: "",
       userRouteLegs: [],
@@ -3706,6 +3822,7 @@
           focal: data.focal || null,
           sharedId: id,
           ticks: data.ticks || {},
+          fu: data.fu || {},
           desc: (data.meta && data.meta.blurb) || "",
           author: (data.meta && data.meta.author) || "",
           tags: (data.meta && data.meta.tags) || [],
@@ -3957,6 +4074,7 @@
       if (localId) {
         state.lists[localId].permits = permits;
         state.lists[localId].ticks = data.ticks || {};
+        state.lists[localId].fu = data.fu || {};
       } else {
         localId = `local_${Date.now().toString(36)}`;
         state.lists[localId] = {
@@ -3965,6 +4083,7 @@
           focal: data.focal || null,
           sharedId: shareId,
           ticks: data.ticks || {},
+          fu: data.fu || {},
         };
       }
       state.activeListId = localId;
@@ -6454,29 +6573,37 @@
       return [...seen.entries()].map(([key, on]) => [key, on]);
     }
 
-    let tickQueue = [];
-    let tickTimer = null;
+    // Visited ticks and follow-up flags are the same shape over the wire — a
+    // key and a boolean on the same list — so they share one queue keyed by
+    // endpoint rather than two copies free to drift. The Worker's handler is
+    // shared for the same reason.
+    const flagQueues = { ticks: [], follow: [] };
+    const flagTimers = { ticks: null, follow: null };
 
-    function queueTickSync() {
+    function queueFlagSync(endpoint) {
       const list = activeList();
-      if (!list || !list.sharedId) { tickQueue = []; return; }
-      clearTimeout(tickTimer);
-      tickTimer = setTimeout(async () => {
-        const batch = coalesceTicks(tickQueue);
-        tickQueue = [];
+      if (!list || !list.sharedId) { flagQueues[endpoint] = []; return; }
+      clearTimeout(flagTimers[endpoint]);
+      flagTimers[endpoint] = setTimeout(async () => {
+        const batch = coalesceTicks(flagQueues[endpoint]);
+        flagQueues[endpoint] = [];
         for (const [key, on] of batch) {
           try {
-            await fetch(`${API_BASE}/api/lists/${encodeURIComponent(list.sharedId)}/ticks`, {
+            await fetch(`${API_BASE}/api/lists/${encodeURIComponent(list.sharedId)}/${endpoint}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ key, on }),
             });
           } catch {
-            // Offline or Worker unreachable. The tick is already stored
+            // Offline or Worker unreachable. The flag is already stored
             // locally and resyncs next time this list is opened.
           }
         }
       }, 800);
+    }
+
+    function queueTickSync() {
+      queueFlagSync("ticks");
     }
 
     function toggleTick(encodedKey, on) {
@@ -6491,7 +6618,7 @@
       if (state.live.connected && activeList() && activeList().sharedId === state.live.id) {
         sendListOp({ f: "tick", k: key, v: on ? 1 : 0 });
       } else {
-        tickQueue.push([key, !!on]);
+        flagQueues.ticks.push([key, !!on]);
         queueTickSync();
       }
     }
@@ -6506,6 +6633,117 @@
       return !!(list && list.ticks && key && list.ticks[key]);
     }
 
+    // The toggle, rendered directly under the general contractors it applies to
+    // so "follow up" is never ambiguous about who. Only on a page with a list
+    // open — the flag lives on the list, so there is nowhere to store it on the
+    // search directory, and a control that silently does nothing is worse than
+    // no control.
+    function followUpToggleHtml(row) {
+      if (!notesFeedAvailable()) return "";
+      const list = activeList();
+      const key = tickKeyFor(row);
+      if (!list || !key || !isInUserList(row.permit_number)) return "";
+      const on = isFollowedUp(row);
+      const who = followUpGcName(row);
+      const what = who ? `Follow up with ${who}` : "Follow up on this permit";
+      return `<p class="pm-fu-row"><button type="button" class="pm-fu" aria-pressed="${on ? "true" : "false"}"
+        aria-label="${esc(what)}${on ? " — flagged, press to clear" : ""}"
+        onclick="toggleFollowUp('${enc(key)}', ${on ? "false" : "true"})">
+        <span class="material-symbols-outlined" aria-hidden="true">flag</span>${esc(what)}</button>
+        <span class="pm-fu-state">${on ? "Flagged for follow-up" : "Not flagged"}</span></p>`;
+    }
+
+    // Row badge, so a flagged permit is obvious WITHOUT opening it. Carries the
+    // word "Follow up" and a flag glyph, never colour alone, and names the GC in
+    // its title so the badge answers "follow up with whom".
+    function followUpBadgeHtml(row) {
+      const who = followUpGcName(row);
+      const label = who ? `Follow up with ${who}` : "Follow up";
+      return `<span class="fu-badge" title="${esc(label)}"><span class="material-symbols-outlined" aria-hidden="true">flag</span>Follow up</span>`;
+    }
+
+    // ---- Follow-up flag (FEAT-034) ----
+    // Attached to the PERMIT, keyed exactly like a visited tick, and labelled
+    // with the general contractor it is about. Flagging the contractor company
+    // itself would mark every one of its permits at once, which is a different
+    // and much larger feature — this is "chase this job", not "chase this firm".
+    function isFollowedUp(row) {
+      const list = activeList();
+      const key = tickKeyFor(row);
+      return !!(list && list.fu && key && list.fu[key]);
+    }
+
+    // The GC this follow-up is about. Permits can name several; the first is
+    // the one the row and the card both lead with, so they agree.
+    function followUpGcName(row) {
+      const gcs = (row && row.general_contractors) || [];
+      const first = gcs.find(gc => clean(gc && gc.name));
+      return first ? clean(first.name) : "";
+    }
+
+    function toggleFollowUp(encodedKey, on) {
+      const key = decodeURIComponent(encodedKey);
+      const list = activeList();
+      if (!list) return;
+      list.fu = list.fu || {};
+      if (on) list.fu[key] = 1; else delete list.fu[key];
+      saveUserLists();
+      if (state.live.connected && activeList().sharedId === state.live.id) {
+        sendListOp({ f: "fu", k: key, v: on ? 1 : 0 });
+      } else {
+        flagQueues.follow.push([key, !!on]);
+        queueFlagSync("follow");
+      }
+      const row = state.userPermitMap.get(key);
+      const who = followUpGcName(row);
+      announceListAction(on
+        ? `Flagged ${who ? who + " on " : ""}permit ${key} for follow-up.`
+        : `Cleared the follow-up flag on permit ${key}.`);
+      // Repaint the row badge and, if the permit card is open, its toggle.
+      renderUserList();
+      if (activeCard()?.type === "permit") refreshCardPreservingFocus();
+    }
+
+    // ---- List view filters (FEAT-034) ----
+    // One flag today; kept as an object and a shared group in the markup so
+    // FEAT-031's visited/called chips compose here instead of starting a second
+    // filter bar.
+    function isListFiltered() {
+      return !!state.listFilters.followUp;
+    }
+
+    function visibleListRows(rows) {
+      return state.listFilters.followUp ? rows.filter(isFollowedUp) : rows;
+    }
+
+    function toggleFollowUpFilter() {
+      state.listFilters.followUp = !state.listFilters.followUp;
+      renderUserList();
+      announceListAction(state.listFilters.followUp
+        ? "Showing only permits flagged for follow-up."
+        : "Showing all permits in this list.");
+    }
+
+    function clearListFilters() {
+      state.listFilters.followUp = false;
+      renderUserList();
+      announceListAction("Showing all permits in this list.");
+    }
+
+    // The bar hides itself when nothing is flagged AND no filter is on: a
+    // filter for a state that cannot occur yet is just a dead control.
+    function renderListFilters(rows, filtered) {
+      const flagged = rows.filter(isFollowedUp).length;
+      const bar = $("list-filters");
+      const btn = $("filter-followup");
+      if (!bar || !btn) return;
+      bar.hidden = !flagged && !isListFiltered();
+      btn.setAttribute("aria-pressed", state.listFilters.followUp ? "true" : "false");
+      $("list-filter-status").textContent = isListFiltered()
+        ? `Showing ${fmt(filtered.length)} of ${fmt(rows.length)}`
+        : (flagged ? `${fmt(flagged)} flagged for follow-up` : "");
+    }
+
     // ---- Live sync (Phase B) ----
     // Applies a server op to a local list object. Mirrors the Worker's applyOp;
     // incoming ops are already server-validated, so this applies them directly.
@@ -6517,6 +6755,10 @@
         case "tick":
           list.ticks = list.ticks || {};
           if (op.k) { if (op.v) list.ticks[op.k] = 1; else delete list.ticks[op.k]; }
+          break;
+        case "fu":
+          list.fu = list.fu || {};
+          if (op.k) { if (op.v) list.fu[op.k] = 1; else delete list.fu[op.k]; }
           break;
         case "meta": {
           const m = op.v || {};
@@ -6609,6 +6851,7 @@
           list.focal = d.f || null;
           list.custom = Array.isArray(d.custom) ? d.custom.slice() : [];
           list.ticks = d.ticks && typeof d.ticks === "object" ? d.ticks : {};
+          list.fu = d.fu && typeof d.fu === "object" ? d.fu : {};
           if (d.meta) { list.name = d.meta.title || list.name; list.desc = d.meta.blurb != null ? d.meta.blurb : list.desc; list.author = d.meta.author != null ? d.meta.author : list.author; list.tags = d.meta.tags != null ? d.meta.tags : list.tags; }
           live.clock = msg.clock || 0;
           if (msg.presence) live.presence = msg.presence;
@@ -7005,17 +7248,30 @@
         $("user-list").innerHTML = `<div class="empty">No permits added yet.</div>`;
         return;
       }
-      $("user-list").innerHTML = permitTable(rows, {
+      // The filter is a VIEW filter and nothing more. Exports, drive distances
+      // and Optimize route all keep reading userListRows(), so narrowing the
+      // view can never quietly narrow what gets exported or routed.
+      const filtered = visibleListRows(rows);
+      renderListFilters(rows, filtered);
+      if (!filtered.length) {
+        $("user-list").innerHTML = `<div class="empty">No permits in this list are flagged for follow-up. <button type="button" class="linkish" onclick="clearListFilters()">Show all ${fmt(rows.length)}</button></div>`;
+        return;
+      }
+      $("user-list").innerHTML = permitTable(filtered, {
         select: false,
         remove: true,
         notes: true,
-        reorder: true,
+        // Reordering a filtered view moves a row within the FULL list, so the
+        // row often would not appear to move at all. Locked while filtered,
+        // with the reason stated rather than the buttons silently misbehaving.
+        reorder: !isListFiltered(),
+        moveLocked: isListFiltered(),
         move: true,
         geo: true,
         sortable: false,
         emptyText: "No permits added yet."
       });
-      fillListGeoCells(rows);
+      fillListGeoCells(filtered);
       // Paint the Notes button from what is already known locally, then let the
       // count fetch refine it — otherwise the button sits blank until the
       // network answers, on a list whose private notes we can count instantly.
@@ -7255,7 +7511,7 @@
               ${options.remove ? `<td class="select-cell" data-label="Remove"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell" data-label="Select" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
               ${options.move ? (() => { const tk = tickKeyFor(row); return `<td class="tick-cell" data-label="Visited"><input type="checkbox" class="tick" ${isTicked(row) ? "checked" : ""} aria-label="Mark ${esc(row.address || row.permit_number || "this stop")} visited" onclick="event.stopPropagation()" onchange="toggleTick('${enc(tk)}', this.checked)"></td>`; })() : ""}
-              <td data-label="Permit">${options.move ? `<span class="list-ordinal" aria-label="Stop ${i + 1}">${i + 1}</span>` : ""}<strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
+              <td data-label="Permit">${options.move ? `<span class="list-ordinal" aria-label="Stop ${i + 1}">${i + 1}</span>` : ""}<strong>${esc(row.permit_number)}</strong>${options.move && isFollowedUp(row) ? followUpBadgeHtml(row) : ""}<br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
               <td data-label="Status">${esc(row.permit_status)}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
               <td data-label="Address">${options.move && clean(row.address) ? (() => { const u = mapsUrls(row.address); return `<span class="maps-picker"><button type="button" class="address-open" aria-haspopup="true" aria-expanded="false" aria-controls="maps-menu-${i}" onclick="event.stopPropagation(); toggleMapsMenu(this)">${esc(row.address)}<span class="chev" aria-hidden="true">▾</span></button><span class="maps-menu" id="maps-menu-${i}" role="menu"><span class="maps-menu-label">Open in</span><a role="menuitem" href="${esc(u.apple)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Apple Maps</a><a role="menuitem" href="${esc(u.google)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Google Maps</a><a role="menuitem" href="${esc(u.waze)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Waze</a></span></span>`; })() : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span>${row.is_custom ? (row.no_geo ? `<span class="added warn" title="Could not be placed on the map">\u26A0 No location</span>` : `<span class="added" title="Typed by hand, not matched to a city permit">\u270E Added by hand</span>`) : ""}</td>
@@ -7264,7 +7520,16 @@
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
               ${options.geo ? `<td data-label="Zone" class="geo-zone" data-permit="${esc(clean(row.permit_number))}">${esc(geoZoneCache.has(clean(row.permit_number)) ? (geoZoneCache.get(clean(row.permit_number)) || "—") : "…")}</td><td data-label="TIF district" class="geo-tif" data-permit="${esc(clean(row.permit_number))}">${esc(geoTifCache.has(clean(row.permit_number)) ? (geoTifCache.get(clean(row.permit_number)) || "—") : "…")}</td>` : ""}
               ${options.notes ? (() => { const pn = clean(row.permit_number); const nt = state.userPermitNotes[pn] || ""; const attr = row.is_custom ? "" : ` data-permit="${esc(pn)}"`; return `<td class="note-count-cell" data-label="Notes"><span class="notecount${nt ? "" : " zero"}"${attr}${nt ? ' title="You have a private note on this permit"' : ""}>${nt ? "✎" : "0"}</span></td>`; })() : ""}
-              ${options.move ? `<td class="move-cell" data-label="Move"><div class="move-controls"><button class="icon-button" title="Move up" aria-label="Move ${esc(row.permit_number)} up" ${i === 0 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', -1)">&uarr;</button><button class="icon-button" title="Move down" aria-label="Move ${esc(row.permit_number)} down" ${i >= rows.length - 1 ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', 1)">&darr;</button></div></td>` : ""}
+              ${options.move ? (() => {
+                // Locked while filtered: the offset moves the row within the
+                // FULL list, so from a filtered view it would often not appear
+                // to move at all. aria-disabled, not disabled, so the button
+                // stays focusable and can say why when pressed.
+                const btn = (glyph, dir, edge) => options.moveLocked
+                  ? `<button class="icon-button" aria-disabled="true" title="Clear the follow-up filter to reorder stops" aria-label="Move ${esc(row.permit_number)} ${dir < 0 ? "up" : "down"} — unavailable while the list is filtered" onclick="event.stopPropagation(); announceListAction('Clear the follow-up filter to reorder stops.')">${glyph}</button>`
+                  : `<button class="icon-button" title="Move ${dir < 0 ? "up" : "down"}" aria-label="Move ${esc(row.permit_number)} ${dir < 0 ? "up" : "down"}" ${edge ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', ${dir})">${glyph}</button>`;
+                return `<td class="move-cell" data-label="Move"><div class="move-controls">${btn("&uarr;", -1, i === 0)}${btn("&darr;", 1, i >= rows.length - 1)}</div></td>`;
+              })() : ""}
             </tr>`).join("")}</tbody>
         </table>`;
     }
@@ -8500,7 +8765,7 @@
             ["Reported cost", money(row.reported_cost)],
             ["Total fee", money(row.total_fee)],
           ])}</section>`,
-        () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div></section>`,
+        () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div>${followUpToggleHtml(row)}</section>`,
         () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div><div class="pm-reported" id="pm-reported"></div></section>`,
         () => `<section class="pm-block"><h3>Notes</h3>
             ${notesFeedAvailable() ? `<p class="pm-feed-link"><button type="button" class="pm-feed-btn" onclick="openFeedForPermit('${enc(row.permit_number)}')">
