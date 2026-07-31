@@ -1115,11 +1115,31 @@
       margin-left: auto;
     }
 
+    /* Four across so each min/max pair (GC jobs, permit value) stays on one row
+       instead of being split across the wrap. */
     .map-filter-grid {
       display: grid;
-      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
       gap: 8px;
       min-width: 0;
+    }
+
+    input[aria-invalid="true"] {
+      border-color: var(--danger-line);
+    }
+
+    /* FEAT-021. The message text states the problem on its own — colour is
+       reinforcement, never the only signal. */
+    .field-error {
+      margin: 8px 0 0;
+      padding: 8px 10px;
+      border: 1px solid var(--danger-line);
+      border-radius: 8px;
+      background: var(--danger-field);
+      color: var(--danger);
+      font-size: 0.82rem;
+      font-weight: 600;
+      line-height: 1.4;
     }
 
     .map-filter-grid label:nth-child(5) {
@@ -3384,6 +3404,8 @@
         dateTo: today,
         gcMin: "",
         gcMax: "",
+        costMin: "",
+        costMax: "",
         neighborhood: "",
         q: "",
         radiusMiles: ""
@@ -3408,6 +3430,8 @@
       settings.dateTo = $("map-date-to")?.value || settings.dateTo;
       settings.gcMin = $("map-gc-min")?.value || "";
       settings.gcMax = $("map-gc-max")?.value || "";
+      settings.costMin = $("map-cost-min")?.value || "";
+      settings.costMax = $("map-cost-max")?.value || "";
       settings.neighborhood = $("map-neighborhood")?.value || "";
       settings.q = $("map-q")?.value || "";
       settings.radiusMiles = $("map-radius")?.value || "";
@@ -3415,6 +3439,28 @@
         localStorage.setItem(mapSettingsKey, JSON.stringify(settings));
       } catch {}
       return settings;
+    }
+
+    // FEAT-021. Returns { min, max, invalid }; blank means unbounded on that end.
+    function mapCostRange(settings) {
+      const read = value => {
+        const raw = clean(value).trim();
+        if (!raw) return null;
+        const num = Number(raw);
+        return Number.isFinite(num) && num >= 0 ? num : null;
+      };
+      const min = read(settings.costMin);
+      const max = read(settings.costMax);
+      const invalid = min != null && max != null && min > max;
+      const box = $("map-cost-error");
+      if (box) {
+        box.textContent = invalid ? "Min value is higher than max value — no permit can match." : "";
+        box.hidden = !invalid;
+      }
+      ["map-cost-min", "map-cost-max"].forEach(id => {
+        $(id)?.setAttribute("aria-invalid", invalid ? "true" : "false");
+      });
+      return { min, max, invalid };
     }
 
     function resetMapSettings() {
@@ -3812,6 +3858,12 @@
               <label class="map-gc-field">GC jobs max
                 <input id="map-gc-max" type="number" min="0" inputmode="numeric" value="${esc(settings.gcMax)}" placeholder="Any">
               </label>
+              <label class="map-gc-field">Min value ($)
+                <input id="map-cost-min" type="number" min="0" step="1000" inputmode="numeric" value="${esc(settings.costMin)}" placeholder="0" aria-describedby="map-cost-error" title="Hide permits with a reported cost below this">
+              </label>
+              <label class="map-gc-field">Max value ($)
+                <input id="map-cost-max" type="number" min="0" step="1000" inputmode="numeric" value="${esc(settings.costMax)}" placeholder="Any" aria-describedby="map-cost-error" title="Hide permits with a reported cost above this">
+              </label>
               <label class="map-gc-field">Radius (miles)
                 <input id="map-radius" type="number" min="0" step="0.25" inputmode="decimal" value="${esc(settings.radiusMiles)}" placeholder="Off" title="Dim permits farther than this many miles from the searched address">
               </label>
@@ -3820,6 +3872,10 @@
                 <datalist id="map-neighborhoods">${neighborhoods}</datalist>
               </label>
             </div>
+            <!-- FEAT-021. Lives in the drawer beside the fields, not in
+                 #map-status-strip: that strip is display:none below the mobile
+                 breakpoint, so an error routed there is invisible on a phone. -->
+            <p id="map-cost-error" class="field-error" role="alert" hidden></p>
             <div class="map-filter-actions">
               <button class="primary" onclick="applyMapFilters()">Apply filters</button>
               <button onclick="resetMapSettings()">Reset current month</button>
@@ -4298,6 +4354,14 @@
         $("map-status-strip").textContent = "Choose a valid date range.";
         return;
       }
+      const cost = mapCostRange(settings);
+      if (cost.invalid) {
+        // Also announced outside the drawer: an invalid range is persisted, so
+        // this path is reached on reload with the drawer shut, and a silent
+        // return would leave an empty map with no stated reason.
+        $("map-status-strip").textContent = "Min value is higher than max value — widen the permit value range.";
+        return;
+      }
       setBusy("Loading map");
       await nextFrame();
       const months = monthsBetween(settings.dateFrom, settings.dateTo);
@@ -4314,6 +4378,14 @@
         const jobs = Number(row.go || 0);
         if (minJobs != null && jobs < minJobs) return false;
         if (maxJobs != null && jobs > maxJobs) return false;
+        if (cost.min != null || cost.max != null) {
+          // A permit with no reported cost can't be shown to sit inside a value
+          // range, so a bounded search drops it rather than guessing zero.
+          const value = Number(row.c);
+          if (!Number.isFinite(value)) return false;
+          if (cost.min != null && value < cost.min) return false;
+          if (cost.max != null && value > cost.max) return false;
+        }
         if (neighborhood && !norm(`${row.cn} ${communityAreaName(row.cn)} ${row.ca} ${row.st}`).includes(neighborhood)) return false;
         return Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lon));
       }).map(row => ({

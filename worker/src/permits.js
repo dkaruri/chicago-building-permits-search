@@ -1,4 +1,11 @@
-import { json } from "./index.js";
+// Local response helper, not index.js's `json` — importing index.js pulls in
+// `cloudflare:workers` (the Durable Object), which node --test cannot load, and
+// this module has tests. Same pattern as profiles.js / tags.js / notes.js. The
+// router re-attaches CORS headers to every handler response, so nothing is lost.
+function json(obj, status = 200) {
+  return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
+}
+
 import {
   query,
   pivotContacts,
@@ -8,7 +15,7 @@ import {
 } from "./socrata.js";
 
 /**
- * GET /api/permits?q=&ward=&status=&type=&contact_name=&limit=&offset=
+ * GET /api/permits?q=&ward=&status=&type=&contact_name=&cost_min=&cost_max=&limit=&offset=
  *
  * Proxies to Socrata with contact pivoting.
  * Returns { rows, row_count, offset, limit }.
@@ -19,6 +26,11 @@ export async function handlePermits(url, env) {
   const status = url.searchParams.get("status") || "";
   const permitType = url.searchParams.get("type") || "";
   const contactName = url.searchParams.get("contact_name") || "";
+  // FEAT-021. Filtered in SoQL rather than on the client because this endpoint
+  // caps at 1000 rows ordered by issue_date DESC — a client-side range filter
+  // would quietly drop every match that fell outside that first page.
+  const costMin = numericParam(url.searchParams.get("cost_min"));
+  const costMax = numericParam(url.searchParams.get("cost_max"));
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "200"), 1000);
   const offset = parseInt(url.searchParams.get("offset") || "0");
 
@@ -43,6 +55,12 @@ export async function handlePermits(url, env) {
         `OR upper(work_description) LIKE '%${sanitize(q.toUpperCase())}%' ` +
         `OR permit_ LIKE '%${sanitize(q)}%')`
     );
+  }
+  if (costMin != null) {
+    whereClauses.push(`reported_cost >= ${costMin}`);
+  }
+  if (costMax != null) {
+    whereClauses.push(`reported_cost <= ${costMax}`);
   }
   if (contactName) {
     const cn = sanitize(contactName.toUpperCase());
@@ -117,7 +135,18 @@ export async function handlePermits(url, env) {
     };
   });
 
-  return json({ rows: results, row_count: results.length, offset, limit }, 200, env);
+  return json({ rows: results, row_count: results.length, offset, limit });
+}
+
+/**
+ * Parse a numeric query param, or null if absent/not a finite number.
+ * These land in SoQL unquoted, so anything non-numeric must be dropped
+ * outright rather than escaped.
+ */
+function numericParam(value) {
+  if (value == null || value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 /** Strip characters that could break SoQL string literals. */
