@@ -3087,7 +3087,10 @@
     #photo-compose .dlg-sub { margin: .2rem 0 .8rem; font-size: .84rem; color: var(--muted); }
     #photo-compose .dlg-field { margin: .8rem 0 0; }
     #photo-compose .dlg-field label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin-bottom: .3rem; }
-    #photo-compose .dlg-field input { font: inherit; font-size: 1rem; width: 100%; box-sizing: border-box; min-height: 44px; background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem; }
+    /* 16px not 1rem (FIX-025): this selector is id-scoped (1-1-2), so it
+       outranks the iOS text-size floor at the end of this sheet, and 1rem is
+       15px here below 640px — it would have been the one control left zooming. */
+    #photo-compose .dlg-field input { font: inherit; font-size: 16px; width: 100%; box-sizing: border-box; min-height: 44px; background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .7rem; }
     .pc-file { font: inherit; margin-bottom: .8rem; }
     .pc-list { display: grid; gap: .6rem; }
     .pc-item { display: flex; gap: .6rem; align-items: center; }
@@ -3107,6 +3110,41 @@
       dialog[open]::backdrop { animation: dialogFade 0.22s ease-out; }
       @keyframes dialogRise { from { opacity: 0; transform: translateY(14px); } }
       @keyframes dialogFade { from { opacity: 0; } }
+    }
+
+    /* FIX-025 — iOS text-size floor for form controls.
+       Safari auto-zooms the whole page when a focused control's font is under
+       16px, and leaves it zoomed; you have to pinch back out after every edit.
+       Every control on this page sat under it, because `1rem` is NOT 16px here:
+       below 640px `html` shrinks to 15px, so rem-sized inputs came out at 15px.
+       PX on purpose — a rem here would reintroduce the same bug.
+
+       Stated in px rather than by un-shrinking `html`, because the shrink is a
+       deliberate density choice the rest of the layout is built on; this is a
+       form-control problem and the fix belongs on form controls.
+
+       A blanket floor rather than one rule per field: the dialogs (walkthrough,
+       photo captions, note drafts) render on demand and would be missed by an
+       id-by-id fix.
+       Checkbox/radio excluded — no text, and sizing them here would break the
+       hit-target work in FIX-018.
+
+       The `:is()` is load-bearing, not decoration. This has to outrank existing
+       0-2-2 selectors like `body.directory-page .controls select` without
+       !important. Written as three plain selectors, `html body select` scores
+       only 0-0-3 and LOSES — which it did on first attempt, leaving #sort and
+       #mode-select at 15px while the inputs passed, because the input arm
+       happened to carry two [type] tests. `:is()` takes the specificity of its
+       most specific argument, so every arm inherits the input's 0-2-1 and the
+       whole rule lands at 0-2-3. Measure after touching this selector. */
+    @media (max-width: 640px) {
+      html body :is(
+        input:not([type="checkbox"]):not([type="radio"]),
+        select,
+        textarea
+      ) {
+        font-size: 16px;
+      }
     }
   </style>
 </head>

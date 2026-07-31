@@ -2736,6 +2736,33 @@
     .pickrow.full .cnt { color: var(--warning); font-weight: 600; }
     .pickrow.new { border-style: dashed; color: var(--primary); font-weight: 600; }
     .pickfoot { display: flex; justify-content: flex-end; margin-top: .7rem; }
+
+    /* FIX-025 — iOS text-size floor for form controls.
+       Safari auto-zooms the whole page when a focused control's font is under
+       16px, and leaves it zoomed; you have to pinch back out after every edit.
+       Every filter field here sat under it: the drawer's inputs computed at
+       14.4px and the two date inputs at 13.76px, the smallest on the site.
+       PX on purpose — `body` is 15px below 640px, so a rem would land under the
+       floor again, and it is a DIFFERENT unit on index.html (which shrinks
+       `html` instead). Never express this one in rem.
+
+       Checkbox/radio excluded — no text, and sizing them here would disturb the
+       layer-toggle hit targets.
+
+       The `:is()` is load-bearing: this must outrank existing 0-2-2 selectors
+       like `.map-filter-grid select` without !important, and as three plain
+       selectors `html body select` scores only 0-0-3 and loses. `:is()` takes
+       the specificity of its most specific argument, so every arm inherits the
+       input's 0-2-1 and the rule lands at 0-2-3. Measure after touching it. */
+    @media (max-width: 640px) {
+      html body :is(
+        input:not([type="checkbox"]):not([type="radio"]),
+        select,
+        textarea
+      ) {
+        font-size: 16px;
+      }
+    }
   </style>
 </head>
 <body class="map-page">
