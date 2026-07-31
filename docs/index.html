@@ -2666,10 +2666,20 @@
       display: none;
     }
 
+    /* FIX-022: the name/details column and the "Read more" link sit side by
+       side. The row itself no longer navigates, so the name, licence and phone
+       can be selected and copied without opening the contractor card. */
     .contractor-line {
       font-size: 0.9rem;
       line-height: 1.4;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
     }
+
+    /* `overflow-wrap` because a real contractor name can be 60+ characters with
+       no space in it, and a flex item will happily overflow its row otherwise. */
+    .contractor-line .ci-main { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 
     .contractor-line .ci-name {
       font-weight: 600;
@@ -2685,8 +2695,12 @@
       text-underline-offset: 2px;
     }
 
-    .contractor-line.clickable { cursor: pointer; min-height: 44px; }
-    .contractor-line.clickable:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    /* Link-styled but a real <button> — it moves the card stack, not the page.
+       `width` AND `min-height` both have to be set: the global
+       `button { width: 100%; min-height: 44px }` would otherwise stretch it
+       across the row. 44px tall keeps it a legal touch target on a phone. */
+    .ci-more { flex: none; width: auto; min-height: 44px; display: inline-flex; align-items: center; padding: 0 2px; border: 0; background: none; font: inherit; font-weight: 600; color: var(--primary); text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; cursor: pointer; }
+    .ci-more:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
     .ci-none { display: block; font-size: 0.79rem; color: var(--muted); margin-top: 4px; }
 
     .pm-contractors .clic { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
@@ -2867,8 +2881,17 @@
     .assoc:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
     .assoc-n { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; }
     @media (min-width: 721px) {
-      .pm-head.stacked { flex-direction: row; align-items: center; }
+      .pm-head.stacked:not(.contact-card) { flex-direction: row; align-items: center; }
       .pm-actions { flex: none; }
+      /* FIX-022: on the contractor card the actions used to share the title row
+         and squeezed a long company name into a clamped ~160px column. They drop
+         to their own right-aligned row instead, and the name renders in full.
+         Below 721px the clamp stays — the header is sticky and space is scarce. */
+      .pm-head.contact-card .pm-actions { justify-content: flex-end; }
+      /* The global `button { width: 100% }` otherwise makes "Add all N to list"
+         claim the whole row and wrap below Call. */
+      .pm-head.contact-card .pm-act { width: auto; flex: none; }
+      .pm-head.contact-card .pm-title .v { display: block; overflow: visible; }
     }
     @media (max-width: 720px) {
       /* Full-screen card: keep the sticky header and actions clear of the
@@ -5930,7 +5953,7 @@
     function contractorLinesHtml(value, role) {
       const names = clean(value).split("|").map(x => x.trim()).filter(Boolean);
       if (!names.length) return `<div class="pc-empty">None listed</div>`;
-      return names.map(name => `<div class="contractor-line" data-contractor="${esc(name)}" data-role="${role}"><span class="ci-name">${esc(name)}</span><span class="ci-meta"> · …</span></div>`).join("");
+      return names.map(name => `<div class="contractor-line" data-contractor="${esc(name)}" data-role="${role}"><div class="ci-main"><span class="ci-name">${esc(name)}</span><span class="ci-meta"> · …</span></div></div>`).join("");
     }
 
     // The unit's owner, straight from the permit's own contact slots. These are
@@ -5965,10 +5988,10 @@
         const name = clean(c.name);
         const where = [clean(c.city), clean(c.state), clean(c.zipcode)].filter(Boolean).join(", ");
         const role = ownerRoleLabel(c.type);
-        return `<div class="contractor-line owner-line" data-contractor="${esc(name)}" data-role="general_contractor" data-owner="1" data-where="${esc(where)}">`
+        return `<div class="contractor-line owner-line" data-contractor="${esc(name)}" data-role="general_contractor" data-owner="1" data-where="${esc(where)}"><div class="ci-main">`
           + `<span class="ci-name">${esc(name) || "—"}</span>`
           + `${role ? `<span class="owner-role">${esc(role)}</span>` : ""}`
-          + `<span class="ci-meta"> · …</span></div>`;
+          + `<span class="ci-meta"> · …</span></div></div>`;
       }).join("");
     }
 
@@ -6045,6 +6068,7 @@
       await Promise.all(lines.map(async line => {
         line.setAttribute("data-filled", "1");
         const meta = line.querySelector(".ci-meta");
+        const main = line.querySelector(".ci-main");
         const info = await fetchContractorInfo(line.getAttribute("data-contractor"), line.getAttribute("data-role"));
         const isOwner = line.hasAttribute("data-owner");
         if (!info) {
@@ -6054,23 +6078,22 @@
             // gap: the permits dataset publishes owner name and city/state/ZIP
             // and nothing else. Say which, rather than implying a lookup failed.
             const where = line.getAttribute("data-where");
-            line.insertAdjacentHTML("beforeend",
+            main.insertAdjacentHTML("beforeend",
               `<span class="ci-none">${where ? esc(where) + " · " : ""}No phone published for owners</span>`);
           } else {
-            line.insertAdjacentHTML("beforeend", `<span class="ci-none">No profile on file</span>`);
+            main.insertAdjacentHTML("beforeend", `<span class="ci-none">No profile on file</span>`);
           }
           return;
         }
-        // A contractor we have a profile for becomes a button to its card. It
-        // stays a <div role="button"> rather than a real <button> because the
-        // line holds a tel: link, which cannot live inside a button — so the
-        // Enter/Space activation a native button gives free is wired by hand.
-        line.setAttribute("role", "button");
-        line.setAttribute("tabindex", "0");
-        line.setAttribute("onclick", `openContactCard('${enc(line.getAttribute("data-contractor"))}', '${line.getAttribute("data-role")}')`);
-        line.setAttribute("onkeydown", "if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();this.click();}");
-        line.setAttribute("aria-label", `Open profile for ${line.getAttribute("data-contractor")}`);
-        line.classList.add("clickable");
+        // A contractor we have a profile for gets a "Read more" link to its
+        // card. The whole row used to be the click target, so selecting or
+        // copying a name opened the card instead (FIX-022) — and because the
+        // row carries a tel: link it could never be a real <button> itself, so
+        // Enter/Space had to be hand-wired. Moving the target into its own
+        // <button> gets keyboard activation and the tab order back for free.
+        line.insertAdjacentHTML("beforeend",
+          `<button class="ci-more" onclick="openContactCard('${enc(line.getAttribute("data-contractor"))}', '${line.getAttribute("data-role")}')"`
+          + ` aria-label="Read more about ${esc(line.getAttribute("data-contractor"))}">Read more</button>`);
         const licType = parseLicenseType(info.license_type);
         const cls = parseLicenseClass(info.license_type);
         const chips = [];
@@ -6804,7 +6827,7 @@
       if (phone) actions.push(`<a class="pm-act primary" href="tel:${esc(phone.replace(/[^\d+]/g, ""))}">Call ${esc(phone)}</a>`);
       if (rows.length) actions.push(`<button class="pm-act" onclick="addAllFromCard()">Add all ${fmt(rows.length)} to list</button>`);
 
-      return `<div class="pm-head stacked">
+      return `<div class="pm-head stacked contact-card">
           <div class="pm-titlerow">
             ${back}
             <div class="pm-title">
@@ -6835,7 +6858,7 @@
     // Shown while the two contractor fetches are in flight. Both routinely
     // exceed 300ms, and a blank card reads as a broken overlay.
     function cardSkeletonHtml(desc, cardIndex) {
-      return `<div class="pm-head stacked">
+      return `<div class="pm-head stacked contact-card">
           <div class="pm-titlerow">
             ${cardIndex > 0 ? `<button class="pm-back" aria-label="Back" onclick="popCard()">&lsaquo;</button>` : ""}
             <div class="pm-title"><div class="k">${esc(cardKicker(desc))}</div><div class="v" id="permit-modal-title" tabindex="-1">${esc(clean(desc.name))}</div></div>
