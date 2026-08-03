@@ -13,7 +13,7 @@
   <meta name="twitter:title" content="Disclaimer">
   <meta name="twitter:description" content="Disclaimer for applications using modified City of Chicago data.">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=database_search,list,map_search,moon_stars,policy,sunny" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=database_search,list,map_search,moon_stars,policy,sunny&display=block" rel="stylesheet">
   <style>
     :root {
       --bg: #f3f7f4;
@@ -55,6 +55,17 @@
 
     .material-symbols-outlined {
       font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+      /* FIX-027. Until the icon font arrives this span lays out its LIGATURE
+         NAME as text — "moon_stars" is 5.2em wide here — and the theme toggle
+         is position:fixed against the right edge, so the page scrolled sideways
+         on every cold load. The glyph's advance is 1em, so capping there costs
+         nothing once the font is in. `min-width: 0` is load-bearing: these
+         spans are flex items, where the default `min-width: auto` resolves to
+         min-content — the full unwrappable text — and min-width beats
+         max-width, so the cap alone was ignored. */
+      max-width: 1em;
+      min-width: 0;
+      overflow: hidden;
     }
 
     .skip-link {
@@ -198,6 +209,12 @@
       align-items: center;
       justify-content: center;
       width: 48px;
+      /* FIX-027's base rule caps every icon span at 1em, on the assumption the
+         span IS the glyph. This one is a 48px badge that CONTAINS the glyph, and
+         max-width beats width — without this the circle collapsed to 24px. The
+         inherited `overflow: hidden` still keeps the pre-font ligature text
+         inside the badge. */
+      max-width: none;
       height: 48px;
       border: 1px solid var(--line);
       border-radius: 999px;
