@@ -1279,16 +1279,29 @@
     .map-search input {
       width: 100%;
       min-height: 44px;
-      padding-right: 42px;
+      /* FIX-029: 44px button + 8px offset. Was 42px, which is less than the
+         button's real width, so long text ran under the clear control. */
+      padding-right: 52px;
     }
 
-    .map-search-clear {
+    /* FIX-029 — scoped to `.map-search` (0-2-0) so it actually BEATS
+       `.map-search button` (0-1-1). Written as a bare `.map-search-clear`
+       (0-1-0) it lost, and every size here was dead: the button rendered
+       44x32 rather than the 32x32 it claimed, because the winner supplies
+       min-width but not min-height. That mismatch is what produced a 44x28
+       touch target on mobile, under the 44x44 minimum.
+
+       44x44 at every viewport. The glyph does not change size -- the button
+       is transparent until hover, so this grows the hit area and the hover
+       circle, nothing else. Do NOT demote this back to a single class; see
+       the specificity audit and FIX-028. */
+    .map-search .map-search-clear {
       position: absolute;
       top: 50%;
       right: 6px;
-      width: 32px;
-      min-width: 32px;
-      min-height: 32px;
+      width: 44px;
+      min-width: 44px;
+      min-height: 44px;
       padding: 0;
       border: 0;
       border-radius: 999px;
@@ -2132,10 +2145,10 @@
       .map-search button {
         width: auto;
       }
-      .map-search-clear {
-        width: 28px;
-        min-width: 28px;
-        min-height: 28px;
+      /* FIX-029: only the offset varies by viewport now. The 28px sizes that
+         used to live here never applied -- they lost to `.map-search button`
+         -- and shrinking a touch target below 44px would be wrong anyway. */
+      .map-search .map-search-clear {
         right: 8px;
       }
       .map-count-pill {
