@@ -562,22 +562,56 @@
        own button wider instead of clipping, so equality degrades gracefully
        rather than truncating text.
 
-       This DOES force a wrap, and that is deliberate. Eight buttons at 156px
-       plus gaps needs ~1296px; the toolbar is 1039px at a 1280 viewport and
-       1199px at 1440, so no realistic desktop fits all eight on one row at a
-       readable size. The destructive pair therefore moves to its own row, which
-       strengthens rather than weakens the spatial separation that `Clear list`
-       and `Delete list` are supposed to have.
+       This value is the MOBILE floor. Desktop is narrower -- see the two tiers
+       below, added after 156px was found to push `Clear list` / `Delete list`
+       onto a second row on every desktop under 1600px.
 
-       ponytail: 156px is tied to the longest label ("Optimize route", 153.9px
-       measured). Re-measure if a label changes; if one exceeds this, raise the
-       floor or the row goes ragged again. */
+       ponytail: any floor here is tied to the longest label ("Optimize route").
+       Re-measure if a label changes; if one exceeds its floor, that button
+       grows and the row goes ragged again. */
     .user-list-toolbar button {
       width: auto;
       min-width: 156px;
       min-height: 44px;
       padding: 8px 14px;
       font-size: 0.86rem;
+    }
+
+    /* FIX-028 follow-up — keep all eight on ONE desktop row.
+       The equal width is bounded from BOTH sides: it must be at least the
+       widest button's natural width or equality breaks, and at most
+       (container - gaps) / 8 or the row wraps. Measured container widths are
+       1039px @1280, 1125px @1366, 1199px @1440, 1295px @1536, capped at
+       1398px -- so the ceiling is 121px @1280 and 141px @1440.
+
+       At the original 14px padding / 0.86rem the widest button is 147.6px
+       naturally, which clears the ceiling everywhere below 1536 -- that is why
+       it wrapped. Trimming padding, font and the icon gap lowers that natural
+       width to 117.6px, which fits from 1280 up.
+
+       Two tiers so wide screens do not pay for the narrow case: >=1400px has
+       room for the roomier numbers. Scoped to min-width 641px throughout, so
+       mobile keeps the base sizing and its own two-column grid. */
+    @media (min-width: 641px) {
+      .user-list-toolbar button {
+        min-width: 120px;
+        padding-inline: 6px;
+        font-size: 0.78rem;
+      }
+      .toolbar-primary button,
+      .toolbar-manage button { gap: .25rem; }
+      .user-list-toolbar button .material-symbols-outlined { font-size: .9em; }
+    }
+
+    @media (min-width: 1400px) {
+      .user-list-toolbar button {
+        min-width: 136px;
+        padding-inline: 10px;
+        font-size: 0.82rem;
+      }
+      .toolbar-primary button,
+      .toolbar-manage button { gap: .35rem; }
+      .user-list-toolbar button .material-symbols-outlined { font-size: 1em; }
     }
 
     /* Unavailable-by-data state. The button keeps its place and its focus ring —
