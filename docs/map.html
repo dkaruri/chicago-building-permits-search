@@ -2196,19 +2196,18 @@
         margin-left: 0;
         padding: 0;
       }
-      .map-neighborhood-field {
-        flex-basis: 100%;
-        max-width: 100%;
-      }
-      /* FEAT-024. Two traps here, both load-bearing:
+      /* The two full-width fields in the filter grid. Two traps here, both
+         load-bearing:
          1. NOT `grid-column` — below this breakpoint .map-filter-grid is a
             FLEXBOX, so grid placement is silently inert;
-         2. the selector must be `.map-filter-grid .map-use-field` (0-2-0). A
-            bare `.map-use-field` is 0-1-0 and loses to `.map-filter-grid label`
-            (0-1-1) above, which pins every field at 50% — leaving the select
-            clipped to "Residential zoning o". Same specificity trap as FIX-025.
-         NOTE: `.map-neighborhood-field` above has this exact bug and is clipped
-         today; left alone as out of scope, worth its own card. */
+         2. the selector must be scoped to `.map-filter-grid` (0-2-0). A bare
+            `.map-neighborhood-field` / `.map-use-field` is 0-1-0 and loses to
+            `.map-filter-grid label` (0-1-1) above, which pins every field at
+            50%. That is the FIX-025 specificity trap, and it had silently
+            defeated the neighborhood rule since it was written: the field sat
+            at half width on every phone with "Search area, id, or street"
+            clipped mid-word. Measure after touching this. */
+      .map-filter-grid .map-neighborhood-field,
       .map-filter-grid .map-use-field {
         flex: 0 0 100%;
         max-width: 100%;
