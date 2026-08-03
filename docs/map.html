@@ -1124,6 +1124,112 @@
       min-width: 0;
     }
 
+    /* FEAT-024. The option labels carry district codes, so this needs more room
+       than a min/max box gets. */
+    .map-use-field {
+      grid-column: span 2;
+    }
+
+    .map-use-note {
+      margin: 8px 0 0;
+      color: var(--muted);
+    }
+
+    /* FEAT-024. A collapsed <details> rather than a custom disclosure: native
+       keyboard and screen-reader behaviour, and nothing to animate. */
+    .map-work-types {
+      margin-top: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .map-work-types > summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 10px;
+      align-items: center;
+      min-height: 44px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .map-work-types > summary:focus-visible {
+      outline: 3px solid var(--focus-ring);
+      outline-offset: -3px;
+    }
+
+    /* The exclusion count is stated in words so the collapsed state is legible
+       without opening it, and without relying on colour. */
+    .map-work-type-count {
+      color: var(--muted);
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .map-work-type-bulk {
+      display: flex;
+      gap: 8px;
+      padding: 0 10px 8px;
+    }
+
+    /* REQUIRED, not cosmetic: .map-drawer is max-height 720px with
+       overflow: visible, so an unbounded 22-row list spills outside the drawer's
+       border instead of scrolling. */
+    .map-work-type-list {
+      max-height: 260px;
+      padding: 0 10px 10px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+
+    .map-work-type-row {
+      display: grid;
+      grid-template-columns: 18px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 34px;
+      /* The drawer is full-bleed on desktop; without a cap the count is flung
+         ~900px from the name it belongs to and the pair stops reading as one row. */
+      max-width: 480px;
+      cursor: pointer;
+      /* These are data values, not field labels. Without this the global
+         uppercase label styling shouts "RENOVATION / ALTERATION" at 22 rows,
+         and inconsistently with the sentence-case layer toggles below. Same
+         reason .check-row opts out. */
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .map-work-type-row input {
+      width: 18px;
+      min-height: 18px;
+      accent-color: var(--primary);
+    }
+
+    .map-work-type-row .wt-name {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .map-work-type-row .wt-count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* 34px is tolerable for the five layer toggles; it is not for a 22-row list
+       being worked through on a phone. The whole row is the target, so the height
+       is the tap target — the 18px box never has to be hit precisely. */
+    @media (max-width: 640px) {
+      .map-work-type-row {
+        min-height: 44px;
+      }
+
+      .map-work-type-list {
+        max-height: 320px;
+      }
+    }
+
     input[aria-invalid="true"] {
       border-color: var(--danger-line);
     }
@@ -2090,8 +2196,20 @@
         margin-left: 0;
         padding: 0;
       }
-      .map-neighborhood-field {
-        flex-basis: 100%;
+      /* The two full-width fields in the filter grid. Two traps here, both
+         load-bearing:
+         1. NOT `grid-column` — below this breakpoint .map-filter-grid is a
+            FLEXBOX, so grid placement is silently inert;
+         2. the selector must be scoped to `.map-filter-grid` (0-2-0). A bare
+            `.map-neighborhood-field` / `.map-use-field` is 0-1-0 and loses to
+            `.map-filter-grid label` (0-1-1) above, which pins every field at
+            50%. That is the FIX-025 specificity trap, and it had silently
+            defeated the neighborhood rule since it was written: the field sat
+            at half width on every phone with "Search area, id, or street"
+            clipped mid-word. Measure after touching this. */
+      .map-filter-grid .map-neighborhood-field,
+      .map-filter-grid .map-use-field {
+        flex: 0 0 100%;
         max-width: 100%;
       }
       .map-filter-actions {
@@ -2962,6 +3080,12 @@
         zoningLoaded: false,
         zoningLoading: false,
         zoneCache: new Map(),
+        zoningGeoJsonPromise: null,
+        zoneIndex: null,
+        zoneIndexPromise: null,
+        zoneIndexFailed: false,
+        propertyUseFallback: false,
+        workTypeCounts: [],
         tifLoaded: false,
         tifLoading: false,
         tifCache: new Map(),
@@ -3447,7 +3571,9 @@
         costMax: "",
         neighborhood: "",
         q: "",
-        radiusMiles: ""
+        radiusMiles: "",
+        excludedWorkTypes: [],
+        propertyUse: ""
       };
     }
 
@@ -3474,6 +3600,17 @@
       settings.neighborhood = $("map-neighborhood")?.value || "";
       settings.q = $("map-q")?.value || "";
       settings.radiusMiles = $("map-radius")?.value || "";
+      // FEAT-024. Read the exclude checklist only when it is actually on the page.
+      // The drawer is re-rendered wholesale by renderMapShell, and a missing list
+      // must leave the persisted exclusions alone rather than silently clear them.
+      const workTypeList = $("map-work-type-list");
+      if (workTypeList) {
+        settings.excludedWorkTypes = Array.from(workTypeList.querySelectorAll("input[type=checkbox]"))
+          .filter(box => box.checked)
+          .map(box => box.value);
+      }
+      const propertyUse = $("map-property-use");
+      if (propertyUse) settings.propertyUse = propertyUse.value || "";
       try {
         localStorage.setItem(mapSettingsKey, JSON.stringify(settings));
       } catch {}
@@ -3500,6 +3637,129 @@
         $(id)?.setAttribute("aria-invalid", invalid ? "true" : "false");
       });
       return { min, max, invalid };
+    }
+
+    // FEAT-024. work_type is populated ONLY on Express Permit Program permits.
+    // Renovation/Alteration and New Construction — 30% of open permits, and the
+    // two categories most worth isolating — always carry a blank work_type, so a
+    // control offering just Socrata's labels could not exclude them. These two
+    // entries are synthesized from permit_type to complete the set.
+    const MAP_PERMIT_TYPE_WORK_LABELS = {
+      "PERMIT - RENOVATION/ALTERATION": "Renovation / alteration",
+      "PERMIT - NEW CONSTRUCTION": "New construction"
+    };
+
+    // The filterable work-type bucket for a row. NOTE: work_type values may contain
+    // literal commas ("Porch,Deck,Balcony,or Fire Escape" is ONE label) — never
+    // split this field on commas.
+    function mapWorkTypeKey(row) {
+      const workType = clean(row && row.wt).trim();
+      if (workType) return workType;
+      const permitType = clean(row && row.t).trim().toUpperCase();
+      if (MAP_PERMIT_TYPE_WORK_LABELS[permitType]) return MAP_PERMIT_TYPE_WORK_LABELS[permitType];
+      // Defensive: a permit type we have not seen with a blank work_type. Note the
+      // dash in "PERMIT – EXPRESS PERMIT PROGRAM" is an EN DASH, unlike the other
+      // two, so the class covers all three.
+      const stripped = permitType.replace(/^PERMIT\s*[-–—]\s*/, "").trim();
+      if (!stripped) return "Unspecified";
+      return stripped.charAt(0) + stripped.slice(1).toLowerCase();
+    }
+
+    const PROPERTY_USE_OPTIONS = [
+      { value: "", label: "All property types" },
+      { value: "residential", label: "Residential zoning only (RS, RT, RM, DR)" },
+      { value: "residential_business", label: "Residential + business (adds B1–B3)" }
+    ];
+
+    // FEAT-024. Whether a permit's PROPERTY counts as residential, decided by the
+    // zoning district it sits in rather than by its work description. Zoning states
+    // what a district ALLOWS, not what is built: B1–B3 are storefronts with housing
+    // above and carry real housing work, which is why "residential + business"
+    // exists as a second, looser level rather than being folded into the first.
+    function mapRowMatchesPropertyUse(row, mode) {
+      if (!mode) return true;
+      const zone = zoneCategoryAt(Number(row.lon), Number(row.lat));
+      // In no district at all (~5 permits a city-wide month: river, lakefront and
+      // rail parcels). Kept rather than dropped — same principle as the FIX-011
+      // neighborhood fallback, never invent a classification.
+      if (!zone) return true;
+      if (zone.zcat === "residential") return true;
+      if (/^DR/i.test(zone.zoneClass)) return true; // downtown residential
+      if (mode === "residential_business" && zone.zcat === "business") return true;
+      return false;
+    }
+
+    // Excluded work types, sanitised. Persisted state is user-editable and can be
+    // any shape; a bad value must not take the filter down.
+    function mapExcludedWorkTypes(settings) {
+      const raw = settings && settings.excludedWorkTypes;
+      if (!Array.isArray(raw)) return [];
+      // Strings only. clean() would turn a stray 0 or false into "0"/"false" — a
+      // key that matches no work type, so it would filter nothing but would sit in
+      // the checklist as an unremovable phantom row.
+      return [...new Set(raw.filter(value => typeof value === "string").map(value => value.trim()).filter(Boolean))];
+    }
+
+    // FEAT-024. Repaint the exclude checklist. Counts come from the rows passing
+    // every OTHER filter, so a count says what ticking that box would remove right
+    // now. Rebuilds the markup only when the SET of types changes: ticking a box
+    // leaves the set alone (counts are computed pre-exclusion), so a rebuild would
+    // only serve to yank focus out of the list mid-keyboard-pass.
+    function syncMapWorkTypeList() {
+      const list = $("map-work-type-list");
+      if (!list) return;
+      const settings = loadMapSettings();
+      const excluded = new Set(mapExcludedWorkTypes(settings));
+      const counts = new Map(state.map.workTypeCounts);
+      // A persisted exclusion for a type absent from the loaded months still gets
+      // a row (count 0) — otherwise it would filter invisibly, with no way to clear
+      // it, and saveMapSettingsFromControls would drop it on the next apply.
+      for (const key of excluded) if (!counts.has(key)) counts.set(key, 0);
+      const entries = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      const signature = entries.map(entry => entry[0]).join("\u0000");
+      if (list.dataset.signature === signature) {
+        for (const [key, count] of entries) {
+          const box = list.querySelector(`input[data-wt="${cssEscape(key)}"]`);
+          const cell = box && box.closest(".map-work-type-row").querySelector(".wt-count");
+          if (cell) cell.textContent = fmt(count);
+        }
+      } else {
+        list.dataset.signature = signature;
+        list.innerHTML = entries.map(([key, count]) => `
+          <label class="map-work-type-row">
+            <input type="checkbox" value="${esc(key)}" data-wt="${esc(key)}"${excluded.has(key) ? " checked" : ""} onchange="updateMapWorkTypeSummary()">
+            <span class="wt-name">${esc(key)}</span>
+            <span class="wt-count">${fmt(count)}</span>
+          </label>`).join("") || `<div class="empty">No permits loaded yet.</div>`;
+      }
+      updateMapWorkTypeSummary();
+    }
+
+    // CSS.escape isn't universal in the older WebViews this site still serves, and
+    // the work-type labels contain commas and slashes.
+    function cssEscape(value) {
+      return String(value).replace(/["\\]/g, "\\$&");
+    }
+
+    // Live count on the collapsed summary. Reads the DOM, not the saved settings:
+    // the checklist applies on "Apply filters" like every other field in this
+    // drawer, so between ticking and applying the DOM is the truth.
+    function updateMapWorkTypeSummary() {
+      const list = $("map-work-type-list");
+      const label = $("map-work-type-count");
+      if (!list || !label) return;
+      const total = list.querySelectorAll("input[type=checkbox]").length;
+      const n = list.querySelectorAll("input[type=checkbox]:checked").length;
+      // States the TOTAL as well as the count: the list is a bounded scroller
+      // that cuts off mid-row, which otherwise reads as "that is all there is".
+      label.textContent = total ? `${fmt(n)} of ${fmt(total)} excluded` : "none excluded";
+    }
+
+    function setAllMapWorkTypes(checked) {
+      const list = $("map-work-type-list");
+      if (!list) return;
+      list.querySelectorAll("input[type=checkbox]").forEach(box => { box.checked = checked; });
+      updateMapWorkTypeSummary();
     }
 
     function resetMapSettings() {
@@ -3910,7 +4170,24 @@
                 <input id="map-neighborhood" list="map-neighborhoods" value="${esc(settings.neighborhood)}" placeholder="Search area, id, or street">
                 <datalist id="map-neighborhoods">${neighborhoods}</datalist>
               </label>
+              <label class="map-use-field">Property use
+                <select id="map-property-use" aria-describedby="map-use-note">
+                  ${PROPERTY_USE_OPTIONS.map(option => `<option value="${esc(option.value)}"${clean(settings.propertyUse) === option.value ? " selected" : ""}>${esc(option.label)}</option>`).join("")}
+                </select>
+              </label>
             </div>
+            <!-- FEAT-024. The district codes are in the option text, and this note
+                 states the limit of the signal: zoning says what a district ALLOWS,
+                 not what stands on the lot. -->
+            <p id="map-use-note" class="small map-use-note">Decided by the property's zoning district, not the work description. Permits outside every district are kept.</p>
+            <details id="map-work-type-details" class="map-work-types">
+              <summary id="map-work-type-summary">Exclude work types<span id="map-work-type-count" class="map-work-type-count">none excluded</span></summary>
+              <div class="map-work-type-bulk">
+                <button type="button" onclick="setAllMapWorkTypes(true)">Select all</button>
+                <button type="button" onclick="setAllMapWorkTypes(false)">Clear</button>
+              </div>
+              <div id="map-work-type-list" class="map-work-type-list"></div>
+            </details>
             <!-- FEAT-021. Lives in the drawer beside the fields, not in
                  #map-status-strip: that strip is display:none below the mobile
                  breakpoint, so an error routed there is invisible on a phone. -->
@@ -4406,6 +4683,23 @@
       const months = monthsBetween(settings.dateFrom, settings.dateTo);
       const rows = await loadMapMonths(months);
       if (token !== state.map.loadingToken) return;
+      // FEAT-024. The property-use filter needs the zoning index. Resolve it BEFORE
+      // filtering, never alongside: applying a half-ready filter would quietly show
+      // the wrong rows, which is worse than making the user wait for 850 KB.
+      let propertyUse = clean(settings.propertyUse);
+      if (propertyUse) {
+        const pill = $("map-count-pill");
+        if (pill && !state.map.zoneIndex) pill.textContent = "Loading zoning…";
+        const ready = await ensureZoneIndex();
+        if (token !== state.map.loadingToken) return;
+        // Fall back to showing everything, and record it so the status strip can
+        // say so. Writing the message here directly would not survive: the strip
+        // is rewritten by renderMapSideList at the end of every filter pass.
+        if (!ready) propertyUse = "";
+        state.map.propertyUseFallback = !ready;
+      } else {
+        state.map.propertyUseFallback = false;
+      }
       const minJobs = settings.gcMin === "" ? null : Number(settings.gcMin);
       const maxJobs = settings.gcMax === "" ? null : Number(settings.gcMax);
       const neighborhood = norm(settings.neighborhood);
@@ -4427,6 +4721,21 @@
         }
         if (neighborhood && !norm(`${row.cn} ${communityAreaName(row.cn)} ${row.ca} ${row.st}`).includes(neighborhood)) return false;
         return Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lon));
+      });
+      // FEAT-024. Counted BEFORE the work-type exclusion is applied, so each row's
+      // count reads as "how many ticking this would remove", and so ticking a box
+      // never changes the set of rows in the checklist.
+      const workTypeCounts = new Map();
+      for (const row of state.map.filteredRows) {
+        const key = mapWorkTypeKey(row);
+        workTypeCounts.set(key, (workTypeCounts.get(key) || 0) + 1);
+      }
+      state.map.workTypeCounts = [...workTypeCounts];
+      syncMapWorkTypeList();
+      const excludedWorkTypes = new Set(mapExcludedWorkTypes(settings));
+      state.map.filteredRows = state.map.filteredRows.filter(row => {
+        if (excludedWorkTypes.size && excludedWorkTypes.has(mapWorkTypeKey(row))) return false;
+        return mapRowMatchesPropertyUse(row, propertyUse);
       }).map(row => ({
         ...row,
         m: text && (norm(`${row.n} ${row.a} ${row.gc} ${row.os} ${row.wt} ${row.t} ${row.x} ${row.cn} ${row.st}`).includes(text) || (addressSearch && mapAddressMatches(row, settings.q))) ? 1 : 0
@@ -4743,7 +5052,17 @@
       const matches = state.map.filteredRows.filter(row => Number(row.m || 0) === 1).length;
       const geocoded = state.map.searchLocation ? ` | zoomed to address area` : "";
       const radiusNote = state.map.radiusFilter ? ` | within ${state.map.radiusFilter.miles} mi of ${esc(state.map.radiusFilter.label || "address")}` : "";
-      $("map-status-strip").textContent = `${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` | ${esc(settings.neighborhood)}` : ""}${settings.q ? ` | ${fmt(matches)} highlighted for "${esc(settings.q)}"${geocoded}` : ""}${radiusNote}`;
+      // FEAT-024. Both filters are persisted and live behind a collapsed drawer, so
+      // a reload can land on a thin map with the cause out of sight. Name them.
+      const excludedCount = mapExcludedWorkTypes(settings).length;
+      const workTypeNote = excludedCount ? ` | ${fmt(excludedCount)} work ${excludedCount === 1 ? "type" : "types"} excluded` : "";
+      const useOption = PROPERTY_USE_OPTIONS.find(option => option.value === clean(settings.propertyUse));
+      // When the zoning load failed the filter is NOT applied, so naming it here
+      // would credit the map with a filter it does not have. Say what happened.
+      const useNote = state.map.propertyUseFallback
+        ? " | zoning data could not be loaded, so the property-use filter is off — apply filters again to retry"
+        : useOption && useOption.value ? ` | ${esc(useOption.label)}` : "";
+      $("map-status-strip").textContent = `${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` | ${esc(settings.neighborhood)}` : ""}${settings.q ? ` | ${fmt(matches)} highlighted for "${esc(settings.q)}"${geocoded}` : ""}${radiusNote}${workTypeNote}${useNote}`;
       if (hasSearch && searchRows.length) {
         const searchHeader = `<div class="map-result-divider">Search matches for "${esc(settings.q)}" stay pinned above visible permits.</div>`;
         const searchMarkup = searchRows.map(mapResultButton).join("");
@@ -5007,8 +5326,23 @@
       }
     }
 
-    // Fetch the ~850 KB (gzipped) zoning GeoJSON once, the first time the layer
-    // is switched on, and paint the legend swatches from the shared color map.
+    // FEAT-024. The zoning GeoJSON has two consumers now — the map fill layer and
+    // the property-use filter's point-in-polygon index — and either can be the
+    // first to want it. Both go through this one cached promise so the ~850 KB
+    // (gzipped) file is fetched exactly once per page load, whatever the order.
+    // The rejection is deliberately not cached: a failed load must be retryable.
+    function loadZoningGeoJson() {
+      if (!state.map.zoningGeoJsonPromise) {
+        state.map.zoningGeoJsonPromise = fetchGeoJson(ZONING_URL).catch(error => {
+          state.map.zoningGeoJsonPromise = null;
+          throw error;
+        });
+      }
+      return state.map.zoningGeoJsonPromise;
+    }
+
+    // Fetch the zoning GeoJSON the first time the layer is switched on, and paint
+    // the legend swatches from the shared color map.
     async function ensureZoningLoaded() {
       if (state.map.zoningLoaded || state.map.zoningLoading) return;
       const source = state.map.map && state.map.map.getSource("zoning");
@@ -5022,7 +5356,7 @@
         });
       }
       try {
-        const data = await fetchGeoJson(ZONING_URL);
+        const data = await loadZoningGeoJson();
         source.setData(data);
         state.map.zoningLoaded = true;
         setLayerLabel("zoning", "Zoning districts");
@@ -5032,6 +5366,114 @@
       } finally {
         state.map.zoningLoading = false;
       }
+    }
+
+    // FEAT-024. Grid cell size in degrees for the zoning index — ~550m, which puts
+    // a handful of candidate rings in a cell rather than hundreds (one bucket per
+    // district would degenerate to a linear scan of 16k rings per point).
+    const ZONE_CELL = 0.005;
+
+    // Build a point-in-polygon index over the zoning districts, once. The permits
+    // dataset carries no occupancy field, so which zoning district a permit sits
+    // in is the only signal that covers essentially every permit (99.8% of a real
+    // month; the text heuristic in permitUse() can classify 32%). Measured on the
+    // real 14,877-feature file: ~104ms to parse, ~77ms to index, ~11ms to classify
+    // 2,384 points — cheap enough to run on every filter pass.
+    function buildZoneIndex(geojson) {
+      const grid = new Map();
+      const rings = [];
+      for (const feature of (geojson && geojson.features) || []) {
+        const geometry = feature.geometry;
+        if (!geometry) continue;
+        const parts = geometry.type === "Polygon" ? [geometry.coordinates]
+          : geometry.type === "MultiPolygon" ? geometry.coordinates
+          : [];
+        for (const ringSet of parts) {
+          const outer = ringSet && ringSet[0];
+          if (!outer || outer.length < 4) continue;
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for (const point of outer) {
+            const x = point[0], y = point[1];
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+          if (!Number.isFinite(minX) || !Number.isFinite(minY)) continue;
+          const id = rings.push({
+            rings: ringSet,
+            minX, minY, maxX, maxY,
+            zcat: clean(feature.properties && feature.properties.zcat),
+            zoneClass: clean(feature.properties && feature.properties.zone_class)
+          }) - 1;
+          for (let gx = Math.floor(minX / ZONE_CELL); gx <= Math.floor(maxX / ZONE_CELL); gx++) {
+            for (let gy = Math.floor(minY / ZONE_CELL); gy <= Math.floor(maxY / ZONE_CELL); gy++) {
+              const key = `${gx},${gy}`;
+              let bucket = grid.get(key);
+              if (!bucket) grid.set(key, bucket = []);
+              bucket.push(id);
+            }
+          }
+        }
+      }
+      return { grid, rings };
+    }
+
+    // Even-odd ray cast. Coordinates are lon/lat degrees; at Chicago's latitude the
+    // planar approximation is far below the precision of a parcel boundary.
+    function pointInRing(x, y, ring) {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = ring[i][0], yi = ring[i][1];
+        const xj = ring[j][0], yj = ring[j][1];
+        if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+      }
+      return inside;
+    }
+
+    // The zoning district containing a point, or null when it is in none (about 5
+    // permits a city-wide month — river, lakefront and rail parcels).
+    function zoneCategoryAt(lon, lat) {
+      const index = state.map.zoneIndex;
+      if (!index || !Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+      const bucket = index.grid.get(`${Math.floor(lon / ZONE_CELL)},${Math.floor(lat / ZONE_CELL)}`);
+      if (!bucket) return null;
+      for (const id of bucket) {
+        const entry = index.rings[id];
+        if (lon < entry.minX || lon > entry.maxX || lat < entry.minY || lat > entry.maxY) continue;
+        if (!pointInRing(lon, lat, entry.rings[0])) continue;
+        // Rings after the first are holes — a point inside one is outside the
+        // district, not inside it (matters for PD parcels carved out of a block).
+        let inHole = false;
+        for (let k = 1; k < entry.rings.length; k++) {
+          if (pointInRing(lon, lat, entry.rings[k])) { inHole = true; break; }
+        }
+        if (!inHole) return { zcat: entry.zcat, zoneClass: entry.zoneClass };
+      }
+      return null;
+    }
+
+    // Resolve the zoning index, sharing one in-flight build across concurrent
+    // callers. Returns true when the index is usable. Never throws: a failed load
+    // degrades the property-use filter to "off" rather than emptying the map.
+    function ensureZoneIndex() {
+      if (state.map.zoneIndex) return Promise.resolve(true);
+      if (!state.map.zoneIndexPromise) {
+        state.map.zoneIndexPromise = loadZoningGeoJson()
+          .then(data => {
+            state.map.zoneIndex = buildZoneIndex(data);
+            state.map.zoneIndexFailed = false;
+            return true;
+          })
+          .catch(() => {
+            state.map.zoneIndexFailed = true;
+            return false;
+          })
+          .finally(() => {
+            state.map.zoneIndexPromise = null;
+          });
+      }
+      return state.map.zoneIndexPromise;
     }
 
     function setLayerVisibility(layerId, visible) {
