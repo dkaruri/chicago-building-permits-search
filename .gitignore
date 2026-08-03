@@ -12,3 +12,5 @@ var/
 verify-tmp/
 worker/node_modules/
 worker/.wrangler/
+# Worker secrets for `wrangler dev` — never commit these.
+.dev.vars*
