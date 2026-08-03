@@ -554,8 +554,27 @@
       margin-left: auto;
     }
 
+    /* FIX-028 — every button in this toolbar shares one width.
+       The row used to be ragged: Share sat at 92.7px next to Optimize route at
+       153.9px, because each button sized to its own label.
+
+       `min-width`, not `width`: a label that ever outgrows the floor pushes its
+       own button wider instead of clipping, so equality degrades gracefully
+       rather than truncating text.
+
+       This DOES force a wrap, and that is deliberate. Eight buttons at 156px
+       plus gaps needs ~1296px; the toolbar is 1039px at a 1280 viewport and
+       1199px at 1440, so no realistic desktop fits all eight on one row at a
+       readable size. The destructive pair therefore moves to its own row, which
+       strengthens rather than weakens the spatial separation that `Clear list`
+       and `Delete list` are supposed to have.
+
+       ponytail: 156px is tied to the longest label ("Optimize route", 153.9px
+       measured). Re-measure if a label changes; if one exceeds this, raise the
+       floor or the row goes ragged again. */
     .user-list-toolbar button {
       width: auto;
+      min-width: 156px;
       min-height: 44px;
       padding: 8px 14px;
       font-size: 0.86rem;
@@ -1889,6 +1908,28 @@
       #result-count button {
         flex: 1 1 auto;
         width: 100%;
+      }
+      /* FIX-028 — the rule above never reached the toolbar buttons.
+         `.toolbar-primary > *` scores 0-1-0 and LOSES to `.user-list-toolbar
+         button` (0-1-1), so these were content-sized on mobile all along,
+         wrapping two-per-row at ragged widths (153.9px next to 182.1px) when
+         the intent was uniform. Same silent, partial specificity loss as
+         FIX-025. The `.panel-actions` / `#result-count` arms of that rule are
+         unaffected and still work, so it stays.
+
+         Two equal columns rather than one full-width stack: eight buttons in a
+         single column is an eight-row wall on a phone. Grid rather than flex so
+         both groups resolve to the SAME column width — under flex the 6-button
+         and 2-button groups would each divide their own row and land on
+         different widths. */
+      .user-list-toolbar :is(.toolbar-primary, .toolbar-manage) {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+      .user-list-toolbar :is(.toolbar-primary, .toolbar-manage) > button {
+        width: 100%;
+        min-width: 0;
       }
       #result-count {
         min-width: 0;
