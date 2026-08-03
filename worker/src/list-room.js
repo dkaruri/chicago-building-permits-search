@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { emptyDoc, docFromStored, applyOp, listValueFromDoc } from "./list-doc.js";
 import { buildListMeta } from "./lists.js";
+import { presenceFrom, presenceKey } from "./presence.js";
 
 const WRITE_THROUGH_MS = 1000; // debounce KV writes while a burst of edits lands
 const LIST_TTL = 15552000;     // 6 months, matching lists.js
@@ -32,14 +33,33 @@ export class ListRoom extends DurableObject {
     await this.ctx.storage.put("clock", this.clock);
   }
 
-  presence() {
-    const sockets = this.ctx.getWebSockets();
-    const names = [];
-    for (const ws of sockets) {
-      const a = ws.deserializeAttachment();
-      if (a && a.author && !names.includes(a.author)) names.push(a.author);
+  // Stamp a socket as alive, merging into whatever it already carries.
+  touch(ws, extra) {
+    const a = ws.deserializeAttachment() || {};
+    ws.serializeAttachment({ ...a, ...extra, seen: Date.now() });
+  }
+
+  // Count SESSIONS, not sockets, and drop sockets that stopped heartbeating.
+  // `except` omits a socket that is on its way out but still listed.
+  presence(except) {
+    const entries = [];
+    for (const ws of this.ctx.getWebSockets()) {
+      if (ws === except) continue;
+      const a = ws.deserializeAttachment() || {};
+      entries.push({ key: ws, sid: a.sid, author: a.author, seen: a.seen, beats: a.beats });
     }
-    return { count: sockets.length, names };
+    const { count, names, stale } = presenceFrom(entries);
+    for (const ws of stale) { try { ws.close(1001, "stale"); } catch { /* already gone */ } }
+    return { count, names };
+  }
+
+  // Only send a presence frame when what viewers see actually changed —
+  // otherwise every heartbeat would broadcast to the whole room.
+  broadcastPresence(p, except) {
+    const key = presenceKey(p);
+    if (key === this.presenceKey) return;
+    this.presenceKey = key;
+    this.broadcast({ t: "presence", ...p }, except);
   }
 
   broadcast(obj, except) {
@@ -77,13 +97,31 @@ export class ListRoom extends DurableObject {
     try { msg = JSON.parse(message); } catch { return; }
 
     if (msg.t === "hello") {
-      ws.serializeAttachment({ author: String(msg.author || "").slice(0, 40) });
-      ws.send(JSON.stringify({ t: "state", doc: this.doc, clock: this.clock, presence: this.presence() }));
-      this.broadcast({ t: "presence", ...this.presence() }, ws);
+      const sid = String(msg.sid || "").slice(0, 64);
+      this.touch(ws, {
+        author: String(msg.author || "").slice(0, 40),
+        // A pre-FIX-009 client sends no sid: give it a synthetic one so it is
+        // still one viewer, and leave beats false so it is never swept.
+        sid: sid || crypto.randomUUID(),
+        beats: !!sid,
+      });
+      const p = this.presence();
+      ws.send(JSON.stringify({ t: "state", doc: this.doc, clock: this.clock, presence: p }));
+      this.broadcastPresence(p, ws);
+      return;
+    }
+
+    // Heartbeat. Doubles as the sweep trigger: presence() reaps sockets whose
+    // client vanished without a close, so a remaining viewer's own beat fixes
+    // the count for everyone.
+    if (msg.t === "ping") {
+      this.touch(ws);
+      this.broadcastPresence(this.presence());
       return;
     }
 
     if (msg.t === "patch" && Array.isArray(msg.ops)) {
+      this.touch(ws);
       for (const op of msg.ops) this.doc = applyOp(this.doc, op);
       this.clock += 1;
       await this.persist();
@@ -96,11 +134,12 @@ export class ListRoom extends DurableObject {
 
   async webSocketClose(ws) {
     try { ws.close(); } catch { /* already closed */ }
-    this.broadcast({ t: "presence", ...this.presence() });
+    // The closing socket is still listed here — omit it or we report it as a viewer.
+    this.broadcastPresence(this.presence(ws), ws);
   }
 
-  async webSocketError() {
-    this.broadcast({ t: "presence", ...this.presence() });
+  async webSocketError(ws) {
+    this.broadcastPresence(this.presence(ws), ws);
   }
 
   // Write the current doc back to KV so the directory + share links stay correct.

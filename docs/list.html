@@ -3806,7 +3806,7 @@
       view: "directory",
       directory: { rows: [], cursor: null, q: "", tag: "", loading: false, error: "" },
       tagRegistry: null,
-      live: { ws: null, id: null, clock: 0, connected: false, applying: false, closing: false, presence: { count: 0, names: [] }, retry: 0, retryTimer: null },
+      live: { ws: null, id: null, clock: 0, connected: false, applying: false, closing: false, presence: { count: 0, names: [] }, retry: 0, retryTimer: null, beat: null },
       userListNote: "",
       userPermitNotes: {},
       userNoteTs: {},
@@ -4356,6 +4356,18 @@
     // otherwise lose the write — which is the common case for a scroll.
     addEventListener("pagehide", flushLastView);
     addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushLastView(); });
+
+    // Presence has to follow the tab's lifecycle, or a viewer who reloads or
+    // switches apps is counted twice / lingers. pagehide is the only unload
+    // event iOS reliably fires, and it also precedes a bfcache freeze.
+    addEventListener("pagehide", () => { if (state.live.ws) liveDisconnect(); });
+    function liveResume() {
+      if (state.view !== "list" || document.visibilityState !== "visible") return;
+      const l = activeList();
+      if (l && l.sharedId && !state.live.connected) liveConnect(l.sharedId);
+    }
+    addEventListener("visibilitychange", liveResume);
+    addEventListener("pageshow", liveResume); // bfcache restore fires no visibilitychange
 
     // Snapshot of where the user is now. Cheap enough to call on every scroll
     // frame because saveLastView debounces the actual write.
@@ -6968,6 +6980,19 @@
     }
 
     const WS_BASE = API_BASE.replace(/^http/, "ws");
+    const LIVE_HEARTBEAT_MS = 30000; // must stay under the room's 90s presence TTL
+
+    // One id per TAB, surviving reloads and dying with the tab — so a reload
+    // replaces this viewer instead of adding one, while a second tab is still a
+    // second viewer. localStorage would merge two real tabs into one.
+    function liveSessionId() {
+      let sid = "";
+      try { sid = sessionStorage.getItem("chi_permit_sid") || ""; } catch { /* storage blocked */ }
+      if (sid) return sid;
+      sid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      try { sessionStorage.setItem("chi_permit_sid", sid); } catch { /* not persisted — a reload then counts as a new viewer */ }
+      return sid;
+    }
 
     function liveConnect(sharedId) {
       liveDisconnect();
@@ -6982,12 +7007,18 @@
       ws.onopen = () => {
         live.connected = true;
         live.retry = 0;
-        try { ws.send(JSON.stringify({ t: "hello", author: (localStorage.getItem("chi_permit_author") || "").trim() })); } catch { /* closing */ }
+        try { ws.send(JSON.stringify({ t: "hello", author: (localStorage.getItem("chi_permit_author") || "").trim(), sid: liveSessionId() })); } catch { /* closing */ }
+        clearInterval(live.beat);
+        live.beat = setInterval(() => {
+          if (live.ws !== ws || ws.readyState !== 1) return;
+          try { ws.send(JSON.stringify({ t: "ping" })); } catch { /* closing */ }
+        }, LIVE_HEARTBEAT_MS);
       };
       ws.onmessage = ev => liveOnMessage(ev.data);
       ws.onerror = () => { /* onclose follows */ };
       ws.onclose = () => {
         live.connected = false;
+        clearInterval(live.beat);
         renderPresence();
         if (!live.closing && live.id === sharedId) liveScheduleReconnect(sharedId);
       };
@@ -6998,6 +7029,7 @@
       live.closing = true;
       live.connected = false;
       clearTimeout(live.retryTimer);
+      clearInterval(live.beat);
       if (live.ws) { try { live.ws.close(); } catch { /* already closed */ } }
       live.ws = null;
       live.id = null;
