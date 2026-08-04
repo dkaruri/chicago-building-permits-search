@@ -498,6 +498,15 @@
       display: inline-flex;
       align-items: center;
       gap: 10px;
+      /* Reserve the presence pill's box so the row is the same height whether
+         or not anyone else is viewing. Without this the pill's arrival and
+         departure resized this row and shoved the whole page — measured 5.9px
+         on iPhone 13, 3.7px on desktop, repeating every time the socket
+         reconnected. The pill measures 22.72px (0.78rem text, 18.72px line box,
+         2px padding each side); 23px covers it in both states. If the pill's
+         type or padding changes, re-measure — t58 asserts the row height does
+         not move, so it will fail rather than silently start jiggling again. */
+      min-height: 23px;
     }
 
     .live-presence {
@@ -3837,7 +3846,7 @@
       view: "directory",
       directory: { rows: [], cursor: null, q: "", tag: "", loading: false, error: "" },
       tagRegistry: null,
-      live: { ws: null, id: null, clock: 0, connected: false, applying: false, closing: false, presence: { count: 0, names: [] }, retry: 0, retryTimer: null, beat: null },
+      live: { ws: null, id: null, clock: 0, connected: false, applying: false, closing: false, presence: { count: 0, names: [] }, retry: 0, retryTimer: null, beat: null, settleTimer: null, settleTo: null },
       userListNote: "",
       userPermitNotes: {},
       userNoteTs: {},
@@ -4258,11 +4267,60 @@
 
     // Shows how many people currently have this published list open (Phase C).
     // Presence flows in over the live socket; hidden unless 2+ are connected.
+    //
+    // Deliberately NOT gated on `live.connected`. The socket drops and
+    // reconnects routinely — a throttled background tab gets swept by the
+    // room's TTL every few minutes — and blanking the pill on each blip made it
+    // flash in and out while the actual viewers never changed. The count is
+    // only cleared by a deliberate leave (liveDisconnect), so a reconnect keeps
+    // showing the last known answer rather than briefly lying that nobody is
+    // here. Worst case it is stale for one reconnect backoff (≤30s).
+    // How long a drop is held before it is believed. Covers the case the TTL
+    // cannot: a phone whose screen goes off fires `pagehide` and disconnects
+    // CLEANLY, so the server is right to say one viewer — it just stops being
+    // true again the moment the screen comes back on. Holding the old number
+    // briefly turns "pocket, then look again" into no visible change at all.
+    // Rises are never delayed; only drops.
+    const PRESENCE_SETTLE_MS = 25000;
+
+    // Every presence frame goes through here. `immediate` is for a deliberate
+    // leave, which must take effect at once or the pill would linger on a list
+    // the user has navigated away from.
+    function applyPresence(next, immediate) {
+      const live = state.live;
+      const count = (next && next.count) || 0;
+      const names = (next && next.names) || [];
+      const showing = (live.presence.count || 0) >= 2;
+      if (immediate || count >= 2 || !showing) {
+        clearTimeout(live.settleTimer);
+        live.settleTo = null;
+        live.presence = { count, names };
+        renderPresence();
+        return;
+      }
+      // Dropping out of view: keep showing the last known count for now. If the
+      // viewer comes back inside the window, the next frame cancels this and
+      // nothing on screen ever moved.
+      //
+      // A repeat of the SAME drop must not restart the clock. A reconnect
+      // re-sends the room state, so re-arming on every frame would let the hold
+      // stretch indefinitely and leave the pill claiming someone is here long
+      // after they left. The grace period is a delay, never a suppression.
+      if (live.settleTo === count) return;
+      clearTimeout(live.settleTimer);
+      live.settleTo = count;
+      live.settleTimer = setTimeout(() => {
+        live.settleTo = null;
+        live.presence = { count, names };
+        renderPresence();
+      }, PRESENCE_SETTLE_MS);
+    }
+
     function renderPresence() {
       const el = $("live-presence");
       if (!el) return;
       const live = state.live;
-      const count = live.connected ? (live.presence.count || 0) : 0;
+      const count = live.presence.count || 0;
       if (count < 2) { el.hidden = true; el.textContent = ""; return; }
       const names = (live.presence.names || []).filter(n => n && n.trim());
       el.hidden = false;
@@ -7189,7 +7247,10 @@
     }
 
     const WS_BASE = API_BASE.replace(/^http/, "ws");
-    const LIVE_HEARTBEAT_MS = 30000; // must stay under the room's 90s presence TTL
+    // Must stay well under the room's presence TTL (300s). The margin is wide on
+    // purpose: browsers throttle this timer in a hidden tab, so a tight margin
+    // reaps viewers who never left.
+    const LIVE_HEARTBEAT_MS = 30000;
 
     // One id per TAB, surviving reloads and dying with the tab — so a reload
     // replaces this viewer instead of adding one, while a second tab is still a
@@ -7204,7 +7265,10 @@
     }
 
     function liveConnect(sharedId) {
-      liveDisconnect();
+      // Keep the presence count across the teardown: this is a RECONNECT, not
+      // a departure, and clearing it here is what made the pill blink on every
+      // retry. A genuine leave calls liveDisconnect() directly.
+      liveDisconnect(true);
       if (!sharedId || typeof WebSocket === "undefined") return;
       const live = state.live;
       live.id = sharedId;
@@ -7228,12 +7292,16 @@
       ws.onclose = () => {
         live.connected = false;
         clearInterval(live.beat);
-        renderPresence();
+        // No renderPresence() here: the count has not changed just because our
+        // socket dropped, and repainting was the flicker. The next `state` or
+        // `presence` frame after the reconnect repaints with the truth.
         if (!live.closing && live.id === sharedId) liveScheduleReconnect(sharedId);
       };
     }
 
-    function liveDisconnect() {
+    // `keepPresence` is for the teardown inside liveConnect — the socket is
+    // being replaced, not abandoned, so who is in the room is still true.
+    function liveDisconnect(keepPresence) {
       const live = state.live;
       live.closing = true;
       live.connected = false;
@@ -7242,8 +7310,13 @@
       if (live.ws) { try { live.ws.close(); } catch { /* already closed */ } }
       live.ws = null;
       live.id = null;
-      live.presence = { count: 0, names: [] };
-      renderPresence();
+      // Cancel a pending drop either way: on a reconnect it would fire against
+      // the new socket's room, and on a leave it would repaint after the pill
+      // was already cleared.
+      clearTimeout(live.settleTimer);
+      live.settleTo = null;
+      if (keepPresence) return;
+      applyPresence({ count: 0, names: [] }, true);
     }
 
     function liveScheduleReconnect(sharedId) {
@@ -7267,7 +7340,7 @@
       try { msg = JSON.parse(data); } catch { return; }
       const live = state.live;
       if (msg.t === "error") { liveDisconnect(); return; }
-      if (msg.t === "presence") { live.presence = { count: msg.count || 0, names: msg.names || [] }; renderPresence(); return; }
+      if (msg.t === "presence") { applyPresence({ count: msg.count || 0, names: msg.names || [] }); return; }
       const list = activeList();
       if (!list || list.sharedId !== live.id) return;
 
@@ -7283,7 +7356,7 @@
           list.called = d.called && typeof d.called === "object" ? d.called : {};
           if (d.meta) { list.name = d.meta.title || list.name; list.desc = d.meta.blurb != null ? d.meta.blurb : list.desc; list.author = d.meta.author != null ? d.meta.author : list.author; list.tags = d.meta.tags != null ? d.meta.tags : list.tags; }
           live.clock = msg.clock || 0;
-          if (msg.presence) live.presence = msg.presence;
+          if (msg.presence) applyPresence(msg.presence);
         } else if (msg.t === "patch" && Array.isArray(msg.ops)) {
           for (const op of msg.ops) applyListOp(list, op);
           live.clock = msg.clock || live.clock;
