@@ -498,6 +498,15 @@
       display: inline-flex;
       align-items: center;
       gap: 10px;
+      /* Reserve the presence pill's box so the row is the same height whether
+         or not anyone else is viewing. Without this the pill's arrival and
+         departure resized this row and shoved the whole page — measured 5.9px
+         on iPhone 13, 3.7px on desktop, repeating every time the socket
+         reconnected. The pill measures 22.72px (0.78rem text, 18.72px line box,
+         2px padding each side); 23px covers it in both states. If the pill's
+         type or padding changes, re-measure — t58 asserts the row height does
+         not move, so it will fail rather than silently start jiggling again. */
+      min-height: 23px;
     }
 
     .live-presence {
@@ -4258,11 +4267,19 @@
 
     // Shows how many people currently have this published list open (Phase C).
     // Presence flows in over the live socket; hidden unless 2+ are connected.
+    //
+    // Deliberately NOT gated on `live.connected`. The socket drops and
+    // reconnects routinely — a throttled background tab gets swept by the
+    // room's TTL every few minutes — and blanking the pill on each blip made it
+    // flash in and out while the actual viewers never changed. The count is
+    // only cleared by a deliberate leave (liveDisconnect), so a reconnect keeps
+    // showing the last known answer rather than briefly lying that nobody is
+    // here. Worst case it is stale for one reconnect backoff (≤30s).
     function renderPresence() {
       const el = $("live-presence");
       if (!el) return;
       const live = state.live;
-      const count = live.connected ? (live.presence.count || 0) : 0;
+      const count = live.presence.count || 0;
       if (count < 2) { el.hidden = true; el.textContent = ""; return; }
       const names = (live.presence.names || []).filter(n => n && n.trim());
       el.hidden = false;
@@ -7189,7 +7206,10 @@
     }
 
     const WS_BASE = API_BASE.replace(/^http/, "ws");
-    const LIVE_HEARTBEAT_MS = 30000; // must stay under the room's 90s presence TTL
+    // Must stay well under the room's presence TTL (300s). The margin is wide on
+    // purpose: browsers throttle this timer in a hidden tab, so a tight margin
+    // reaps viewers who never left.
+    const LIVE_HEARTBEAT_MS = 30000;
 
     // One id per TAB, surviving reloads and dying with the tab — so a reload
     // replaces this viewer instead of adding one, while a second tab is still a
@@ -7204,7 +7224,10 @@
     }
 
     function liveConnect(sharedId) {
-      liveDisconnect();
+      // Keep the presence count across the teardown: this is a RECONNECT, not
+      // a departure, and clearing it here is what made the pill blink on every
+      // retry. A genuine leave calls liveDisconnect() directly.
+      liveDisconnect(true);
       if (!sharedId || typeof WebSocket === "undefined") return;
       const live = state.live;
       live.id = sharedId;
@@ -7228,12 +7251,16 @@
       ws.onclose = () => {
         live.connected = false;
         clearInterval(live.beat);
-        renderPresence();
+        // No renderPresence() here: the count has not changed just because our
+        // socket dropped, and repainting was the flicker. The next `state` or
+        // `presence` frame after the reconnect repaints with the truth.
         if (!live.closing && live.id === sharedId) liveScheduleReconnect(sharedId);
       };
     }
 
-    function liveDisconnect() {
+    // `keepPresence` is for the teardown inside liveConnect — the socket is
+    // being replaced, not abandoned, so who is in the room is still true.
+    function liveDisconnect(keepPresence) {
       const live = state.live;
       live.closing = true;
       live.connected = false;
@@ -7242,6 +7269,7 @@
       if (live.ws) { try { live.ws.close(); } catch { /* already closed */ } }
       live.ws = null;
       live.id = null;
+      if (keepPresence) return;
       live.presence = { count: 0, names: [] };
       renderPresence();
     }
