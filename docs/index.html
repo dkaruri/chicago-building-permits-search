@@ -6810,7 +6810,7 @@
             ["Reported cost", money(row.reported_cost)],
             ["Total fee", money(row.total_fee)],
           ])}</section>`,
-        () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div>${followUpToggleHtml(row)}</section>`,
+        () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div>${calledToggleHtml(row)}${followUpToggleHtml(row)}</section>`,
         () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div><div class="pm-reported" id="pm-reported"></div></section>`,
         () => `<section class="pm-block"><h3>Notes</h3>
             ${notesFeedAvailable() ? `<p class="pm-feed-link"><button type="button" class="pm-feed-btn" onclick="openFeedForPermit('${enc(row.permit_number)}')">
@@ -7227,6 +7227,12 @@
 
     function followUpToggleHtml() {
       /* unreachable: the follow-up flag lives on a saved list, and this page has none */
+      return "";
+    }
+
+    function calledToggleHtml() {
+      /* FEAT-031. Same reason as the follow-up flag: the call mark is stored on
+         a saved list, and this page never has one open. */
       return "";
     }
 
