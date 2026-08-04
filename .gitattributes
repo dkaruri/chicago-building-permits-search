@@ -1,0 +1,5 @@
+# Git hooks must keep LF endings. A #!/bin/sh script checked out with CRLF has
+# a carriage return in its interpreter line and simply does not run -- which on
+# a fresh clone would silently disable the control-byte guard (FIX-030).
+scripts/hooks/pre-commit text eol=lf
+scripts/hooks/*.mjs text eol=lf
