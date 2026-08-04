@@ -8036,8 +8036,120 @@
     }
 
     // Resolve zone + TIF for every row before an export builds its rows.
+    // Deliberately does NOT resolve the Assessor class: that is a second live
+    // dependency on Cook County and must stay on-demand, one open permit at a
+    // time (FEAT-038).
     async function resolveGeoForRows(rows) {
       await Promise.all(rows.flatMap(row => [ensurePermitZone(row), ensurePermitTif(row)]));
+    }
+
+    // FEAT-038. Cook County Assessor property class -> use, bucketed straight
+    // from the Assessor's own class dictionary (ccao-data/data-architecture,
+    // dbt/seeds/ccao/ccao.class_dict.csv, read 2026-08-04) by its
+    // major_class_type column. Bucket by CLASS, never by the leading digit: the
+    // digit lies. 591 is commercial but 593 is industrial; 991 and 997 are
+    // residential incentives despite the 9; and the four genuinely mixed-use
+    // classes sit under three different major types. Regenerate from that CSV
+    // if the County adds classes — an unknown code falls back to the heuristic
+    // rather than being guessed at.
+    const ASSESSOR_CLASS_USE = (() => {
+      const groups = {
+        residential: "200 201 202 203 204 205 206 207 208 209 210 211 213 218 219 224 225 234 236 239 240 241 278 288 290 295 297 299 OA2 300 301 313 314 315 390 391 396 397 399 900 901 913 914 915 959 990 991 996 997",
+        mixed: "212 318 418 918",
+        commercial: "500 501 516 517 522 523 526 527 528 529 530 531 532 533 535 590 591 592 597 599 550 580 581 583 587 589 593 OA5 650 680 681 683 687 689 693 651 663 663A 663B 670 670A 670B 671 673 673A 677 677A 677B 679 679A 679B 637 638 638A 638B 654 654A 655 666 668 668A 669 700 701 716 717 717A 717B 722 723 723A 726 727 728 729 729A 729B 730 730A 730B 731 732 733 735 790 790A 790B 791 791A 791B 792 792A 792B 797 797A 797B 799 799B 742 743 745 746 746A 747 748 752 753 756 757 758 760 761 762 764 765 767 772 774 798 800 801 801B 816 817 817A 817B 822 822A 823 823A 823B 826 827 828 828A 829 829B 830 830A 831 831A 832 833 833A 835 850 880 880A 881 881A 883 887 887B 889 890 890A 890B 891 892 892A 892B 893 893A 893B 897 897A 897B 899 899A 899B",
+        nonprofit: "400 401 417 422 423 426 427 428 429 430 431 432 433 435 480 481 483 487 489 490 491 492 493 496 497 499",
+        vacant: "100 190",
+        exempt: "EX RR",
+      };
+      const map = new Map();
+      for (const [key, codes] of Object.entries(groups)) for (const code of codes.split(" ")) map.set(code, key);
+      return map;
+    })();
+
+    const ASSESSOR_USE_LABEL = {
+      residential: "Residential",
+      mixed: "Mixed use",
+      commercial: "Commercial / industrial",
+      nonprofit: "Not-for-profit",
+      vacant: "Vacant land",
+      exempt: "Tax-exempt",
+    };
+
+    const parcelUseCache = new Map();
+    const permitPinCache = new Map();
+
+    // The 10-digit Cook County PINs a permit covers. pin_list is pipe-delimited —
+    // a permit can span several parcels. Read off the row when a hydration path
+    // happened to carry it, otherwise fetched on demand: threading pin_list
+    // through all six row-construction sites on three pages would be a far wider
+    // change than one lookup for the one permit whose overlay is open.
+    async function ensurePermitPins(row) {
+      const number = clean(row.permit_number);
+      if (!number) return [];
+      const parse = value => [...new Set(String(value || "").split("|")
+        .map(p => p.replace(/\D/g, "").slice(0, 10)).filter(p => p.length === 10))];
+      const onRow = parse(row.pin_list);
+      if (onRow.length) return onRow;
+      if (permitPinCache.has(number)) return permitPinCache.get(number);
+      try {
+        const params = new URLSearchParams({ $select: "pin_list", $where: `permit_ = '${number}'`, $limit: "1" });
+        const [hit] = await fetch(`https://data.cityofchicago.org/resource/ydr8-5enu.json?${params}`).then(r => r.json());
+        const pins = parse(hit && hit.pin_list);
+        permitPinCache.set(number, pins);
+        return pins;
+      } catch {
+        return [];
+      }
+    }
+
+    // The parcel's legal use as Cook County itself records it for assessment — a
+    // sourced fact, unlike permitUse()'s read of the work description. Returns
+    // { label, classes } or null when no parcel matched. A network failure is
+    // NOT cached: a blip must not harden into a permanent "unknown".
+    async function ensurePermitParcelUse(row) {
+      const number = clean(row.permit_number);
+      if (!number) return null;
+      if (parcelUseCache.has(number)) return parcelUseCache.get(number);
+      const pins = await ensurePermitPins(row);
+      if (!pins.length) { parcelUseCache.set(number, null); return null; }
+      try {
+        const params = new URLSearchParams({
+          $select: "pin10,class,year",
+          $where: `pin10 in(${pins.map(p => `'${p}'`).join(",")})`,
+          $order: "year DESC",
+          $limit: "500",
+        });
+        const hits = await fetch(`https://datacatalog.cookcountyil.gov/resource/nj4t-kc8j.json?${params}`).then(r => r.json());
+        const newest = new Map();
+        // Ordered newest year first, so the first row seen for a parcel is the
+        // current classification.
+        for (const hit of Array.isArray(hits) ? hits : []) {
+          const code = clean(hit.class).trim().toUpperCase();
+          if (code && !newest.has(hit.pin10)) newest.set(hit.pin10, code);
+        }
+        const classes = [...new Set(newest.values())].sort();
+        const keys = [...new Set(classes.map(code => ASSESSOR_CLASS_USE.get(code)).filter(Boolean))];
+        // Several parcels that disagree ARE a mixed-use property, not a coin toss.
+        const key = keys.length === 1 ? keys[0] : keys.length > 1 ? "mixed" : "";
+        const result = key ? { label: ASSESSOR_USE_LABEL[key], classes } : null;
+        parcelUseCache.set(number, result);
+        return result;
+      } catch {
+        return null;
+      }
+    }
+
+    // Sourced class when the parcel matched; otherwise permitUse()'s reading of
+    // the work description, still badged approximate. A guess is never presented
+    // as a fact, and a fact never carries the "approx." badge.
+    function parcelUseHtml(hit, row) {
+      if (hit) {
+        const plural = hit.classes.length > 1 ? "classes" : "class";
+        return `${esc(hit.label)} <span class="small" title="Cook County Assessor property ${plural} ${esc(hit.classes.join(", "))} — the County's own classification of this parcel for assessment">· Cook County ${plural} ${esc(hit.classes.join(", "))}</span>`;
+      }
+      const guess = permitUse(row);
+      if (guess.key === "unclear") return "&mdash;";
+      return `${esc(guess.label)} <span class="approx" title="Guessed from the work description — no Cook County parcel record matched this permit">approx.</span>`;
     }
 
     async function renderUserList() {
@@ -9567,8 +9679,12 @@
     }
 
     function pmFacts(pairs) {
+      // The "—" is the EMPTY placeholder, so a row whose value is supplied by
+      // `extra` must not get one — Zone has been shipping as "—RS-3" and TIF
+      // district as "——" since the async rows landed (found while building
+      // FEAT-038, whose Property use row is the third caller of this shape).
       return `<dl class="pm-facts">${pairs.map(([k, v, extra]) =>
-        `<dt>${esc(k)}</dt><dd>${v ? esc(v) : "—"}${extra || ""}</dd>`).join("")}</dl>`;
+        `<dt>${esc(k)}</dt><dd>${v ? esc(v) : (extra ? "" : "—")}${extra || ""}</dd>`).join("")}</dl>`;
     }
 
     // Ordered section builders — insert future sections here (extensibility seam).
@@ -9598,6 +9714,7 @@
             ["Neighborhood", communityAreaName(row.community_area)],
             ["Zone", "", `<span class="geo-zone" data-permit="${esc(num)}">${geoZoneCache.has(num) ? esc(geoZoneCache.get(num) || "—") : "…"}</span>`],
             ["TIF district", "", `<span class="geo-tif" data-permit="${esc(num)}">${geoTifCache.has(num) ? esc(geoTifCache.get(num) || "—") : "…"}</span>`],
+            ["Property use", "", `<span class="parcel-use" data-permit="${esc(num)}">${parcelUseCache.has(num) ? parcelUseHtml(parcelUseCache.get(num), row) : "…"}</span>`],
           ])}</section>`,
         () => `<section class="pm-block"><h3>Unit owner</h3><div class="pm-contractors" data-role="owner">${ownerLinesHtml(row)}</div></section>`,
         () => `<section class="pm-block"><h3>Permit details</h3>${pmFacts([
@@ -9993,16 +10110,20 @@
 
     // Fill Zone / TIF district into a permit-detail overlay body (Task 5),
     // resolving via the existing geo cache/fetch (shared with the saved-list
-    // table columns) rather than a fresh lookup path.
+    // table columns) rather than a fresh lookup path. The three run in parallel;
+    // each fills independently so one slow source cannot hold the others at "…".
     async function fillPermitGeo(body, row) {
       const num = clean(row.permit_number);
-      if (!geoZoneCache.has(num) || !geoTifCache.has(num)) {
-        try { await resolveGeoForRows([row]); } catch {}
-      }
+      const jobs = [];
+      if (!geoZoneCache.has(num) || !geoTifCache.has(num)) jobs.push(resolveGeoForRows([row]));
+      if (!parcelUseCache.has(num)) jobs.push(ensurePermitParcelUse(row));
+      if (jobs.length) { try { await Promise.all(jobs); } catch {} }
       const zone = body.querySelector(`.geo-zone[data-permit="${CSS.escape(num)}"]`);
       const tif = body.querySelector(`.geo-tif[data-permit="${CSS.escape(num)}"]`);
+      const use = body.querySelector(`.parcel-use[data-permit="${CSS.escape(num)}"]`);
       if (zone) zone.textContent = geoZoneCache.get(num) || "—";
       if (tif) tif.textContent = geoTifCache.get(num) || "—";
+      if (use) use.innerHTML = parcelUseHtml(parcelUseCache.get(num) || null, row);
     }
 
     // Public entry point for opening a permit's detail overlay. Starts a fresh
