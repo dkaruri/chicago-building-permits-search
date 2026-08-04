@@ -153,7 +153,13 @@ export function attachClosureStats(profiles, stats, category) {
  */
 export function isKeyMissingError(text) {
   const s = String(text || "");
-  if (/404/.test(s) && /not found/i.test(s)) return true;
+  // The word boundaries are \b as two-character ESCAPES. Written with real
+  // 0x08 backspace BYTES this tested for a literal backspace and could never
+  // match, so this branch was dead (FIX-030). It is not redundant with the
+  // check below: that one needs the literal word "key" followed by a space,
+  // which the real message only contains when the KEY NAME happens to end in
+  // "key" -- it does not match for closure:stats, the key this actually reads.
+  if (/\b404\b/.test(s) && /not found/i.test(s)) return true;
   // Wrangler has phrased this differently across versions; accept the explicit
   // wording too, but never a bare "not found" on its own — an auth error can
   // easily contain that phrase without meaning the key is absent.
