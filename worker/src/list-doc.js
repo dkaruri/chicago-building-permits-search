@@ -68,6 +68,41 @@ export function applyOp(doc, op) {
   }
 }
 
+// ---- Durable Object storage layout (FEAT-035) ----
+//
+// Durable Object storage caps a single VALUE at 128 KiB, and the doc does not
+// fit at the 1000-permit cap: measured 179 KiB worst case, with every stop
+// visited, called AND flagged by a 40-character actor name. The three flag maps
+// are what grow with those names, so they are what gets split off — leaving a
+// core of ~43 KiB and a largest flag map of ~55 KiB.
+//
+// Kept here, and pure, so the split and the migration off the old single-key
+// layout are testable without standing up a Durable Object.
+export function splitDocForStorage(doc) {
+  const { ticks, fu, called, ...core } = doc;
+  return {
+    "doc:core": core,
+    "doc:ticks": ticks || {},
+    "doc:fu": fu || {},
+    "doc:called": called || {},
+  };
+}
+
+// `legacy` is the old single "doc" key, written before this shipped. It wins
+// when present: a room that has not been rewritten yet holds nothing in the
+// split keys, and reading those first would silently reset it to empty.
+export function docFromStorage(legacy, parts) {
+  if (legacy) return legacy;
+  const core = parts && parts["doc:core"];
+  if (!core) return emptyDoc();
+  return {
+    ...core,
+    ticks: (parts["doc:ticks"]) || {},
+    fu: (parts["doc:fu"]) || {},
+    called: (parts["doc:called"]) || {},
+  };
+}
+
 export function listValueFromDoc(doc) {
   return {
     v: 2,
