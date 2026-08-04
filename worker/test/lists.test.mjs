@@ -403,6 +403,98 @@ test("PUT /ticks does NOT write a revision", async () => {
   assert.equal(revs.length, 0, "a checkbox tap is not an edit worth versioning");
 });
 
+// ---- PUT /called (FEAT-031) ----
+// The route is shared with /ticks and /follow, so these cover what is genuinely
+// different: the third field exists, it is independent, and it carries an actor.
+
+test("PUT /called flips a key without touching ticks or follow-ups", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234", "100987"], title: "T" }))).json();
+  const put = (flag, body) => {
+    const url = new URL(`https://w/api/lists/${id}/${flag}`);
+    return handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify(body) }));
+  };
+  assert.equal((await put("ticks", { key: "100234", on: true })).status, 200);
+  assert.equal((await put("follow", { key: "100234", on: true })).status, 200);
+  assert.equal((await put("called", { key: "100234", on: true })).status, 200);
+  assert.equal((await put("called", { key: "100987", on: true })).status, 200);
+  let body = await (await handleLists(new URL(`https://w/api/lists/${id}`), env, get(id))).json();
+  assert.deepEqual(body.called, { "100234": 1, "100987": 1 });
+
+  await put("called", { key: "100234", on: false });
+  body = await (await handleLists(new URL(`https://w/api/lists/${id}`), env, get(id))).json();
+  assert.deepEqual(body.called, { "100987": 1 }, "clearing one call must not clear the other");
+  assert.deepEqual(body.ticks, { "100234": 1 }, "the visited tick must be untouched");
+  assert.deepEqual(body.fu, { "100234": 1 }, "the follow-up flag must be untouched");
+});
+
+test("PUT /called records who called, and caps the name", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234", "100987"], title: "T" }))).json();
+  const url = new URL(`https://w/api/lists/${id}/called`);
+  const put = body => handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify(body) }));
+  await put({ key: "100234", on: true, by: "Divyam" });
+  await put({ key: "100987", on: true, by: "X".repeat(80) });
+  const body = await (await handleLists(new URL(`https://w/api/lists/${id}`), env, get(id))).json();
+  assert.equal(body.called["100234"], "Divyam");
+  assert.equal(body.called["100987"], "X".repeat(40));
+});
+
+test("PUT /called with no actor stores 1, so an anonymous call still reads as called", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "T" }))).json();
+  const url = new URL(`https://w/api/lists/${id}/called`);
+  await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "100234", on: true, by: "  " }) }));
+  const body = await (await handleLists(new URL(`https://w/api/lists/${id}`), env, get(id))).json();
+  assert.equal(body.called["100234"], 1);
+});
+
+test("PUT /called refuses a key that is not in the list", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "T" }))).json();
+  const url = new URL(`https://w/api/lists/${id}/called`);
+  const res = await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "999999", on: true }) }));
+  assert.equal(res.status, 400);
+});
+
+// The rule that protects the team's field log: a details edit goes through the
+// generic PUT, which must carry the flags across rather than take them from the
+// body. Without this, renaming a list would wipe every call and visit on it.
+test("a generic PUT preserves called, ticks and follow-ups", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "T" }))).json();
+  for (const flag of ["ticks", "follow", "called"]) {
+    const url = new URL(`https://w/api/lists/${id}/${flag}`);
+    await handleLists(url, env, new Request(url, { method: "PUT", body: JSON.stringify({ key: "100234", on: true, by: "Divyam" }) }));
+  }
+  const editUrl = new URL(`https://w/api/lists/${id}`);
+  await handleLists(editUrl, env, new Request(editUrl, {
+    method: "PUT",
+    body: JSON.stringify({ title: "Renamed", called: {}, ticks: {}, fu: {} }),
+  }));
+  const body = await (await handleLists(new URL(`https://w/api/lists/${id}`), env, get(id))).json();
+  assert.equal(body.called["100234"], "Divyam", "a details edit must not clear the call log");
+  assert.equal(body.ticks["100234"], "Divyam");
+  assert.equal(body.fu["100234"], "Divyam");
+});
+
+test("a list stored before FEAT-031 reads back with an empty called", async () => {
+  const env = ENV();
+  const { id } = await (await handleLists(new URL("https://w/api/lists"), env,
+    post({ permits: ["100234"], title: "T" }))).json();
+  // Rewrite storage in the pre-FEAT-031 shape, with no `called` key at all.
+  const stored = JSON.parse(env.CACHE.map.get("list:" + id));
+  delete stored.called;
+  env.CACHE.map.set("list:" + id, JSON.stringify(stored));
+  const body = await (await handleLists(new URL(`https://w/api/lists/${id}`), env, get(id))).json();
+  assert.deepEqual(body.called, {});
+});
+
 test("POST round-trips custom stops", async () => {
   const env = ENV();
   const created = await handleLists(new URL("https://w/api/lists"), env, post({

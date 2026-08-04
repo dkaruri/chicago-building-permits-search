@@ -27,6 +27,23 @@ function resp(obj, status) {
   return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
 }
 
+// A per-key flag (visited / follow-up / called) stores either 1 — set, actor
+// unknown — or the actor's display name, which is how a shared list can say WHO
+// visited or called (FEAT-031). 1 stays truthy, so every list written before
+// this shipped keeps reading as "set" with nobody to name; no migration.
+const MAX_ACTOR = 40;
+export function flagValue(v) {
+  if (typeof v !== "string") return 1;
+  return v.trim().slice(0, MAX_ACTOR) || 1;
+}
+
+export function flagMap(v) {
+  if (!v || typeof v !== "object") return {};
+  const out = {};
+  for (const [k, val] of Object.entries(v)) out[k] = flagValue(val);
+  return out;
+}
+
 export async function handleLists(url, env, request) {
   const isCollection = url.pathname === "/api/lists" || url.pathname === "/api/lists/";
   if (request.method === "POST" && isCollection) {
@@ -39,7 +56,7 @@ export async function handleLists(url, env, request) {
     const focal = sanitizeFocal(body && body.focal);
     const id = makeShareId();
     const now = Math.floor(Date.now() / 1000);
-    const value = { v: 2, p: permits, f: focal, desc: String(body.desc ?? "").slice(0, MAX_DESC), custom: sanitizeCustom(body.custom), ticks: {}, fu: {} };
+    const value = { v: 2, p: permits, f: focal, desc: String(body.desc ?? "").slice(0, MAX_DESC), custom: sanitizeCustom(body.custom), ticks: {}, fu: {}, called: {} };
     const metadata = buildListMeta(value, body, now);
     await env.CACHE.put("list:" + id, JSON.stringify(value), { expirationTtl: LIST_TTL, metadata });
     return resp({ id }, 200);
@@ -65,17 +82,20 @@ export async function handleLists(url, env, request) {
       custom: data.custom,
       ticks: data.ticks,
       fu: data.fu,
+      called: data.called,
       meta: metadata || null,
     }, 200);
   }
   // More specific than the generic PUT below, so it must be tested first.
-  // `ticks` is the visited checkbox; `follow` is FEAT-034's follow-up flag.
-  // Both are per-key booleans on the same list document with identical rules,
-  // so they share one handler rather than two copies that could drift.
-  const flagMatch = url.pathname.match(/^\/api\/lists\/([A-Za-z0-9]{1,16})\/(ticks|follow)\/?$/);
+  // `ticks` is the visited checkbox, `follow` is FEAT-034's follow-up flag, and
+  // `called` is FEAT-031's call log. All three are per-key flags on the same
+  // list document with identical rules, so they share one handler rather than
+  // three copies that could drift.
+  const FLAG_FIELDS = { ticks: "ticks", follow: "fu", called: "called" };
+  const flagMatch = url.pathname.match(/^\/api\/lists\/([A-Za-z0-9]{1,16})\/(ticks|follow|called)\/?$/);
   if (request.method === "PUT" && flagMatch) {
     const id = flagMatch[1];
-    const field = flagMatch[2] === "ticks" ? "ticks" : "fu";
+    const field = FLAG_FIELDS[flagMatch[2]];
     let body;
     try { body = JSON.parse(await request.text()); } catch { return resp({ error: "bad json" }, 400); }
     const current = await env.CACHE.getWithMetadata("list:" + id);
@@ -85,7 +105,9 @@ export async function handleLists(url, env, request) {
     const key = String((body && body.key) || "");
     if (!valid.has(key)) return resp({ error: "unknown key" }, 400);
     const flags = { ...existing[field] };
-    if (body.on) flags[key] = 1; else delete flags[key];
+    // `by` is the actor's name, so a shared list can say who visited or called.
+    // Optional and length-capped; absent means "set, actor unknown" (1).
+    if (body.on) flags[key] = flagValue(body.by); else delete flags[key];
     // Deliberately no revision: a checkbox tap is not an edit worth versioning,
     // and ticking through a 99-stop list would evict all 20 stored revisions.
     await env.CACHE.put("list:" + id, JSON.stringify({ ...existing, [field]: flags }),
@@ -120,9 +142,11 @@ export async function handleLists(url, env, request) {
       desc: body.desc === undefined ? existing.desc : String(body.desc).slice(0, MAX_DESC),
       custom: body.custom === undefined ? existing.custom : sanitizeCustom(body.custom),
       ticks: existing.ticks,
-      // Never taken from the body: follow-ups are toggled through their own
-      // endpoint, and a metadata edit must not be able to clear the team's flags.
+      // Never taken from the body: follow-ups and calls are toggled through
+      // their own endpoints, and a metadata edit must not be able to clear the
+      // team's flags.
       fu: existing.fu,
+      called: existing.called,
     };
     const metadata = {
       ...buildListMeta(value, { ...current.metadata, ...body }, now),
@@ -207,7 +231,9 @@ export function sanitizeTicks(value, validKeys) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const out = {};
   for (const [k, v] of Object.entries(value)) {
-    if (validKeys.has(k) && v) out[k] = 1;
+    // flagValue, not a literal 1: this must not be the one path that silently
+    // erases the actor name a flag can carry (FEAT-031).
+    if (validKeys.has(k) && v) out[k] = flagValue(v);
   }
   return out;
 }
@@ -256,9 +282,11 @@ export function readList(stored) {
     f: data.f || null,
     desc: typeof data.desc === "string" ? data.desc : "",
     custom: Array.isArray(data.custom) ? data.custom : [],
-    ticks: data.ticks && typeof data.ticks === "object" ? data.ticks : {},
+    ticks: flagMap(data.ticks),
     // FEAT-034. Defaults for every list written before follow-ups existed.
-    fu: data.fu && typeof data.fu === "object" ? data.fu : {},
+    fu: flagMap(data.fu),
+    // FEAT-031. Same defaulting rule, same reason.
+    called: flagMap(data.called),
   };
 }
 

@@ -22,7 +22,7 @@
   <meta name="twitter:description" content="Review, reorder, route, annotate, and export saved Chicago building permits.">
   <meta name="twitter:image" content="https://dkaruri.github.io/chicago-building-permits-search/assets/search-directory-preview.png">
   <meta name="twitter:image:alt" content="Chicago Building Permits Search preview card by Divyam Karuri">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_photo_alternate,clear_all,close,csv,database_search,delete,directions_walk,edit,flag,group,list,lock,map_search,moon_stars,photo,policy,route,share,sticky_note_2,sunny&display=block" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_photo_alternate,call,clear_all,close,csv,database_search,delete,directions_walk,edit,flag,group,list,lock,map_search,moon_stars,photo,policy,route,share,sticky_note_2,sunny&display=block" rel="stylesheet">
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.7/dist/pmtiles.js"></script>
@@ -663,6 +663,16 @@
       width: auto;
     }
 
+    /* FEAT-031's four chips, same rules. Both members of a pair share a colour
+       — the label text is what distinguishes them, and sharing keeps the pair
+       legible as a pair. Measured against the panel in both themes, unpressed
+       (--tc on panel) and pressed (panel on --tc), which are the same figure:
+       --accent 5.36:1 light / 9.76:1 dark, --t5 7.76:1 / 8.61:1. All clear 4.5.
+       Pressed state is never colour alone — button.tag[aria-pressed="true"]
+       already prints a check glyph. */
+    #filter-visited, #filter-not-visited { --tc: var(--accent); }
+    #filter-called, #filter-not-called { --tc: var(--t5); }
+
     #filter-followup .material-symbols-outlined {
       font-size: 16px;
       max-width: 1em;
@@ -722,6 +732,17 @@
       border-color: var(--warning);
       border-width: 2px;
       color: var(--warning);
+    }
+
+    /* The call mark reuses the follow-up toggle wholesale and only recolours,
+       so the two controls in this block read as one pair. The button carries
+       BOTH classes, and this selector scores exactly the same as
+       .pm-fu[aria-pressed="true"] (0-2-0, one class + one attribute) — it wins
+       on source order alone. Keep it BELOW that rule; moving it up silently
+       turns the call mark warning-orange. */
+    .pm-called[aria-pressed="true"] {
+      border-color: var(--t5);
+      color: var(--t5);
     }
 
     .pm-fu .material-symbols-outlined {
@@ -3363,7 +3384,11 @@
     /* The header is two words over a 22px column: it must wrap at its
        <wbr> instead of inheriting the table's nowrap and overflowing. */
     .saved-permits-table th.tick-cell { white-space: normal; }
-    .tick { width: 22px; height: 22px; accent-color: var(--accent); cursor: pointer; margin: .5rem; }
+    /* 22px box + 11px margin each side = a 44px hit target exactly. Measured:
+       at the old .5rem margin this was 38px, under the floor, and FEAT-031
+       doubled the number of these controls. Do not shrink the margin. */
+    .tick { width: 22px; height: 22px; accent-color: var(--accent); cursor: pointer; margin: .6875rem; }
+    .tick.tick-called { accent-color: var(--t5); }
     /* State is dimming + strike-through as well as the box, so it never rests
        on colour alone. */
     tbody tr.is-done td:not(.tick-cell) { opacity: .62; }
@@ -3691,9 +3716,15 @@
            buttons and the starting-location row are a full screen apart, and an
            explanation that far from the control it describes reads as unrelated. -->
       <div id="optimize-route-note" class="optimize-note" hidden></div>
-      <!-- Row filters. Built as a group so FEAT-031's visited/called chips join
-           this row rather than starting a second, competing filter bar. -->
+      <!-- Row filters (FEAT-034 + FEAT-031). One group, as planned: the
+           visited/called chips joined this row rather than starting a second,
+           competing filter bar. Within a pair the chips are mutually exclusive;
+           across pairs they combine. -->
       <div id="list-filters" class="list-filters" role="group" aria-label="Filter permits in this list" hidden>
+        <button type="button" id="filter-visited" class="tag" aria-pressed="false" onclick="setRowFilter('visited', 'yes')">Visited</button>
+        <button type="button" id="filter-not-visited" class="tag" aria-pressed="false" onclick="setRowFilter('visited', 'no')">Not visited</button>
+        <button type="button" id="filter-called" class="tag" aria-pressed="false" onclick="setRowFilter('called', 'yes')">Called</button>
+        <button type="button" id="filter-not-called" class="tag" aria-pressed="false" onclick="setRowFilter('called', 'no')">Not called</button>
         <button type="button" id="filter-followup" class="tag" aria-pressed="false" onclick="toggleFollowUpFilter()">
           <span class="material-symbols-outlined" aria-hidden="true">flag</span>Follow-up only
         </button>
@@ -3820,7 +3851,10 @@
       },
       // View filters for the saved list. Deliberately NOT persisted: a filter
       // you forgot you set is how a list looks half-empty after a reload.
-      listFilters: { followUp: false },
+      // followUp is a plain on/off; visited and called are tri-state —
+      // null (don't care) / "yes" / "no" — because "not visited" is as useful a
+      // question as "visited" and the two cannot both be true (FEAT-031).
+      listFilters: { followUp: false, visited: null, called: null },
       focalPoint: null,
       draggedPermitNumber: "",
       userRouteLegs: [],
@@ -4002,6 +4036,7 @@
           sharedId: id,
           ticks: data.ticks || {},
           fu: data.fu || {},
+          called: data.called || {},
           desc: (data.meta && data.meta.blurb) || "",
           author: (data.meta && data.meta.author) || "",
           tags: (data.meta && data.meta.tags) || [],
@@ -4194,7 +4229,7 @@
       if (id && state.lists[id]) {
         // A view filter belongs to the list you set it on. Carried across, it
         // shows the next list as empty for a filter you never set there.
-        if (id !== state.activeListId) state.listFilters = { followUp: false };
+        if (id !== state.activeListId) state.listFilters = { followUp: false, visited: null, called: null };
         state.activeListId = id;
         state.userPermitNumbers = [...state.lists[id].permits];
         saveUserLists();
@@ -4257,6 +4292,7 @@
         state.lists[localId].permits = permits;
         state.lists[localId].ticks = data.ticks || {};
         state.lists[localId].fu = data.fu || {};
+        state.lists[localId].called = data.called || {};
       } else {
         localId = `local_${Date.now().toString(36)}`;
         state.lists[localId] = {
@@ -4266,6 +4302,7 @@
           sharedId: shareId,
           ticks: data.ticks || {},
           fu: data.fu || {},
+          called: data.called || {},
         };
       }
       state.activeListId = localId;
@@ -4646,6 +4683,7 @@
       loadUserListCookie();
       loadUserNotes();
       loadFocalPoint();
+      watchCallActions();
       const focalInput = $("focal-input");
       if (focalInput && state.focalPoint) focalInput.value = state.focalPoint.address || "";
       renderFocalStatus();
@@ -6062,18 +6100,22 @@
         }
         await resolveGeoForRows(rows);
         const headers = [
-          "order", "source", "visited", "use", "permit_number", "status", "issued", "address", "ward", "zone", "tif_district", "permit_type",
+          "order", "source", "visited", "visited_by", "called", "called_by", "use", "permit_number", "status", "issued", "address", "ward", "zone", "tif_district", "permit_type",
           "work_type", "reported_cost", "processing_time", "latitude", "longitude",
           "general_contractors", "open_subs", "permit_note", "list_note", "work_description"
         ];
-        const list = activeList();
         // Prepend the starting location (when set) as row "Start".
         const exportRows = withFocalOrigin(rows);
         let ordinal = 0;
         const body = exportRows.map(row => [
           row.focal ? "Start" : (ordinal += 1),
           row.focal ? "start" : (row.is_custom ? "manual" : "permit"),
-          row.focal ? "" : ((list && list.ticks && list.ticks[tickKeyFor(row)]) ? "yes" : "no"),
+          // The flag stores 1 or the actor's name, so "who" is a separate
+          // column rather than a value the yes/no column has to carry.
+          row.focal ? "" : (isTicked(row) ? "yes" : "no"),
+          row.focal ? "" : flagActor("ticks", row),
+          row.focal ? "" : (isCalled(row) ? "yes" : "no"),
+          row.focal ? "" : flagActor("called", row),
           row.focal ? "" : (row.is_custom ? (row._use || "unclear") : permitUse(row).key),
           row.permit_number,
           row.permit_status,
@@ -6767,12 +6809,12 @@
       return [...seen.entries()].map(([key, on]) => [key, on]);
     }
 
-    // Visited ticks and follow-up flags are the same shape over the wire — a
-    // key and a boolean on the same list — so they share one queue keyed by
-    // endpoint rather than two copies free to drift. The Worker's handler is
-    // shared for the same reason.
-    const flagQueues = { ticks: [], follow: [] };
-    const flagTimers = { ticks: null, follow: null };
+    // Visited ticks, follow-up flags and call marks are the same shape over the
+    // wire — a key and a boolean on the same list — so they share one queue
+    // keyed by endpoint rather than three copies free to drift. The Worker's
+    // handler is shared for the same reason.
+    const flagQueues = { ticks: [], follow: [], called: [] };
+    const flagTimers = { ticks: null, follow: null, called: null };
 
     function queueFlagSync(endpoint) {
       const list = activeList();
@@ -6786,7 +6828,7 @@
             await fetch(`${API_BASE}/api/lists/${encodeURIComponent(list.sharedId)}/${endpoint}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ key, on }),
+              body: JSON.stringify({ key, on, by: actorName() }),
             });
           } catch {
             // Offline or Worker unreachable. The flag is already stored
@@ -6800,21 +6842,106 @@
       queueFlagSync("ticks");
     }
 
+    // The name this browser posts under, already collected once by the notes
+    // feed. Blank is fine and common — the flag then stores 1 and simply has
+    // nobody to name.
+    function actorName() {
+      try { return (localStorage.getItem("chi_permit_author") || "").trim(); } catch { return ""; }
+    }
+
+    // The three per-permit flags differ only in which map they write, which op
+    // they send and which endpoint they fall back to. FEAT-034 already made the
+    // Worker treat them as one; this is the client half of that.
+    const FLAGS = {
+      ticks:  { field: "ticks",  op: "tick", endpoint: "ticks" },
+      fu:     { field: "fu",     op: "fu",   endpoint: "follow" },
+      called: { field: "called", op: "call", endpoint: "called" },
+    };
+
+    function setFlag(which, key, on) {
+      const spec = FLAGS[which];
+      const list = activeList();
+      if (!list || !spec || !key) return;
+      list[spec.field] = list[spec.field] || {};
+      if (on) list[spec.field][key] = actorName() || 1; else delete list[spec.field][key];
+      saveUserLists();
+      if (state.live.connected && activeList().sharedId === state.live.id) {
+        sendListOp({ f: spec.op, k: key, v: on ? 1 : 0, by: actorName() });
+      } else {
+        flagQueues[spec.endpoint].push([key, !!on]);
+        queueFlagSync(spec.endpoint);
+      }
+    }
+
+    function flagOn(which, row) {
+      const list = activeList();
+      const key = tickKeyFor(row);
+      const map = list && list[FLAGS[which].field];
+      return !!(map && key && map[key]);
+    }
+
+    // The actor stored against a flag, or "" when it is a legacy 1 (set before
+    // names were recorded, or set by someone who never named themselves).
+    function flagActor(which, row) {
+      const list = activeList();
+      const key = tickKeyFor(row);
+      const v = list && list[FLAGS[which].field] && key ? list[FLAGS[which].field][key] : null;
+      return typeof v === "string" ? v : "";
+    }
+
+    // " by Divyam", or "" — appended to a control's label so a shared list says
+    // who acted, in text, reachable by a screen reader.
+    function flagByText(which, row) {
+      const who = flagActor(which, row);
+      return who ? ` by ${who}` : "";
+    }
+
     function toggleTick(encodedKey, on) {
       const key = decodeURIComponent(encodedKey);
-      const list = activeList();
-      if (!list) return;
-      list.ticks = list.ticks || {};
-      if (on) list.ticks[key] = 1; else delete list.ticks[key];
-      saveUserLists();
+      setFlag("ticks", key, on);
       const row = document.querySelector(`tr[data-tick-row="${CSS.escape(key)}"]`);
       if (row) row.classList.toggle("is-done", !!on);
-      if (state.live.connected && activeList() && activeList().sharedId === state.live.id) {
-        sendListOp({ f: "tick", k: key, v: on ? 1 : 0 });
-      } else {
-        flagQueues.ticks.push([key, !!on]);
-        queueTickSync();
-      }
+      // A row can drop out of a filtered view the moment it is ticked, and the
+      // filter chip counts change either way.
+      if (isListFiltered()) renderUserList(); else refreshListFilterCounts();
+    }
+
+    // Called is set by hand here, and automatically when a Call action is used
+    // from inside a permit card (see the tel: listener below).
+    function toggleCalled(encodedKey, on) {
+      const key = decodeURIComponent(encodedKey);
+      setFlag("called", key, on);
+      const row = state.userPermitMap.get(key);
+      announceListAction(on
+        ? `Marked ${row && row.address ? row.address : key} as called.`
+        : `Cleared the call mark on ${row && row.address ? row.address : key}.`);
+      if (isListFiltered()) renderUserList(); else refreshListFilterCounts();
+      if (activeCard()?.type === "permit") refreshCardPreservingFocus();
+    }
+
+    // Using the Call action marks the permit called (FEAT-031). One delegated
+    // listener on the overlay rather than an onclick threaded through each
+    // template that renders a phone number — there are three today (the
+    // contractor line, the contact card's Call button, the party rows) and a
+    // fourth added later would otherwise silently not record the call.
+    //
+    // Scoped to a PERMIT card on purpose: a call placed from a contractor's own
+    // profile card is not about any one of that firm's permits, and ticking one
+    // of them would be a guess. The checkbox covers that case.
+    function watchCallActions() {
+      const modal = $("permit-modal");
+      if (!modal) return;
+      modal.addEventListener("click", ev => {
+        const link = ev.target.closest && ev.target.closest('a[href^="tel:"]');
+        if (!link) return;
+        const card = activeCard();
+        if (!card || card.type !== "permit") return;
+        const key = tickKeyFor(card.row);
+        // Only for permits actually on the list — that is where the flag lives.
+        // Already-called is a no-op, so a second call does not re-announce.
+        if (!key || isCalled(card.row) || !isInUserList(card.row.permit_number)) return;
+        toggleCalled(enc(key), true);
+      });
     }
 
     function tickKeyFor(row) {
@@ -6822,13 +6949,18 @@
     }
 
     function isTicked(row) {
-      const list = activeList();
-      const key = tickKeyFor(row);
-      return !!(list && list.ticks && key && list.ticks[key]);
+      return flagOn("ticks", row);
+    }
+
+    function isCalled(row) {
+      return flagOn("called", row);
     }
 
     // The toggle, rendered directly under the general contractors it applies to
-    // so "follow up" is never ambiguous about who. Only on a page with a list
+    // so "follow up" is never ambiguous about who. It carries `pm-followup` as
+    // well as `pm-fu` because FEAT-031 put a second .pm-fu button (the call
+    // mark) in the same block — a bare `.pm-fu` selector now matches both, and
+    // silently picked the wrong one. Only on a page with a list
     // open — the flag lives on the list, so there is nowhere to store it on the
     // search directory, and a control that silently does nothing is worse than
     // no control.
@@ -6840,11 +6972,27 @@
       const on = isFollowedUp(row);
       const who = followUpGcName(row);
       const what = who ? `Follow up with ${who}` : "Follow up on this permit";
-      return `<p class="pm-fu-row"><button type="button" class="pm-fu" aria-pressed="${on ? "true" : "false"}"
+      return `<p class="pm-fu-row"><button type="button" class="pm-fu pm-followup" aria-pressed="${on ? "true" : "false"}"
         aria-label="${esc(what)}${on ? " — flagged, press to clear" : ""}"
         onclick="toggleFollowUp('${enc(key)}', ${on ? "false" : "true"})">
         <span class="material-symbols-outlined" aria-hidden="true">flag</span>${esc(what)}</button>
         <span class="pm-fu-state">${on ? "Flagged for follow-up" : "Not flagged"}</span></p>`;
+    }
+
+    // The call mark, in the card where the phone numbers are. Tapping a tel:
+    // link in here sets it on its own; this is the manual override, and the
+    // place a call made from a desk phone gets recorded.
+    function calledToggleHtml(row) {
+      const list = activeList();
+      const key = tickKeyFor(row);
+      if (!list || !key || !isInUserList(row.permit_number)) return "";
+      const on = isCalled(row);
+      const by = flagByText("called", row);
+      return `<p class="pm-fu-row"><button type="button" class="pm-fu pm-called" aria-pressed="${on ? "true" : "false"}"
+        aria-label="${on ? `Called${esc(by)} — press to clear` : "Mark this permit as called"}"
+        onclick="toggleCalled('${enc(key)}', ${on ? "false" : "true"})">
+        <span class="material-symbols-outlined" aria-hidden="true">call</span>${on ? "Called" : "Mark as called"}</button>
+        <span class="pm-fu-state">${on ? esc(`Called${by}`) : "Not called yet"}</span></p>`;
     }
 
     // Row badge, so a flagged permit is obvious WITHOUT opening it. Carries the
@@ -6862,9 +7010,7 @@
     // itself would mark every one of its permits at once, which is a different
     // and much larger feature — this is "chase this job", not "chase this firm".
     function isFollowedUp(row) {
-      const list = activeList();
-      const key = tickKeyFor(row);
-      return !!(list && list.fu && key && list.fu[key]);
+      return flagOn("fu", row);
     }
 
     // The GC this follow-up is about. Permits can name several; the first is
@@ -6882,17 +7028,7 @@
 
     function toggleFollowUp(encodedKey, on) {
       const key = decodeURIComponent(encodedKey);
-      const list = activeList();
-      if (!list) return;
-      list.fu = list.fu || {};
-      if (on) list.fu[key] = 1; else delete list.fu[key];
-      saveUserLists();
-      if (state.live.connected && activeList().sharedId === state.live.id) {
-        sendListOp({ f: "fu", k: key, v: on ? 1 : 0 });
-      } else {
-        flagQueues.follow.push([key, !!on]);
-        queueFlagSync("follow");
-      }
+      setFlag("fu", key, on);
       const row = state.userPermitMap.get(key);
       const who = followUpGcName(row);
       announceListAction(on
@@ -6903,44 +7039,113 @@
       if (activeCard()?.type === "permit") refreshCardPreservingFocus();
     }
 
-    // ---- List view filters (FEAT-034) ----
-    // One flag today; kept as an object and a shared group in the markup so
-    // FEAT-031's visited/called chips compose here instead of starting a second
-    // filter bar.
+    // ---- List view filters (FEAT-034, extended by FEAT-031) ----
+    // Three facets over one row set. `followUp` is on/off; `visited` and
+    // `called` are tri-state (null / "yes" / "no").
+    //
+    // Within a facet the two chips are MUTUALLY EXCLUSIVE — a permit cannot be
+    // both visited and not visited, and offering the contradiction only to
+    // render a guaranteed-empty table is a dead control. Across facets they
+    // COMBINE, which is the question the field actually asks: visited + not
+    // called = "been there, nobody has phoned yet".
     function isListFiltered() {
-      return !!state.listFilters.followUp;
+      const f = state.listFilters;
+      return !!(f.followUp || f.visited || f.called);
     }
 
     function visibleListRows(rows) {
-      return state.listFilters.followUp ? rows.filter(isFollowedUp) : rows;
+      const f = state.listFilters;
+      return rows.filter(row =>
+        (!f.followUp || isFollowedUp(row))
+        && (!f.visited || isTicked(row) === (f.visited === "yes"))
+        && (!f.called || isCalled(row) === (f.called === "yes")));
     }
 
     function toggleFollowUpFilter() {
       state.listFilters.followUp = !state.listFilters.followUp;
       renderUserList();
-      announceListAction(state.listFilters.followUp
-        ? "Showing only permits flagged for follow-up."
-        : "Showing all permits in this list.");
+      announceFilterState();
+    }
+
+    // Pressing the chip that is already on turns the facet off, so every chip
+    // is its own escape route and "all" needs no chip of its own.
+    function setRowFilter(facet, want) {
+      state.listFilters[facet] = state.listFilters[facet] === want ? null : want;
+      renderUserList();
+      announceFilterState();
     }
 
     function clearListFilters() {
-      state.listFilters.followUp = false;
+      state.listFilters = { followUp: false, visited: null, called: null };
       renderUserList();
       announceListAction("Showing all permits in this list.");
     }
 
-    // The bar hides itself when nothing is flagged AND no filter is on: a
-    // filter for a state that cannot occur yet is just a dead control.
+    // Says which filters are on, in words — the chips' pressed state is visual,
+    // and this is what a screen reader hears after a tap.
+    function announceFilterState() {
+      const f = state.listFilters;
+      const on = [];
+      if (f.followUp) on.push("flagged for follow-up");
+      if (f.visited) on.push(f.visited === "yes" ? "visited" : "not visited");
+      if (f.called) on.push(f.called === "yes" ? "called" : "not called");
+      announceListAction(on.length
+        ? `Showing only permits ${on.join(" and ")}.`
+        : "Showing all permits in this list.");
+    }
+
+    const ROW_FILTER_CHIPS = [
+      ["filter-visited", "visited", "yes"],
+      ["filter-not-visited", "visited", "no"],
+      ["filter-called", "called", "yes"],
+      ["filter-not-called", "called", "no"],
+    ];
+
+    // The bar hides itself when NOTHING has been flagged, visited or called and
+    // no filter is on: a filter for a state that cannot occur yet is a dead
+    // control. Once any of the three exists, all the chips appear together —
+    // showing "Visited" but hiding "Called" would read as though calls were not
+    // trackable at all.
     function renderListFilters(rows, filtered) {
-      const flagged = rows.filter(isFollowedUp).length;
       const bar = $("list-filters");
       const btn = $("filter-followup");
       if (!bar || !btn) return;
-      bar.hidden = !flagged && !isListFiltered();
+      const flagged = rows.filter(isFollowedUp).length;
+      const visited = rows.filter(isTicked).length;
+      const called = rows.filter(isCalled).length;
+      bar.hidden = !flagged && !visited && !called && !isListFiltered();
       btn.setAttribute("aria-pressed", state.listFilters.followUp ? "true" : "false");
+      for (const [id, facet, want] of ROW_FILTER_CHIPS) {
+        const chip = $(id);
+        if (chip) chip.setAttribute("aria-pressed", state.listFilters[facet] === want ? "true" : "false");
+      }
+      // Counts, not just "N of M": on an unfiltered list they are the reason to
+      // reach for a chip in the first place.
+      const tally = [];
+      if (visited) tally.push(`${fmt(visited)} visited`);
+      if (called) tally.push(`${fmt(called)} called`);
+      if (flagged) tally.push(`${fmt(flagged)} flagged`);
       $("list-filter-status").textContent = isListFiltered()
         ? `Showing ${fmt(filtered.length)} of ${fmt(rows.length)}`
-        : (flagged ? `${fmt(flagged)} flagged for follow-up` : "");
+        : tally.join(" · ");
+    }
+
+    // Names the filters that emptied the view, so the empty state says which
+    // control to reach for rather than the old hard-coded follow-up sentence.
+    function noRowsMatchText() {
+      const f = state.listFilters;
+      const on = [];
+      if (f.followUp) on.push("flagged for follow-up");
+      if (f.visited) on.push(f.visited === "yes" ? "visited" : "not visited");
+      if (f.called) on.push(f.called === "yes" ? "called" : "not called");
+      return `No permits in this list are ${on.join(" and ")}.`;
+    }
+
+    // Repaint the chips and the tally without rebuilding the table — used when
+    // a checkbox changes a count but the visible rows are unaffected.
+    function refreshListFilterCounts() {
+      const rows = userListRows();
+      renderListFilters(rows, visibleListRows(rows));
     }
 
     // ---- Live sync (Phase B) ----
@@ -6953,11 +7158,15 @@
         case "custom": list.custom = Array.isArray(op.v) ? op.v.slice() : []; break;
         case "tick":
           list.ticks = list.ticks || {};
-          if (op.k) { if (op.v) list.ticks[op.k] = 1; else delete list.ticks[op.k]; }
+          if (op.k) { if (op.v) list.ticks[op.k] = op.by || 1; else delete list.ticks[op.k]; }
           break;
         case "fu":
           list.fu = list.fu || {};
-          if (op.k) { if (op.v) list.fu[op.k] = 1; else delete list.fu[op.k]; }
+          if (op.k) { if (op.v) list.fu[op.k] = op.by || 1; else delete list.fu[op.k]; }
+          break;
+        case "call":
+          list.called = list.called || {};
+          if (op.k) { if (op.v) list.called[op.k] = op.by || 1; else delete list.called[op.k]; }
           break;
         case "meta": {
           const m = op.v || {};
@@ -7071,6 +7280,7 @@
           list.custom = Array.isArray(d.custom) ? d.custom.slice() : [];
           list.ticks = d.ticks && typeof d.ticks === "object" ? d.ticks : {};
           list.fu = d.fu && typeof d.fu === "object" ? d.fu : {};
+          list.called = d.called && typeof d.called === "object" ? d.called : {};
           if (d.meta) { list.name = d.meta.title || list.name; list.desc = d.meta.blurb != null ? d.meta.blurb : list.desc; list.author = d.meta.author != null ? d.meta.author : list.author; list.tags = d.meta.tags != null ? d.meta.tags : list.tags; }
           live.clock = msg.clock || 0;
           if (msg.presence) live.presence = msg.presence;
@@ -7473,7 +7683,7 @@
       const filtered = visibleListRows(rows);
       renderListFilters(rows, filtered);
       if (!filtered.length) {
-        $("user-list").innerHTML = `<div class="empty">No permits in this list are flagged for follow-up. <button type="button" class="linkish" onclick="clearListFilters()">Show all ${fmt(rows.length)}</button></div>`;
+        $("user-list").innerHTML = `<div class="empty">${esc(noRowsMatchText())} <button type="button" class="linkish" onclick="clearListFilters()">Show all ${fmt(rows.length)}</button></div>`;
         return;
       }
       $("user-list").innerHTML = permitTable(filtered, {
@@ -7709,7 +7919,10 @@
       const removeHead = options.remove ? "<th class=\"select-cell\" aria-label=\"Remove permits\"></th>" : "";
       const notesHead = options.notes ? "<th>Notes</th>" : "";
       const useHead = options.move ? "<th>Use</th>" : "";
-      const tickHead = options.move ? `<th class="tick-cell">Visited/<wbr>Called</th>` : "";
+      // Two columns, not one control for two different facts (FEAT-031). Both
+      // carry .tick-cell so the mobile stack rules — order:2, inline ::before
+      // label, flex row — apply to both without a line of new CSS.
+      const tickHead = options.move ? `<th class="tick-cell">Visited</th><th class="tick-cell">Called</th>` : "";
       const geoHead = options.geo ? "<th>Zone</th><th>TIF district</th>" : "";
       const moveHead = options.move ? "<th class=\"move-cell\" aria-label=\"Move permits\"></th>" : "";
       const head = (label, key) => options.sortable === false ? esc(label) : sortHeader(label, key);
@@ -7729,7 +7942,19 @@
             >
               ${options.remove ? `<td class="select-cell" data-label="Remove"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell" data-label="Select" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
-              ${options.move ? (() => { const tk = tickKeyFor(row); return `<td class="tick-cell" data-label="Visited/Called"><input type="checkbox" class="tick" ${isTicked(row) ? "checked" : ""} aria-label="Mark ${esc(row.address || row.permit_number || "this stop")} visited/called" onclick="event.stopPropagation()" onchange="toggleTick('${enc(tk)}', this.checked)"></td>`; })() : ""}
+              ${options.move ? (() => {
+                const tk = tickKeyFor(row);
+                const what = esc(row.address || row.permit_number || "this stop");
+                // The actor rides in the label and the tooltip, so a shared
+                // list says WHO — in text, not a colour or a hover-only hint.
+                const box = (cls, label, on, by, handler) =>
+                  `<td class="tick-cell" data-label="${label}"><input type="checkbox" class="tick ${cls}"${on ? " checked" : ""}`
+                  + (on && by ? ` title="${esc(label + by)}"` : "")
+                  + ` aria-label="${label} — ${what}${on ? esc(by) : ""}"`
+                  + ` onclick="event.stopPropagation()" onchange="${handler}('${enc(tk)}', this.checked)"></td>`;
+                return box("tick-visited", "Visited", isTicked(row), flagByText("ticks", row), "toggleTick")
+                  + box("tick-called", "Called", isCalled(row), flagByText("called", row), "toggleCalled");
+              })() : ""}
               <td data-label="Permit">${options.move ? `<span class="list-ordinal" aria-label="Stop ${i + 1}">${i + 1}</span>` : ""}<strong>${esc(row.permit_number)}</strong>${options.move && isFollowedUp(row) ? followUpBadgeHtml(row) : ""}<br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
               <td data-label="Status">${esc(row.permit_status)}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
@@ -8984,7 +9209,7 @@
             ["Reported cost", money(row.reported_cost)],
             ["Total fee", money(row.total_fee)],
           ])}</section>`,
-        () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div>${followUpToggleHtml(row)}</section>`,
+        () => `<section class="pm-block"><h3>General contractors</h3><div class="pm-contractors" data-role="general_contractor">${contractorLinesHtml(row.general_contractors, "general_contractor")}</div>${calledToggleHtml(row)}${followUpToggleHtml(row)}</section>`,
         () => `<section class="pm-block"><h3>Open subs</h3><div class="pm-contractors" data-role="open_tech">${contractorLinesHtml(row.open_subs, "open_tech")}</div><div class="pm-reported" id="pm-reported"></div></section>`,
         () => `<section class="pm-block"><h3>Notes</h3>
             ${notesFeedAvailable() ? `<p class="pm-feed-link"><button type="button" class="pm-feed-btn" onclick="openFeedForPermit('${enc(row.permit_number)}')">
