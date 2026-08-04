@@ -124,3 +124,77 @@ test("listValueFromDoc persists follow-ups so they survive a round trip", () => 
   const stored = JSON.stringify(listValueFromDoc(doc));
   assert.deepEqual(docFromStored(stored, null).fu, { "101082609": 1 });
 });
+
+// ---- Called flag (FEAT-031) ----
+
+test("emptyDoc starts with nothing called", () => {
+  assert.deepEqual(emptyDoc().called, {});
+});
+
+test("applyOp call sets and clears a called flag", () => {
+  const on = applyOp(emptyDoc(), { f: "call", k: "101082609", v: 1 });
+  assert.deepEqual(on.called, { "101082609": 1 });
+  const off = applyOp(on, { f: "call", k: "101082609", v: 0 });
+  assert.deepEqual(off.called, {});
+});
+
+test("applyOp call ignores an empty key", () => {
+  assert.deepEqual(applyOp(emptyDoc(), { f: "call", k: "", v: 1 }).called, {});
+});
+
+test("applyOp call does not mutate the input doc", () => {
+  const before = emptyDoc();
+  applyOp(before, { f: "call", k: "101082609", v: 1 });
+  assert.deepEqual(before.called, {}, "applyOp must be pure");
+});
+
+// The three flags share one case in applyOp, so the test that matters is that
+// they still write to three separate maps.
+test("call, tick and fu are three independent flags on the same key", () => {
+  let d = emptyDoc();
+  for (const f of ["call", "tick", "fu"]) d = applyOp(d, { f, k: "A", v: 1 });
+  d = applyOp(d, { f: "call", k: "A", v: 0 });
+  assert.deepEqual(d.called, {}, "clearing called must not touch the others");
+  assert.deepEqual(d.ticks, { A: 1 }, "the visited tick must survive");
+  assert.deepEqual(d.fu, { A: 1 }, "the follow-up flag must survive");
+});
+
+test("a list stored before called existed reads back with an empty called", () => {
+  const legacy = JSON.stringify({ v: 2, p: ["101082609"], f: null, desc: "", custom: [], ticks: { "101082609": 1 }, fu: {} });
+  const doc = docFromStored(legacy, null);
+  assert.deepEqual(doc.called, {});
+  assert.deepEqual(doc.ticks, { "101082609": 1 }, "the legacy 1 value must survive untouched");
+  assert.deepEqual(applyOp(doc, { f: "call", k: "101082609", v: 1 }).called, { "101082609": 1 });
+});
+
+test("listValueFromDoc persists called so it survives a round trip", () => {
+  const doc = applyOp(applyOp(emptyDoc(), { f: "p", v: ["101082609"] }), { f: "call", k: "101082609", v: 1 });
+  const stored = JSON.stringify(listValueFromDoc(doc));
+  assert.deepEqual(docFromStored(stored, null).called, { "101082609": 1 });
+});
+
+// ---- Actor attribution: "show who acted where the data allows" ----
+
+test("op.by stores the actor's name instead of 1, and survives a round trip", () => {
+  const d = applyOp(emptyDoc(), { f: "call", k: "101082609", v: 1, by: "Divyam" });
+  assert.deepEqual(d.called, { "101082609": "Divyam" });
+  assert.deepEqual(docFromStored(JSON.stringify(listValueFromDoc(d)), null).called, { "101082609": "Divyam" });
+});
+
+test("a blank or non-string actor falls back to 1, never an empty name", () => {
+  assert.deepEqual(applyOp(emptyDoc(), { f: "tick", k: "A", v: 1, by: "   " }).ticks, { A: 1 });
+  assert.deepEqual(applyOp(emptyDoc(), { f: "tick", k: "A", v: 1, by: 42 }).ticks, { A: 1 });
+  assert.deepEqual(applyOp(emptyDoc(), { f: "tick", k: "A", v: 1 }).ticks, { A: 1 });
+});
+
+test("an actor name is trimmed and capped at 40 characters", () => {
+  const d = applyOp(emptyDoc(), { f: "call", k: "A", v: 1, by: "  " + "N".repeat(60) + "  " });
+  assert.equal(d.called.A, "N".repeat(40));
+});
+
+// The point of the fallback: a name is a display detail, and every code path
+// that asks "is this set?" must keep working on a list that stores plain 1s.
+test("both flag shapes are truthy, so old and new lists filter identically", () => {
+  const doc = docFromStored(JSON.stringify({ v: 2, p: ["A", "B"], custom: [], ticks: { A: 1, B: "Divyam" } }), null);
+  assert.deepEqual(Object.keys(doc.ticks).filter(k => doc.ticks[k]), ["A", "B"]);
+});

@@ -1,9 +1,9 @@
-import { sanitizePermits, sanitizeFocal, sanitizeCustom, sanitizeMeta, readList } from "./lists.js";
+import { sanitizePermits, sanitizeFocal, sanitizeCustom, sanitizeMeta, readList, flagValue, flagMap } from "./lists.js";
 
 const MAX_DESC = 2000;
 
 export function emptyDoc() {
-  return { p: [], f: null, custom: [], ticks: {}, fu: {}, desc: "", meta: sanitizeMeta({}) };
+  return { p: [], f: null, custom: [], ticks: {}, fu: {}, called: {}, desc: "", meta: sanitizeMeta({}) };
 }
 
 // value: the raw KV string (or null). metadata: the KV metadata object (or null).
@@ -14,10 +14,12 @@ export function docFromStored(value, metadata) {
     p: Array.isArray(list.p) ? list.p : [],
     f: list.f || null,
     custom: Array.isArray(list.custom) ? list.custom : [],
-    ticks: list.ticks && typeof list.ticks === "object" ? list.ticks : {},
+    ticks: flagMap(list.ticks),
     // Follow-up flags (FEAT-034). Absent on every list stored before this
     // shipped, so it must default rather than assume the key exists.
-    fu: list.fu && typeof list.fu === "object" ? list.fu : {},
+    fu: flagMap(list.fu),
+    // Called flags (FEAT-031). Same defaulting rule, same reason.
+    called: flagMap(list.called),
     desc: typeof list.desc === "string" ? list.desc : "",
     // Metadata carries the directory-facing details; sanitizeMeta normalises them.
     meta: sanitizeMeta({
@@ -31,7 +33,7 @@ export function docFromStored(value, metadata) {
 
 // Pure: returns a new doc, never mutates the input.
 export function applyOp(doc, op) {
-  const next = { ...doc, ticks: { ...doc.ticks }, fu: { ...doc.fu }, meta: { ...doc.meta } };
+  const next = { ...doc, ticks: { ...doc.ticks }, fu: { ...doc.fu }, called: { ...doc.called }, meta: { ...doc.meta } };
   switch (op && op.f) {
     case "p":
       next.p = sanitizePermits(op.v);
@@ -42,19 +44,18 @@ export function applyOp(doc, op) {
     case "custom":
       next.custom = sanitizeCustom(op.v);
       return next;
-    case "tick": {
+    // Three per-key flags, all keyed the same way: permit number, or custom_id
+    // for a custom stop. `fu` is FEAT-034's follow-up, `called` is FEAT-031.
+    // One case rather than three copies free to drift — the only difference
+    // between them is which map they write to. `op.by` is the actor's name and
+    // is optional; without it the flag stores 1.
+    case "tick":
+    case "fu":
+    case "call": {
+      const field = op.f === "tick" ? "ticks" : op.f === "fu" ? "fu" : "called";
       const key = String(op.k || "");
       if (!key) return next;
-      if (op.v) next.ticks[key] = 1; else delete next.ticks[key];
-      return next;
-    }
-    // Follow-up flag (FEAT-034), keyed exactly like a tick: permit number, or
-    // custom_id for a custom stop. Shares the tick's sync path so the whole
-    // team sees who has been flagged.
-    case "fu": {
-      const key = String(op.k || "");
-      if (!key) return next;
-      if (op.v) next.fu[key] = 1; else delete next.fu[key];
+      if (op.v) next[field][key] = flagValue(op.by); else delete next[field][key];
       return next;
     }
     case "meta": {
@@ -74,7 +75,8 @@ export function listValueFromDoc(doc) {
     f: doc.f || null,
     desc: String(doc.desc || "").slice(0, MAX_DESC),
     custom: Array.isArray(doc.custom) ? doc.custom : [],
-    ticks: doc.ticks && typeof doc.ticks === "object" ? doc.ticks : {},
-    fu: doc.fu && typeof doc.fu === "object" ? doc.fu : {},
+    ticks: flagMap(doc.ticks),
+    fu: flagMap(doc.fu),
+    called: flagMap(doc.called),
   };
 }
