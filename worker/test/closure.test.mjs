@@ -89,7 +89,11 @@ test("a zero-sample entry is treated as no data", () => {
 });
 
 // The real 404 wrangler emits for an absent key, captured from a live run.
-const REAL_404 = `[31m✘ [ERROR] Failed to fetch https://api.cloudflare.com/client/v4/accounts/65d6.../storage/kv/namespaces/ef1c.../values/closure%3Adefinitely_not_a_key - 404: Not Found[0m`;
+// The key name here MUST be the one the seed actually reads. It used to say
+// "..._a_key", and that trailing "_a_key" gave the /key .*not found/i fallback
+// a "key " to match -- so this test passed for six weeks while the 404 branch
+// it exists to cover was dead (FIX-030). A fixture is a claim about production.
+const REAL_404 = `[31m✘ [ERROR] Failed to fetch https://api.cloudflare.com/client/v4/accounts/65d6.../storage/kv/namespaces/ef1c.../values/closure%3Astats - 404: Not Found[0m`;
 // The real error when credentials are absent, captured from the first CI run.
 const REAL_NO_TOKEN = `✘ [ERROR] In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN environment variable for wrangler to work. Please go to https://developers.cloudflare.com/fundamentals/api/get-started/create-token/ for instructions.`;
 
@@ -103,6 +107,21 @@ test("a missing key is a first run; anything else is not", () => {
   assert.equal(isKeyMissingError("403: Forbidden"), false);
   assert.equal(isKeyMissingError(""), false);
   assert.equal(isKeyMissingError(null), false);
+});
+
+test("the 404 branch carries the real message on its own, not the /key / fallback", () => {
+  // FIX-030. The two checks are independent and this pins that: strip anything
+  // the fallback could latch onto and the 404 branch must still answer true.
+  // Against the pre-fix source (real 0x08 bytes instead of the escapes) this
+  // fails, which is the point -- the old fixture could not tell the difference.
+  const noKeyWord = REAL_404.replace(/key/gi, "kv-entry");
+  assert.equal(/key .*not found/i.test(noKeyWord), false, "fixture no longer isolates the 404 branch");
+  assert.equal(isKeyMissingError(noKeyWord), true);
+
+  // ...and the boundaries are real boundaries: 404 embedded in a longer number
+  // is an account id or a byte count, not a status code.
+  assert.equal(isKeyMissingError("Failed: 1404040 bytes not found"), false);
+  assert.equal(isKeyMissingError("HTTP 404 - Not Found"), true);
 });
 
 test("a 403 mentioning 'not found' elsewhere is not treated as a missing key", () => {
