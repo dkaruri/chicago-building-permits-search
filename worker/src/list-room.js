@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { emptyDoc, docFromStored, applyOp, listValueFromDoc } from "./list-doc.js";
+import { emptyDoc, docFromStored, applyOp, listValueFromDoc, splitDocForStorage, docFromStorage } from "./list-doc.js";
 import { buildListMeta } from "./lists.js";
 import { presenceFrom, presenceKey } from "./presence.js";
 
@@ -17,20 +17,40 @@ export class ListRoom extends DurableObject {
     this.clock = 0;
   }
 
-  // Load persisted state once per wake. Hibernation can evict us between
-  // messages, so every entry point calls this first.
+  // The doc is stored in four parts, not one, because Durable Object storage
+  // caps a single VALUE at 128 KiB and one blob does not fit at FEAT-035's
+  // 1000-permit cap: measured 179 KiB worst case — every stop visited, called
+  // AND flagged, each by a 40-character actor name. Split, the largest part is
+  // the biggest flag map at ~55 KiB and the core is ~43 KiB, both with room to
+  // spare. The three flag maps are the parts that grow with the actor names,
+  // which is why they are what gets separated out.
+  //
+  // Rooms written before this shipped hold a single "doc" key. load() prefers
+  // it and the next persist() rewrites them into the split form, so there is no
+  // migration pass and no version field.
   async load() {
     if (this.loaded) return;
     this.id = (await this.ctx.storage.get("id")) || null;
-    const savedDoc = await this.ctx.storage.get("doc");
-    this.doc = savedDoc || emptyDoc();
+    const legacy = await this.ctx.storage.get("doc");
+    this.legacyDoc = !!legacy;
+    const parts = legacy ? null : Object.fromEntries(
+      await this.ctx.storage.get(["doc:core", "doc:ticks", "doc:fu", "doc:called"]),
+    );
+    this.doc = docFromStorage(legacy, parts);
     this.clock = (await this.ctx.storage.get("clock")) || 0;
     this.loaded = true;
   }
 
   async persist() {
-    await this.ctx.storage.put("doc", this.doc);
-    await this.ctx.storage.put("clock", this.clock);
+    await this.ctx.storage.put({
+      ...splitDocForStorage(this.doc),
+      clock: this.clock,
+    });
+    // Only after the split copy is safely down, and only once.
+    if (this.legacyDoc) {
+      await this.ctx.storage.delete("doc");
+      this.legacyDoc = false;
+    }
   }
 
   // Stamp a socket as alive, merging into whatever it already carries.

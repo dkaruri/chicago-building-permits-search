@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert";
-import { emptyDoc, docFromStored, applyOp, listValueFromDoc } from "../src/list-doc.js";
+import { emptyDoc, docFromStored, applyOp, listValueFromDoc, splitDocForStorage, docFromStorage } from "../src/list-doc.js";
 
 test("emptyDoc has the five fields", () => {
   const d = emptyDoc();
@@ -197,4 +197,68 @@ test("an actor name is trimmed and capped at 40 characters", () => {
 test("both flag shapes are truthy, so old and new lists filter identically", () => {
   const doc = docFromStored(JSON.stringify({ v: 2, p: ["A", "B"], custom: [], ticks: { A: 1, B: "Divyam" } }), null);
   assert.deepEqual(Object.keys(doc.ticks).filter(k => doc.ticks[k]), ["A", "B"]);
+});
+
+// ---- Durable Object storage split (FEAT-035) ----
+
+test("splitting a doc for storage keeps every field, in four parts", () => {
+  const doc = { ...emptyDoc(), p: ["100234"], desc: "note", ticks: { 100234: "Ana" }, fu: { 100234: 1 }, called: {} };
+  const parts = splitDocForStorage(doc);
+  assert.deepEqual(Object.keys(parts).sort(), ["doc:called", "doc:core", "doc:fu", "doc:ticks"]);
+  assert.deepEqual(parts["doc:core"].p, ["100234"]);
+  assert.equal(parts["doc:core"].desc, "note");
+  // The flag maps are what got split off, so they must not also be in the core.
+  assert.equal(parts["doc:core"].ticks, undefined);
+  assert.equal(parts["doc:core"].fu, undefined);
+  assert.equal(parts["doc:core"].called, undefined);
+  assert.deepEqual(parts["doc:ticks"], { 100234: "Ana" });
+});
+
+test("split then merge is the identity - nothing is lost in the new layout", () => {
+  const doc = { ...emptyDoc(), p: ["100234", "B200461632"], f: { lat: 41.9, lon: -87.6, label: "HQ" },
+    custom: [], desc: "d", ticks: { 100234: "Ana" }, fu: { B200461632: 1 }, called: { 100234: "Bo" } };
+  assert.deepEqual(docFromStorage(null, splitDocForStorage(doc)), doc);
+});
+
+test("a room still on the old single doc key loads from it, untouched", () => {
+  const legacy = { ...emptyDoc(), p: ["100234"], ticks: { 100234: "Ana" } };
+  // Split keys are absent on a room that has not been rewritten yet. Reading
+  // them first would silently reset a live shared list to empty.
+  assert.deepEqual(docFromStorage(legacy, null), legacy);
+  assert.deepEqual(docFromStorage(legacy, {}), legacy);
+});
+
+test("a room with neither layout present loads empty rather than throwing", () => {
+  assert.deepEqual(docFromStorage(null, null), emptyDoc());
+  assert.deepEqual(docFromStorage(null, {}), emptyDoc());
+});
+
+test("a split doc missing its flag maps still loads, with empty flags", () => {
+  const merged = docFromStorage(null, { "doc:core": { p: ["100234"], f: null, custom: [], desc: "", meta: {} } });
+  assert.deepEqual(merged.ticks, {});
+  assert.deepEqual(merged.fu, {});
+  assert.deepEqual(merged.called, {});
+  assert.deepEqual(merged.p, ["100234"]);
+});
+
+test("every stored part stays under the Durable Object 128 KiB per-value limit", () => {
+  // The worst case FEAT-035 has to survive: a full list where every stop is
+  // visited, called and flagged, each by a 40-character actor name. As ONE
+  // value this is ~179 KiB and the write would throw.
+  const actor = "W".repeat(40);
+  const p = [], ticks = {}, fu = {}, called = {};
+  for (let i = 0; i < 1000; i += 1) {
+    const k = `1002${String(i).padStart(11, "0")}`;
+    p.push(k); ticks[k] = actor; fu[k] = actor; called[k] = actor;
+  }
+  const doc = { p, f: { lat: 41.88, lon: -87.63, label: "x".repeat(80) }, custom: [],
+    desc: "d".repeat(2000), meta: { title: "t".repeat(80), author: "a".repeat(40), desc: "b".repeat(160), tags: [] },
+    ticks, fu, called };
+  const LIMIT = 128 * 1024;
+  const whole = Buffer.byteLength(JSON.stringify(doc));
+  assert.ok(whole > LIMIT, `the single-value case is ${whole} bytes - no longer over the limit, so this test proves nothing`);
+  for (const [key, value] of Object.entries(splitDocForStorage(doc))) {
+    const size = Buffer.byteLength(JSON.stringify(value));
+    assert.ok(size < LIMIT, `${key} is ${size} bytes, over the 128 KiB Durable Object value limit`);
+  }
 });

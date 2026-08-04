@@ -2,11 +2,17 @@ import { revKey, pruneRevs } from "./revisions.js";
 
 const ID_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const PERMIT_RE = /^[A-Za-z0-9-]{1,16}$/;
-const MAX_PERMITS = 220;
+// FEAT-035. MUST stay in step with userListLimit in docs/list.html: the client
+// builds the list, this re-caps it on publish, and a client cap above this one
+// would let a user build a list that silently loses its tail when shared.
+const MAX_PERMITS = 1000;
 
 const LIST_TTL = 15552000;
 const TRASH_TTL = 2592000; // 30 days — a deleted list is kept, invisible, then auto-purged
-const MAX_BODY = 8192;
+// Sized from the cap above, not picked round: 1000 permit numbers serialise to
+// ~19 KB, plus a 2 KB desc and up to 60 custom stops (~21 KB). 8 KB was fine at
+// 220 permits and would now 413 every full list on publish.
+const MAX_BODY = 65536;
 const ID_RE = /^[A-Za-z0-9]{1,16}$/;
 
 const MAX_TITLE = 80;

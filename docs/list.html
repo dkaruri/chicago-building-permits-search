@@ -936,6 +936,45 @@
       gap: 8px;
     }
 
+    /* Saved-list pager (FEAT-035). A one-page list renders "" into both navs,
+       and an empty flex box would still contribute its 10px margin-top — so a
+       short list has to look exactly as it did before pagination existed. */
+    .pager:empty { display: none; }
+
+    .pager-pages {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    /* .pager button already gives width:auto and the 44px height. min-width is
+       the other half of the touch target: "1" with 12px of padding is only
+       ~32px wide, which passes the height check and fails the real one. */
+    .pager-page {
+      min-width: 44px;
+      justify-content: center;
+      color: var(--primary);
+    }
+
+    /* Current page is a filled swatch AND a heavier weight — never colour
+       alone, and aria-current="page" carries it for a screen reader. Measured
+       both ways against --panel: 7.76:1 light, 8.61:1 dark. */
+    .pager-page.current {
+      background: var(--primary);
+      color: var(--panel);
+      font-weight: 800;
+    }
+
+    .pager-gap {
+      color: var(--muted);
+      padding: 0 2px;
+    }
+
+    /* setListPage scrolls this into view on every page change; without the
+       margin the first row sits flush against the viewport edge. */
+    #user-list-pager-top { scroll-margin-top: 12px; }
+
     .pager button {
       width: auto;
       min-height: 44px;
@@ -2095,9 +2134,23 @@
       }
       .pager-controls {
         width: 100%;
+        /* So the numbers can take a line of their own below Prev/Next. */
+        flex-wrap: wrap;
       }
       .pager-controls button {
         flex: 1;
+      }
+      /* Prev/Next share the row and stretch; the page NUMBERS must not, or a
+         five-digit row of stretched buttons pushes Next off screen. Written at
+         0-2-1 so it beats `.pager-controls button` (0-1-1) outright rather than
+         relying on source order — see the specificity audit on FIX-029. */
+      .pager .pager-pages {
+        flex: 1 1 100%;
+        order: 3;
+        justify-content: center;
+      }
+      .pager .pager-pages button {
+        flex: 0 0 auto;
       }
       .detail-filter-grid {
         grid-template-columns: 1fr;
@@ -3764,7 +3817,14 @@
       <label class="list-note">List note
         <textarea id="user-list-note" placeholder="Add an overall note for this permit list..." oninput="saveListNote(this.value)"></textarea>
       </label>
+      <!-- Two pagers, one builder (FEAT-035). A page holds 100 rows, which on
+           mobile is 100 stacked cards — a pager only at the bottom would mean
+           scrolling the whole page to change page, and one only at the top
+           would mean scrolling all the way back up. Both are empty (and take no
+           space) until the list needs a second page. -->
+      <nav id="user-list-pager-top" class="pager" aria-label="List pages, top"></nav>
       <div id="user-list" class="table-wrap"><div class="empty">No permits added yet.</div></div>
+      <nav id="user-list-pager" class="pager" aria-label="List pages, bottom"></nav>
     </section>
 
     <section class="layout">
@@ -3841,6 +3901,10 @@
       selectedPermitNumbers: new Set(),
       userPermitNumbers: [],
       userPermitMap: new Map(),
+      // Which page of the SAVED list is on screen (FEAT-035). Separate from
+      // pageIndex, which belongs to the search results — the two views are
+      // paged independently and list.html only ever shows one of them.
+      listPage: 0,
       lists: {},
       activeListId: "local_1",
       view: "directory",
@@ -3950,7 +4014,14 @@
     const themeKey = "chi_permit_theme";
     const mapSettingsKey = "chi_permit_map_settings";
     const lastViewKey = "chi_permit_last_view";
-    const userListLimit = 220;
+    // FEAT-035. MUST stay in step with MAX_PERMITS in worker/src/lists.js — the
+    // Worker re-caps every published list, so a client cap above it would let a
+    // user build a list that silently loses its tail the moment it is shared.
+    const userListLimit = 1000;
+    // The saved list paginates at this size. Only the VIEW is paged: exports,
+    // drive distances and Optimize route all keep reading userListRows(), which
+    // is the whole list — same contract the row filters already hold to.
+    const LIST_PAGE_SIZE = 100;
     const appModes = ["general_contractors", "open_subs", "open_permits"];
     const openPermitStatuses = new Set(["ACTIVE", "SUSPENDED", "PHASED PERMITTING"]);
 
@@ -3958,6 +4029,13 @@
       const doc = document.documentElement;
       const max = doc.scrollHeight - doc.clientHeight;
       $("progress").style.width = (max > 0 ? doc.scrollTop / max * 100 : 0) + "%";
+      // Where the user is in the open list (FEAT-035), so a reload comes back to
+      // it. saveLastView debounces the write, so this is cheap per scroll frame.
+      // Skipped while the permit overlay is up: the page underneath is locked at
+      // whatever offset it had, and the overlay's own scroller is not this one.
+      if (state.view === "list" && $("permit-modal").hidden) {
+        saveLastView({ listId: state.activeListId, listScroll: Math.round(doc.scrollTop || window.scrollY || 0) });
+      }
     }, { passive: true });
 
     document.addEventListener("click", event => {
@@ -4245,6 +4323,8 @@
       }
       state.view = "list";
       saveLastView({ view: "list" });
+      // Read BEFORE renderUserList, which is what paints the restored page.
+      restoreListPage();
       const dir = $("directory-view");
       const panel = $("user-list-panel");
       if (dir) dir.hidden = true;
@@ -4254,6 +4334,29 @@
       renderListHeading();
       await ensurePermitMap();
       await renderUserList();
+      restoreListScroll();
+    }
+
+    // Page memory (FEAT-035). The remembered page belongs to exactly ONE list —
+    // without the id check, opening a different list would inherit the previous
+    // list's page number and open somewhere the user never was. A mismatch is
+    // therefore page 0, which is also the right answer for a first visit.
+    // No clamping here: clampedListPage does it at render time, against a row
+    // count that only exists once the list is built.
+    function restoreListPage() {
+      const last = readLastView();
+      state.listPage = last.listId === state.activeListId && Number.isInteger(last.listPage)
+        ? Math.max(0, last.listPage)
+        : 0;
+    }
+
+    // After the last repaint, or the page is not tall enough to have scrolled
+    // yet. "instant" is explicit: restoring a position is not a navigation.
+    function restoreListScroll() {
+      const last = readLastView();
+      if (last.listId !== state.activeListId) return;
+      if (!Number.isFinite(last.listScroll) || last.listScroll <= 0) return;
+      requestAnimationFrame(() => window.scrollTo({ top: last.listScroll, behavior: "instant" }));
     }
 
     function renderListHeading() {
@@ -6287,11 +6390,24 @@
     // A burst of 60+ parallel requests at a public demo server invites rate
     // limiting, so tiles go out a few at a time.
     const MATRIX_TILE_CONCURRENCY = 4;
-    // Practical ceiling. Not the matrix — that tiles indefinitely — but the local
-    // search in greedyRouteOrder, which is ~O(n^3) and blocks the main thread:
-    // measured 2.7s at 300 stops, 6.2s at 400, 12.5s at 500, 25s at 600. 400 also
-    // keeps the request count at 64. See FIX-004 on the board.
-    const MAX_SORT_STOPS = 400;
+    // Practical ceiling. FIX-004 set this at 400 because the local search was
+    // ~O(n^3) on the main thread — 2.7s at 300 stops, 6.2s at 400, 25s at 600.
+    // FEAT-035 made that search incremental (see greedyRouteOrder), which is
+    // ~O(n^2) per pass and re-measured on the same machine at 579ms for 400 and
+    // 1.35s for 1000. CPU is no longer what limits this.
+    //
+    // What limits it now is the ROUTING SERVICE. The matrix costs ceil(n/50)^2
+    // requests against the public OSRM demo server: 64 at 400 stops, 100 at 500,
+    // and 400 at the 1000-permit cap. 400 requests at 4-way concurrency is
+    // minutes of traffic to a shared demo server and an invitation to be rate
+    // limited, so the budget — not the arithmetic — sets the number. 500 keeps
+    // it to 100 requests, the same order as what ships today.
+    //
+    // A list above this still gets an honest message rather than a dead button;
+    // see refreshOptimizeAvailability. Lifting it further means fetching fewer
+    // cells (k-nearest sparse matrix, or FIX-004's noted cluster-then-route),
+    // not faster local search — that part is done.
+    const MAX_SORT_STOPS = 500;
 
     // One Table request. sourceCount splits `rows` into a leading source block
     // and a trailing destination block; pass null to ask for the full square.
@@ -6363,9 +6479,13 @@
       // Refine the greedy path toward optimal with 2-opt + Or-opt local search,
       // reusing the duration matrix already fetched (no extra requests). order[0]
       // stays pinned as the fixed start (the focal origin when one is set).
-      // ponytail: O(passes*n^3) local search, near-optimal not exact (avg ~0.5%
-      // off true optimum in testing); add segment Or-opt or restarts only if
-      // route quality proves insufficient.
+      //
+      // Both moves are evaluated INCREMENTALLY — by how much the move changes
+      // the cost, never by rebuilding and re-summing the whole path. That is
+      // what drops a pass from O(n^3) to O(n^2) and is what makes FEAT-035's
+      // 1000-permit cap routable at all; see MAX_SORT_STOPS for the measured
+      // numbers. The route this produces is the same quality as before — the
+      // accept/reject test is unchanged, only the arithmetic reaching it is.
       const legDuration = (a, b) => {
         const d = matrix.durations[a]?.[b];
         return d == null ? Infinity : d;
@@ -6381,25 +6501,79 @@
       while (improved && passes < 60) {
         improved = false;
         passes += 1;
-        // 2-opt: reverse a segment to untangle crossings.
+        // 2-opt: reverse order[i..j] to untangle a crossing.
+        //
+        // Driving durations are ASYMMETRIC, so reversing a segment also flips
+        // the direction of every edge inside it — this is not the textbook
+        // four-edge delta, and the interior cost genuinely has to be counted
+        // both ways. Keeping running forward/backward sums as j walks outward
+        // makes each candidate O(1) all the same.
+        // Every accepted move strictly lowers a cost that is bounded below, so
+        // a correct delta always terminates — but that rests on the arithmetic
+        // below being right, and the failure mode when it is not is a hung tab
+        // (observed: a deliberately corrupted delta spins here forever), not a
+        // slightly worse route. Bounded, a bad delta costs some refinement
+        // instead of the browser.
+        let restarts = 0;
+        const restartBudget = order.length * 4;
         for (let i = 1; i < order.length - 1; i += 1) {
+          let fwd = 0; // cost of order[i..j] as it stands
+          let rev = 0; // cost of the same stops traversed backwards
           for (let j = i + 1; j < order.length; j += 1) {
+            fwd += legDuration(order[j - 1], order[j]);
+            rev += legDuration(order[j], order[j - 1]);
+            const before = legDuration(order[i - 1], order[i]) + fwd;
+            const after = legDuration(order[i - 1], order[j]) + rev;
+            // The edge leaving the segment only exists when j is not the last
+            // stop; this is a path, not a tour, so there is nothing after it.
+            const tail = j + 1 < order.length ? order[j + 1] : null;
+            const delta = tail === null
+              ? after - before
+              : (after + legDuration(order[i], tail)) - (before + legDuration(order[j], tail));
+            if (!(delta < -1e-6)) continue; // also rejects NaN from an unreachable pair
             let lo = i, hi = j;
             while (lo < hi) { const t = order[lo]; order[lo] = order[hi]; order[hi] = t; lo += 1; hi -= 1; }
-            const cost = pathCost(order);
-            if (cost < bestCost - 1e-6) { bestCost = cost; improved = true; }
-            else { lo = i; hi = j; while (lo < hi) { const t = order[lo]; order[lo] = order[hi]; order[hi] = t; lo += 1; hi -= 1; } }
+            bestCost += delta;
+            improved = true;
+            // Keep working THIS i until it has no improving move left, the way
+            // the full-recompute version did. Moving straight on to the next i
+            // instead measured 0.38% worse on average over 64 random instances
+            // and 11% worse on one of them: same neighbourhood, coarser walk
+            // through it, so it settles for a worse local optimum. The reversal
+            // invalidated fwd/rev, so restart them rather than reuse them; the
+            // extra work is bounded by the number of accepted moves, and every
+            // accepted move strictly lowers the cost.
+            restarts += 1;
+            if (restarts > restartBudget) break; // budget spent — on to the next i
+            j = i;
+            fwd = 0;
+            rev = 0;
           }
         }
-        // Or-opt: relocate a single stop to its best position (escapes 2-opt local minima).
+        // Or-opt: relocate a single stop to its best position (escapes 2-opt
+        // local minima). The path with the stop pulled out is built once per
+        // stop, then every insertion point is priced in O(1) against it.
         for (let p = 1; p < order.length; p += 1) {
-          for (let q = 1; q < order.length; q += 1) {
-            if (q === p) continue;
-            const candidate = order.slice();
-            const [node] = candidate.splice(p, 1);
-            candidate.splice(q > p ? q - 1 : q, 0, node);
-            const cost = pathCost(candidate);
-            if (cost < bestCost - 1e-6) { order = candidate; bestCost = cost; improved = true; }
+          const rest = order.slice();
+          const [node] = rest.splice(p, 1);
+          const restCost = pathCost(rest);
+          let bestAdd = Infinity;
+          let bestQ = -1;
+          // q starts at 1: position 0 is the pinned start and is never displaced.
+          // q may equal rest.length, which appends the stop to the end.
+          for (let q = 1; q <= rest.length; q += 1) {
+            const before = rest[q - 1];
+            const after = q < rest.length ? rest[q] : null;
+            const add = after === null
+              ? legDuration(before, node)
+              : legDuration(before, node) + legDuration(node, after) - legDuration(before, after);
+            if (Number.isFinite(add) && add < bestAdd) { bestAdd = add; bestQ = q; }
+          }
+          if (bestQ >= 0 && restCost + bestAdd < bestCost - 1e-6) {
+            rest.splice(bestQ, 0, node);
+            order = rest;
+            bestCost = restCost + bestAdd;
+            improved = true;
           }
         }
       }
@@ -6560,16 +6734,23 @@
       const row = state.userPermitMap.get(clean(number));
       if (!row) return;
       const filtered = state.userPermitNumbers.filter(item => item !== number);
+      // Refuse rather than truncate. This path re-inserts an existing permit
+      // when it is a move, so only a genuinely NEW permit can push past the cap.
+      if (filtered.length >= userListLimit && !state.userPermitNumbers.includes(number)) {
+        announceListAction(`This list is full at ${fmt(userListLimit)} permits. Remove one, or add to another list.`);
+        return;
+      }
       const targetIndex = targetNumber ? filtered.indexOf(targetNumber) : -1;
       if (targetIndex >= 0) {
         filtered.splice(targetIndex + (placement === "after" ? 1 : 0), 0, number);
       } else {
         filtered.unshift(number);
       }
-      state.userPermitNumbers = filtered.slice(0, userListLimit);
+      state.userPermitNumbers = filtered;
       saveUserListCookie();
       clearUserRoute("List changed. Recalculate driving distances when ready.");
       announceListAction(`Added permit ${number} to the list.`);
+      followPermitToPage(number);
       await renderUserList();
       renderCurrentMode();
     }
@@ -7199,6 +7380,98 @@
       return `No permits in this list are ${on.join(" and ")}.`;
     }
 
+    // ---- Saved-list pagination (FEAT-035) ----
+    //
+    // Pagination here is a VIEW concern and nothing else, exactly like the row
+    // filters above it: renderUserList slices what it hands to permitTable, and
+    // every other consumer (exports, drive distances, Optimize route, the stat
+    // tiles, live sync) keeps calling userListRows() for the whole list. Nothing
+    // downstream is allowed to learn what page is on screen.
+    function listPageCount(total) {
+      return Math.max(1, Math.ceil(total / LIST_PAGE_SIZE));
+    }
+
+    // The page is clamped on every READ rather than fixed up at each mutation.
+    // Removals, a filter being switched on, and a remote peer's edit arriving
+    // over the socket can all shrink the list under a page that is already on
+    // screen, and those three do not funnel through any one place — so a stale
+    // page index would otherwise render an empty table with no way back.
+    function clampedListPage(total) {
+      return Math.min(Math.max(state.listPage | 0, 0), listPageCount(total) - 1);
+    }
+
+    // At most five numbers: first, the current page with its two neighbours, and
+    // last. Ten 44px buttons plus their gaps do not fit at 390px, and a control
+    // row that wraps to two lines shoves the table down the screen every time
+    // the page changes.
+    function listPageNumbers(page, pages) {
+      const last = pages - 1;
+      return [...new Set([0, page - 1, page, page + 1, last])]
+        .filter(n => n >= 0 && n <= last)
+        .sort((a, b) => a - b);
+    }
+
+    function listPagerHtml(total) {
+      const pages = listPageCount(total);
+      // One page is not a pager. Returning "" also collapses the nav to nothing,
+      // so a short list looks exactly as it did before this shipped.
+      if (pages < 2) return "";
+      const page = clampedListPage(total);
+      const from = page * LIST_PAGE_SIZE + 1;
+      const to = Math.min((page + 1) * LIST_PAGE_SIZE, total);
+      let buttons = "";
+      let prev = -1;
+      for (const n of listPageNumbers(page, pages)) {
+        if (prev >= 0 && n > prev + 1) buttons += `<span class="pager-gap" aria-hidden="true">…</span>`;
+        // aria-current carries the state for a screen reader; .current carries a
+        // filled swatch AND a heavier weight, so the current page is never
+        // signalled by colour alone.
+        buttons += `<button type="button" class="pager-page${n === page ? " current" : ""}"`
+          + (n === page ? ` aria-current="page"` : "")
+          + ` aria-label="Page ${fmt(n + 1)} of ${fmt(pages)}" onclick="setListPage(${n})">${fmt(n + 1)}</button>`;
+        prev = n;
+      }
+      return `<span class="small">Page ${fmt(page + 1)} of ${fmt(pages)} &middot; showing ${fmt(from)}–${fmt(to)} of ${fmt(total)}</span>
+        <div class="pager-controls">
+          <button type="button" onclick="setListPage(${page - 1})" ${page === 0 ? "disabled" : ""} aria-label="Previous page">Previous</button>
+          <div class="pager-pages">${buttons}</div>
+          <button type="button" onclick="setListPage(${page + 1})" ${page >= pages - 1 ? "disabled" : ""} aria-label="Next page">Next</button>
+        </div>`;
+    }
+
+    // One builder, both containers. The status text is NOT an aria-live region
+    // of its own: it is rebuilt wholesale on every render, and a live region
+    // that is itself replaced does not reliably announce. setListPage speaks
+    // through #list-action-status, which is stable and already exists.
+    function setListPagerHtml(html) {
+      for (const id of ["user-list-pager-top", "user-list-pager"]) {
+        const node = $(id);
+        if (node) node.innerHTML = html;
+      }
+    }
+
+    async function setListPage(page) {
+      const total = visibleListRows(userListRows()).length;
+      const next = Math.min(Math.max(page | 0, 0), listPageCount(total) - 1);
+      if (next === clampedListPage(total)) return;
+      state.listPage = next;
+      // A new page starts at its own top, so the remembered scroll offset from
+      // the page being left must not be restored over it.
+      saveLastView({ listId: state.activeListId, listPage: next, listScroll: 0 });
+      await renderUserList();
+      // Changing page replaces every row in the table, so the button that was
+      // just pressed no longer exists and focus would fall back to <body>.
+      // Put it on the new current-page button, and bring the top of the table
+      // into view — otherwise page 2 opens scrolled to where page 1 ended.
+      const top = $("user-list-pager-top");
+      if (top) {
+        top.scrollIntoView({ block: "start", behavior: "instant" });
+        const current = top.querySelector('[aria-current="page"]');
+        if (current) current.focus();
+      }
+      announceListAction(`Page ${fmt(next + 1)} of ${fmt(listPageCount(total))}.`);
+    }
+
     // Repaint the chips and the tally without rebuilding the table — used when
     // a checkbox changes a count but the visible rows are unaffected.
     function refreshListFilterCounts() {
@@ -7449,19 +7722,38 @@
       }
       const numbers = rows.map(row => clean(row.permit_number)).filter(Boolean);
       const next = [...state.userPermitNumbers];
+      // A cap-aware partial add (FEAT-035): fill to the cap and report what did
+      // not fit. The previous version pushed everything on and then sliced the
+      // result back to length, which trims the TAIL — so adding to a full list
+      // silently deleted the permits that had been saved longest. An add must
+      // never remove something the user already had.
+      let added = 0;
+      let skipped = 0;
       numbers.forEach(number => {
-        if (!next.includes(number)) next.unshift(number);
+        if (next.includes(number)) return; // already saved — neither added nor refused
+        if (next.length >= userListLimit) { skipped += 1; return; }
+        next.unshift(number);
+        added += 1;
       });
-      state.userPermitNumbers = next.slice(0, userListLimit);
+      state.userPermitNumbers = next;
+      // New permits are unshifted to the top, so show the page they landed on.
+      state.listPage = 0;
       saveUserListCookie();
       state.selectedPermitNumbers.clear();
       clearUserRoute("List changed. Recalculate driving distances when ready.");
-      announceListAction(`${fmt(numbers.length)} permit${numbers.length === 1 ? "" : "s"} added to the list.`);
+      announceListAction(skipped
+        ? `${fmt(added)} permit${added === 1 ? "" : "s"} added. ${fmt(skipped)} could not be added — this list is full at ${fmt(userListLimit)} permits.`
+        : `${fmt(numbers.length)} permit${numbers.length === 1 ? "" : "s"} added to the list.`);
       await renderUserList();
       if (!skipModeRefresh) renderCurrentMode();
       if (!skipModeRefresh && activeCard()?.type === "permit") {
         refreshCard();
       }
+      // Returned so a caller with its own announcement (the card's "Add all N")
+      // can report what actually happened instead of restating what it asked
+      // for — otherwise a capped bulk add says "40 permits added" over the top
+      // of the message explaining that 12 of them were refused.
+      return { added, skipped };
     }
 
     async function moveSavedPermit(draggedNumber, targetNumber, placement = "before") {
@@ -7474,7 +7766,18 @@
       saveUserListCookie();
       clearUserRoute("List order changed. Recalculate driving distances when ready.");
       announceListAction("Permit order updated.");
+      followPermitToPage(draggedNumber);
       await renderUserList();
+    }
+
+    // A stop moved across a page boundary would otherwise vanish from the view
+    // — the move worked, but it looks like the row was deleted. Follow it to
+    // whichever page it landed on. Measured against the rendered rows, not
+    // userPermitNumbers, because custom stops are merged into the view.
+    function followPermitToPage(number) {
+      const target = clean(number);
+      const at = visibleListRows(userListRows()).findIndex(row => clean(row.permit_number) === target);
+      if (at >= 0) state.listPage = Math.floor(at / LIST_PAGE_SIZE);
     }
 
     async function moveSavedPermitByOffset(encodedNumber, delta) {
@@ -7490,6 +7793,7 @@
       saveUserListCookie();
       clearUserRoute("List order changed. Recalculate driving distances when ready.");
       announceListAction("Permit moved.");
+      followPermitToPage(number);
       await renderUserList();
     }
 
@@ -7746,6 +8050,9 @@
       const rows = userListRows();
       const permitCount = rows.filter(row => !row.is_custom).length;
       $("user-list-count").textContent = permitCount ? `${fmt(permitCount)} saved` : "";
+      // Both pagers are cleared on every early return below, or a list that
+      // empties out would keep the previous list's page controls on screen.
+      setListPagerHtml("");
       if (!rows.length) {
         $("user-list").innerHTML = `<div class="empty">No permits added yet.</div>`;
         return;
@@ -7759,7 +8066,20 @@
         $("user-list").innerHTML = `<div class="empty">${esc(noRowsMatchText())} <button type="button" class="linkish" onclick="clearListFilters()">Show all ${fmt(rows.length)}</button></div>`;
         return;
       }
-      $("user-list").innerHTML = permitTable(filtered, {
+      // Slice LAST, after the filter and after the counts above have all seen
+      // the full list. `page` comes back clamped, so a page index left over
+      // from a longer list lands on the new last page instead of on nothing.
+      const page = clampedListPage(filtered.length);
+      state.listPage = page;
+      const start = page * LIST_PAGE_SIZE;
+      const pageRows = filtered.slice(start, start + LIST_PAGE_SIZE);
+      setListPagerHtml(listPagerHtml(filtered.length));
+      $("user-list").innerHTML = permitTable(pageRows, {
+        // The stop numbers, and which rows sit at the ends of the list, are
+        // facts about the WHOLE list — without these two the ordinals would
+        // restart at 1 on page 2 and "move up" would be dead on its first row.
+        indexOffset: start,
+        total: filtered.length,
         select: false,
         remove: true,
         notes: true,
@@ -7773,12 +8093,15 @@
         sortable: false,
         emptyText: "No permits added yet."
       });
-      fillListGeoCells(filtered);
+      fillListGeoCells(pageRows);
       // Paint the Notes button from what is already known locally, then let the
       // count fetch refine it — otherwise the button sits blank until the
       // network answers, on a list whose private notes we can count instantly.
       refreshNotesFeedCount();
-      fetchNoteCounts(rows.filter(r => !r.is_custom).map(r => clean(r.permit_number)));
+      // Page rows only. applyNoteCounts can paint nothing but the cells that are
+      // in the DOM, and a comma-joined query of 1000 permit numbers is a ~14KB
+      // URL — this both scopes the work and keeps the request a sane size.
+      fetchNoteCounts(pageRows.filter(r => !r.is_custom).map(r => clean(r.permit_number)));
     }
 
     function specialtyText(row) {
@@ -7988,6 +8311,13 @@
 
     function permitTable(rows, options = {}) {
       if (!rows.length) return `<div class="empty">${esc(options.emptyText || "No permits.")}</div>`;
+      // `rows` may be one page of a longer list (FEAT-035). Anything that is a
+      // fact about the user's whole list — the stop number, and whether a row is
+      // at an end and so cannot move further — has to be measured against the
+      // full length, not against the slice. Both default to the slice, so every
+      // other caller is unchanged.
+      const offset = options.indexOffset || 0;
+      const total = options.total || rows.length;
       const selectHead = options.select ? "<th class=\"select-cell\" aria-label=\"Select permits\"></th>" : "";
       const removeHead = options.remove ? "<th class=\"select-cell\" aria-label=\"Remove permits\"></th>" : "";
       const notesHead = options.notes ? "<th>Notes</th>" : "";
@@ -8028,10 +8358,10 @@
                 return box("tick-visited", "Visited", isTicked(row), flagByText("ticks", row), "toggleTick")
                   + box("tick-called", "Called", isCalled(row), flagByText("called", row), "toggleCalled");
               })() : ""}
-              <td data-label="Permit">${options.move ? `<span class="list-ordinal" aria-label="Stop ${i + 1}">${i + 1}</span>` : ""}<strong>${esc(row.permit_number)}</strong>${options.move && isFollowedUp(row) ? followUpBadgeHtml(row) : ""}<br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
+              <td data-label="Permit">${options.move ? `<span class="list-ordinal" aria-label="Stop ${offset + i + 1}">${offset + i + 1}</span>` : ""}<strong>${esc(row.permit_number)}</strong>${options.move && isFollowedUp(row) ? followUpBadgeHtml(row) : ""}<br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
               <td data-label="Status">${esc(row.permit_status)}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
-              <td data-label="Address">${options.move && clean(row.address) ? (() => { const u = mapsUrls(row.address); return `<span class="maps-picker"><button type="button" class="address-open" aria-haspopup="true" aria-expanded="false" aria-controls="maps-menu-${i}" onclick="event.stopPropagation(); toggleMapsMenu(this)">${esc(row.address)}<span class="chev" aria-hidden="true">▾</span></button><span class="maps-menu" id="maps-menu-${i}" role="menu"><span class="maps-menu-label">Open in</span><a role="menuitem" href="${esc(u.apple)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Apple Maps</a><a role="menuitem" href="${esc(u.google)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Google Maps</a><a role="menuitem" href="${esc(u.waze)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Waze</a></span></span>`; })() : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span>${row.is_custom ? (row.no_geo ? `<span class="added warn" title="Could not be placed on the map">\u26A0 No location</span>` : `<span class="added" title="Typed by hand, not matched to a city permit">\u270E Added by hand</span>`) : ""}</td>
+              <td data-label="Address">${options.move && clean(row.address) ? (() => { const u = mapsUrls(row.address); return `<span class="maps-picker"><button type="button" class="address-open" aria-haspopup="true" aria-expanded="false" aria-controls="maps-menu-${offset + i}" onclick="event.stopPropagation(); toggleMapsMenu(this)">${esc(row.address)}<span class="chev" aria-hidden="true">▾</span></button><span class="maps-menu" id="maps-menu-${offset + i}" role="menu"><span class="maps-menu-label">Open in</span><a role="menuitem" href="${esc(u.apple)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Apple Maps</a><a role="menuitem" href="${esc(u.google)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Google Maps</a><a role="menuitem" href="${esc(u.waze)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Waze</a></span></span>`; })() : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span>${row.is_custom ? (row.no_geo ? `<span class="added warn" title="Could not be placed on the map">\u26A0 No location</span>` : `<span class="added" title="Typed by hand, not matched to a city permit">\u270E Added by hand</span>`) : ""}</td>
               ${options.move ? (() => { const pu = row.is_custom ? customUse(row._use) : permitUse(row); if (pu.key === "unclear") return `<td data-label="Use"></td>`; const badge = row.is_custom ? `<span class="approx" title="Typed when this address was added">typed</span>` : `<span class="approx" title="Inferred from the work description \u2014 the permits dataset has no occupancy field">approx</span>`; return `<td data-label="Use"><span class="use use-${pu.key}">${pu.glyph} ${esc(pu.label)}</span>${badge}</td>`; })() : ""}
               ${options.move ? "" : `<td data-label="Ward">${esc(row.ward)}</td>`}
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
@@ -8045,7 +8375,7 @@
                 const btn = (glyph, dir, edge) => options.moveLocked
                   ? `<button class="icon-button" aria-disabled="true" title="Clear the follow-up filter to reorder stops" aria-label="Move ${esc(row.permit_number)} ${dir < 0 ? "up" : "down"} — unavailable while the list is filtered" onclick="event.stopPropagation(); announceListAction('Clear the follow-up filter to reorder stops.')">${glyph}</button>`
                   : `<button class="icon-button" title="Move ${dir < 0 ? "up" : "down"}" aria-label="Move ${esc(row.permit_number)} ${dir < 0 ? "up" : "down"}" ${edge ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', ${dir})">${glyph}</button>`;
-                return `<td class="move-cell" data-label="Move"><div class="move-controls">${btn("&uarr;", -1, i === 0)}${btn("&darr;", 1, i >= rows.length - 1)}</div></td>`;
+                return `<td class="move-cell" data-label="Move"><div class="move-controls">${btn("&uarr;", -1, offset + i === 0)}${btn("&darr;", 1, offset + i >= total - 1)}</div></td>`;
               })() : ""}
             </tr>`).join("")}</tbody>
         </table>`;
@@ -8212,8 +8542,10 @@
       if (!targetId) return;
       const btn = document.querySelector('.pm-actions .pm-act:not(.primary)');
       if (btn) { btn.disabled = true; btn.textContent = "Adding…"; }
-      await addPermitsToUserList(rows, { listId: targetId });
-      pmAnnounce(`${fmt(rows.length)} permits added to your list`);
+      const result = await addPermitsToUserList(rows, { listId: targetId }) || {};
+      pmAnnounce(result.skipped
+        ? `${fmt(result.added)} added, ${fmt(result.skipped)} skipped — that list is full at ${fmt(userListLimit)} permits`
+        : `${fmt(rows.length)} permits added to your list`);
       refreshCard();
     }
 

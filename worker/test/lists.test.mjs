@@ -8,10 +8,15 @@ test("makeShareId is 7 base62 chars and varies", () => {
   assert.notEqual(a, makeShareId());
 });
 
-test("sanitizePermits keeps valid, dedupes, drops bad, caps at 220", () => {
+// Cap raised 220 -> 1000 by FEAT-035, in step with userListLimit in
+// docs/list.html. The two are asserted equal by verify-tmp/feat035-pagination.mjs.
+test("sanitizePermits keeps valid, dedupes, drops bad, caps at 1000", () => {
   assert.deepEqual(sanitizePermits(["100234", "B200461632", "100234"]), ["100234", "B200461632"]);
   assert.deepEqual(sanitizePermits(["ok-1", "bad space", "sql'; DROP", "toolong01234567890"]), ["ok-1"]);
-  assert.equal(sanitizePermits(Array.from({ length: 300 }, (_, i) => "1000000" + i)).length, 220);
+  assert.equal(sanitizePermits(Array.from({ length: 1200 }, (_, i) => "1000000" + i)).length, 1000);
+  // Just under the cap still comes back whole — a cap that silently truncated
+  // an ordinary list would look identical to one that worked.
+  assert.equal(sanitizePermits(Array.from({ length: 999 }, (_, i) => "1000000" + i)).length, 999);
   assert.deepEqual(sanitizePermits("nope"), []);
 });
 
@@ -74,9 +79,17 @@ test("POST with no valid permits is 400", async () => {
   assert.equal(res.status, 400);
 });
 
+// MAX_BODY was raised to 65536 by FEAT-035 so a full 1000-permit list can be
+// published; 9000 bytes used to be oversized and now is not.
 test("POST oversized body is 413", async () => {
-  const res = await handleLists(new URL("https://w/api/lists"), ENV(), post("x".repeat(9000)));
+  const res = await handleLists(new URL("https://w/api/lists"), ENV(), post("x".repeat(70000)));
   assert.equal(res.status, 413);
+});
+
+test("a full 1000-permit list publishes rather than 413ing on size", async () => {
+  const permits = Array.from({ length: 1000 }, (_, i) => `1002${String(i).padStart(11, "0")}`);
+  const res = await handleLists(new URL("https://w/api/lists"), ENV(), post(JSON.stringify({ permits })));
+  assert.equal(res.status, 200);
 });
 
 test("GET unknown id is 404", async () => {
