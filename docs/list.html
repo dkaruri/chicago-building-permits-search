@@ -3846,7 +3846,7 @@
       view: "directory",
       directory: { rows: [], cursor: null, q: "", tag: "", loading: false, error: "" },
       tagRegistry: null,
-      live: { ws: null, id: null, clock: 0, connected: false, applying: false, closing: false, presence: { count: 0, names: [] }, retry: 0, retryTimer: null, beat: null },
+      live: { ws: null, id: null, clock: 0, connected: false, applying: false, closing: false, presence: { count: 0, names: [] }, retry: 0, retryTimer: null, beat: null, settleTimer: null, settleTo: null },
       userListNote: "",
       userPermitNotes: {},
       userNoteTs: {},
@@ -4275,6 +4275,47 @@
     // only cleared by a deliberate leave (liveDisconnect), so a reconnect keeps
     // showing the last known answer rather than briefly lying that nobody is
     // here. Worst case it is stale for one reconnect backoff (≤30s).
+    // How long a drop is held before it is believed. Covers the case the TTL
+    // cannot: a phone whose screen goes off fires `pagehide` and disconnects
+    // CLEANLY, so the server is right to say one viewer — it just stops being
+    // true again the moment the screen comes back on. Holding the old number
+    // briefly turns "pocket, then look again" into no visible change at all.
+    // Rises are never delayed; only drops.
+    const PRESENCE_SETTLE_MS = 25000;
+
+    // Every presence frame goes through here. `immediate` is for a deliberate
+    // leave, which must take effect at once or the pill would linger on a list
+    // the user has navigated away from.
+    function applyPresence(next, immediate) {
+      const live = state.live;
+      const count = (next && next.count) || 0;
+      const names = (next && next.names) || [];
+      const showing = (live.presence.count || 0) >= 2;
+      if (immediate || count >= 2 || !showing) {
+        clearTimeout(live.settleTimer);
+        live.settleTo = null;
+        live.presence = { count, names };
+        renderPresence();
+        return;
+      }
+      // Dropping out of view: keep showing the last known count for now. If the
+      // viewer comes back inside the window, the next frame cancels this and
+      // nothing on screen ever moved.
+      //
+      // A repeat of the SAME drop must not restart the clock. A reconnect
+      // re-sends the room state, so re-arming on every frame would let the hold
+      // stretch indefinitely and leave the pill claiming someone is here long
+      // after they left. The grace period is a delay, never a suppression.
+      if (live.settleTo === count) return;
+      clearTimeout(live.settleTimer);
+      live.settleTo = count;
+      live.settleTimer = setTimeout(() => {
+        live.settleTo = null;
+        live.presence = { count, names };
+        renderPresence();
+      }, PRESENCE_SETTLE_MS);
+    }
+
     function renderPresence() {
       const el = $("live-presence");
       if (!el) return;
@@ -7269,9 +7310,13 @@
       if (live.ws) { try { live.ws.close(); } catch { /* already closed */ } }
       live.ws = null;
       live.id = null;
+      // Cancel a pending drop either way: on a reconnect it would fire against
+      // the new socket's room, and on a leave it would repaint after the pill
+      // was already cleared.
+      clearTimeout(live.settleTimer);
+      live.settleTo = null;
       if (keepPresence) return;
-      live.presence = { count: 0, names: [] };
-      renderPresence();
+      applyPresence({ count: 0, names: [] }, true);
     }
 
     function liveScheduleReconnect(sharedId) {
@@ -7295,7 +7340,7 @@
       try { msg = JSON.parse(data); } catch { return; }
       const live = state.live;
       if (msg.t === "error") { liveDisconnect(); return; }
-      if (msg.t === "presence") { live.presence = { count: msg.count || 0, names: msg.names || [] }; renderPresence(); return; }
+      if (msg.t === "presence") { applyPresence({ count: msg.count || 0, names: msg.names || [] }); return; }
       const list = activeList();
       if (!list || list.sharedId !== live.id) return;
 
@@ -7311,7 +7356,7 @@
           list.called = d.called && typeof d.called === "object" ? d.called : {};
           if (d.meta) { list.name = d.meta.title || list.name; list.desc = d.meta.blurb != null ? d.meta.blurb : list.desc; list.author = d.meta.author != null ? d.meta.author : list.author; list.tags = d.meta.tags != null ? d.meta.tags : list.tags; }
           live.clock = msg.clock || 0;
-          if (msg.presence) live.presence = msg.presence;
+          if (msg.presence) applyPresence(msg.presence);
         } else if (msg.t === "patch" && Array.isArray(msg.ops)) {
           for (const op of msg.ops) applyListOp(list, op);
           live.clock = msg.clock || live.clock;
