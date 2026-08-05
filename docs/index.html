@@ -5364,6 +5364,133 @@
       });
     }
 
+    // ---- FEAT-032: where a list's permits came from ----
+    // Every add records the search that produced it as one line in the list's
+    // DESCRIPTION rather than in a store of its own. The description already
+    // syncs to the shared doc, renders on the directory card, and is editable
+    // by hand — a parallel "sources" field would have needed all three built
+    // again. The leading bullet is the only marker, and it is what lets a
+    // repeat add from the same search bump a count instead of stacking a
+    // near-identical line.
+    const LIST_SOURCE_RE = /^• (.+?) — (\d+) (.+)$/;
+    const LIST_SOURCE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    // Matches the Edit-details textarea's cap, so a description built by adds
+    // can always still be opened and edited by hand.
+    const LIST_DESC_LIMIT = 2000;
+
+    function sourceMoney(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n <= 0) return "";
+      return n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`;
+    }
+
+    function sourceCount(value) {
+      const n = Number(value);
+      return Number.isFinite(n) && n > 0 ? String(n) : "";
+    }
+
+    function sourceRange(min, max, format) {
+      const lo = format(min);
+      const hi = format(max);
+      if (lo && hi) return `${lo}–${hi}`;
+      if (lo) return `${lo}+`;
+      if (hi) return `up to ${hi}`;
+      return "";
+    }
+
+    // Parsed by hand rather than through Date(), which reads a bare
+    // YYYY-MM-DD as UTC and so names the previous day west of Greenwich.
+    function sourceDay(iso) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || "").trim());
+      if (!m) return null;
+      return { y: m[1], m: LIST_SOURCE_MONTHS[Number(m[2]) - 1] || "", d: String(Number(m[3])) };
+    }
+
+    function sourceDateRange(from, to) {
+      const a = sourceDay(from);
+      const b = sourceDay(to);
+      if (a && b) return a.y === b.y ? `${a.m} ${a.d}–${b.m} ${b.d}, ${b.y}` : `${a.m} ${a.d}, ${a.y}–${b.m} ${b.d}, ${b.y}`;
+      if (a) return `from ${a.m} ${a.d}, ${a.y}`;
+      if (b) return `through ${b.m} ${b.d}, ${b.y}`;
+      return "";
+    }
+
+    const LIST_SOURCE_MODE_LABELS = {
+      open_permits: "Open Permits",
+      general_contractors: "General Contractors",
+      open_subs: "Open Subs"
+    };
+
+    // The conditions in force at this moment, as the tail of a provenance line.
+    // Reads whichever controls this page actually has, so all three pages carry
+    // this function body verbatim — the map branch is dead on index.html, which
+    // has no map mode, and PROPERTY_USE_OPTIONS only exists on map.html.
+    function addSourceSummary() {
+      if (state.mode === "map") {
+        const s = (typeof loadMapSettings === "function" && loadMapSettings()) || {};
+        const parts = [];
+        if (clean(s.q)) parts.push(`"${clean(s.q)}"`);
+        if (clean(s.neighborhood)) parts.push(clean(s.neighborhood));
+        const dates = sourceDateRange(s.dateFrom, s.dateTo);
+        if (dates) parts.push(dates);
+        const cost = sourceRange(s.costMin, s.costMax, sourceMoney);
+        if (cost) parts.push(cost);
+        const gc = sourceRange(s.gcMin, s.gcMax, sourceCount);
+        if (gc) parts.push(`${gc} open GC jobs`);
+        const radius = Number(s.radiusMiles);
+        if (Number.isFinite(radius) && radius > 0) parts.push(`within ${radius} mi`);
+        const options = typeof PROPERTY_USE_OPTIONS === "undefined" ? [] : PROPERTY_USE_OPTIONS;
+        const use = options.find(option => option.value && option.value === clean(s.propertyUse));
+        if (use) parts.push(use.label);
+        const excluded = Array.isArray(s.excludedWorkTypes) ? s.excludedWorkTypes.length : 0;
+        if (excluded) parts.push(`${excluded} work type${excluded === 1 ? "" : "s"} excluded`);
+        return `from Permit Map: ${parts.join(" · ") || "no filters"}`;
+      }
+      const parts = [LIST_SOURCE_MODE_LABELS[state.mode] || "Search"];
+      const q = clean($("q")?.value);
+      if (q) parts.push(`"${q}"`);
+      const ward = clean($("ward")?.value);
+      if (ward) parts.push(`Ward ${ward}`);
+      const cost = sourceRange($("cost-min")?.value, $("cost-max")?.value, sourceMoney);
+      if (cost) parts.push(cost);
+      if ($("usable-processing")?.checked) parts.push("usable processing times only");
+      return `from Search: ${parts.join(" · ")}`;
+    }
+
+    // Record `count` permits' provenance on the list. A repeat add from the
+    // same search on the same day bumps that line's count; a different search
+    // appends a new line. Hand-written description text is never rewritten —
+    // only provenance lines are, and only ever the last one.
+    function noteListSource(list, count, tail) {
+      if (!list || !(count > 0) || !tail) return;
+      const today = new Date();
+      const stamp = `${LIST_SOURCE_MONTHS[today.getMonth()]} ${today.getDate()}`;
+      const lines = String(list.desc || "").split("\n");
+      const prev = LIST_SOURCE_RE.exec(lines[lines.length - 1] || "");
+      if (prev && prev[1] === stamp && prev[3] === tail) {
+        lines[lines.length - 1] = `• ${stamp} — ${Number(prev[2]) + count} ${tail}`;
+      } else {
+        if (lines.length === 1 && !lines[0].trim()) lines.pop();
+        lines.push(`• ${stamp} — ${count} ${tail}`);
+      }
+      // Over the cap, drop provenance from the OLDEST end rather than slicing
+      // the string — a blind slice would eat the user's own text from the top
+      // and leave a half-written line at the bottom.
+      let next = lines.join("\n");
+      while (next.length > LIST_DESC_LIMIT) {
+        const at = lines.findIndex(line => LIST_SOURCE_RE.test(line));
+        if (at < 0) break;
+        lines.splice(at, 1);
+        next = lines.join("\n");
+      }
+      list.desc = next.slice(0, LIST_DESC_LIMIT);
+      // Flags a description edit this page may not be able to push itself:
+      // Search and the Permit Map hold no live socket. list.html clears it once
+      // the shared doc has the line; without it the next `state` frame from the
+      // room would silently overwrite the line with the server's older copy.
+      list.descPending = true;
+    }
+
     async function addPermitsToUserList(rows, options = {}) {
       const skipModeRefresh = Boolean(options.skipModeRefresh);
       // Every add asks which list (D7). options.listId skips the prompt.
@@ -5380,10 +5507,17 @@
       }
       const numbers = rows.map(row => clean(row.permit_number)).filter(Boolean);
       const next = [...state.userPermitNumbers];
+      let added = 0;
       numbers.forEach(number => {
-        if (!next.includes(number)) next.unshift(number);
+        if (next.includes(number)) return;
+        next.unshift(number);
+        added += 1;
       });
       state.userPermitNumbers = next.slice(0, userListLimit);
+      // FEAT-032. Before the save, so the appended line persists with the list.
+      // Count what LANDED, not what was offered: new permits are unshifted to
+      // the head, so they survive the slice above only up to the cap itself.
+      noteListSource(state.lists[targetId], Math.min(added, userListLimit), addSourceSummary());
       saveUserListCookie();
       state.selectedPermitNumbers.clear();
       clearUserRoute("List changed. Recalculate driving distances when ready.");
