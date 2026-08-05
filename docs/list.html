@@ -6579,8 +6579,10 @@
       const dense = tiles.length * tiles.length <= MATRIX_REQUEST_BUDGET;
       const pairs = dense
         ? tiles.flatMap((_, a) => tiles.map((unused, b) => [a, b]))
-        // One request of the budget is spent on the coarse layer below.
-        : bandTilePairs(tiles, MATRIX_REQUEST_BUDGET);
+        // The coarse layer below costs one request and comes out of the SAME
+        // budget — the cap is what the whole sort spends, not the band's share.
+        // Passing the full budget here is what made a 1000-stop sort cost 101.
+        : bandTilePairs(tiles, MATRIX_REQUEST_BUDGET - 1);
       const durations = Array.from({ length: n }, () => new Array(n).fill(null));
       const jobs = pairs.length + (dense ? 0 : 1);
       let done = 0;
