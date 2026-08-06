@@ -109,6 +109,14 @@ static site.
   — separate from the static Pages site; queries the live DuckDB directly.
 - Static site preview: `python -m http.server 8765 --directory docs`.
 - Tests: `uv run pytest` (currently only covers `tools/sql.py`'s validator).
+- **Enable the pre-commit guard in a fresh clone:** `git config core.hooksPath
+  scripts/hooks`. It blocks a commit that would introduce an invisible 0x08 or
+  NUL byte into tracked source (FIX-030 — the class has bitten this repo four
+  times). Git never installs hooks automatically, so this one command is
+  required per clone; `worker/test/control-bytes.test.mjs` is the always-on
+  guard and does NOT depend on it. If `core.hooksPath` ever points at a
+  directory that does not exist, git runs no hook and says nothing — that test
+  catches it.
 - `scripts/accuracy_check.py` cross-checks local DuckDB counts, exported JSON
   counts, live Socrata counts, and live City license-registry counts — run
   after any ingest or export change.

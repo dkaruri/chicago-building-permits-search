@@ -1,0 +1,8 @@
+#!/bin/sh
+# FIX-030 pre-commit guard. Tracked, so it survives a re-clone -- but git will
+# never install hooks automatically (by design), so a fresh clone still needs:
+#     git config core.hooksPath scripts/hooks
+# worker/test/control-bytes.test.mjs is the always-on guard and does not depend
+# on this being enabled.
+DIR=$(cd "$(dirname "$0")" && pwd)
+exec node "$DIR/control-bytes-check.mjs"
