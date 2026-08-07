@@ -5003,22 +5003,50 @@
       locationSource.setData(mapSearchLocationFeatureCollection());
       const circleSource = state.map.map.getSource("radius-circle");
       if (circleSource) circleSource.setData(radiusCircleFeatureCollection());
-      if (state.map.searchLocation && !state.map.skipRecentreOnce) {
-        state.map.map.easeTo({ center: [state.map.searchLocation.lon, state.map.searchLocation.lat], zoom: 15, duration: 0 });
-      } else if (state.map.searchLocation && state.map.skipRecentreOnce) {
-        // First render after restoring a saved viewport. The saved query is
-        // re-geocoded on load, and without this it would yank the map back to
-        // the address every reload — so panning away from a searched address and
-        // reloading lost your position, which is the bug FIX-008 is about. A
-        // NEW search still re-centres: this only suppresses the restore-time one.
-        state.map.skipRecentreOnce = false;
+      // FIX-035. `skipRecentreOnce` means "the camera was just restored from
+      // storage — do not move it on this first render". A new search or a
+      // filter change afterwards re-frames normally.
+      //
+      // It used to guard only the two searchLocation branches, so a restored
+      // viewport survived only when a search query happened to be saved too.
+      // With no query — the common case — control fell through to fitBounds,
+      // the camera was reframed over every pin, and the `moveend` listener then
+      // WROTE THAT BACK over the saved view. So the position was not merely
+      // ignored on return, it was destroyed: measured leaving at zoom 13.5 and
+      // coming back at 9.2, which is what made every filter look forgotten even
+      // though all ten of them had applied correctly.
+      //
+      // The flag is consumed ONLY when a camera move was actually suppressed —
+      // never merely because this function ran. updateMapSource() is called
+      // from two places (the map's `load` handler and the tail of
+      // applyMapFilters), and whichever ran first used to eat the flag while
+      // doing nothing, leaving the other one free to reframe. That is why the
+      // first version of this fix passed on desktop and still lost the viewport
+      // on iPhone: it was a race between two callers, not a platform quirk.
+      if (state.map.searchLocation) {
+        if (state.map.skipRecentreOnce) {
+          // A restored search query is re-geocoded on load; without this the map
+          // would be yanked back to the address every reload.
+          state.map.skipRecentreOnce = false;
+        } else {
+          state.map.map.easeTo({ center: [state.map.searchLocation.lon, state.map.searchLocation.lat], zoom: 15, duration: 0 });
+        }
       } else if (state.map.filteredRows.length) {
-        const bounds = new maplibregl.LngLatBounds();
-        const settings = loadMapSettings();
-        const matchedRows = settings.q ? state.map.filteredRows.filter(row => Number(row.m || 0) === 1) : [];
-        const rowsToFrame = matchedRows.length ? matchedRows : state.map.filteredRows;
-        rowsToFrame.slice(0, 5000).forEach(row => bounds.extend([Number(row.lon), Number(row.lat)]));
-        state.map.map.fitBounds(bounds, { padding: 48, maxZoom: 13, duration: 0 });
+        if (state.map.skipRecentreOnce) {
+          // FIX-035. The camera was restored from storage at construction, so
+          // leaving it alone IS the restore. This branch used to be unguarded:
+          // it reframed over every pin, and the `moveend` listener then WROTE
+          // THAT BACK over the saved view — so the position was not ignored,
+          // it was destroyed. Measured leaving at zoom 13.5, returning at 9.2.
+          state.map.skipRecentreOnce = false;
+        } else {
+          const bounds = new maplibregl.LngLatBounds();
+          const settings = loadMapSettings();
+          const matchedRows = settings.q ? state.map.filteredRows.filter(row => Number(row.m || 0) === 1) : [];
+          const rowsToFrame = matchedRows.length ? matchedRows : state.map.filteredRows;
+          rowsToFrame.slice(0, 5000).forEach(row => bounds.extend([Number(row.lon), Number(row.lat)]));
+          state.map.map.fitBounds(bounds, { padding: 48, maxZoom: 13, duration: 0 });
+        }
       }
       updateMapLayerVisibility();
     }
