@@ -5392,6 +5392,18 @@
       await ensurePermitMap();
       const row = state.userPermitMap.get(clean(number));
       if (!row) return;
+      // FIX-037. This function both ADDS a permit and REPOSITIONS one already
+      // saved (drag-and-drop onto the list). Only a genuinely new permit can be
+      // refused by the cap — refusing a reposition would freeze reordering on a
+      // full list. The trailing `.slice(0, userListLimit)` that used to be here
+      // trimmed the TAIL, so dropping one permit onto a full list silently
+      // deleted the oldest saved one.
+      const isNew = !state.userPermitNumbers.includes(number);
+      if (isNew && state.userPermitNumbers.length >= userListLimit) {
+        state.userRouteSummary = `This list is full at ${fmt(userListLimit)} permits — ${esc(number)} was not added. Remove some before adding more.`;
+        renderRouteSummary();
+        return;
+      }
       const filtered = state.userPermitNumbers.filter(item => item !== number);
       const targetIndex = targetNumber ? filtered.indexOf(targetNumber) : -1;
       if (targetIndex >= 0) {
@@ -5399,7 +5411,7 @@
       } else {
         filtered.unshift(number);
       }
-      state.userPermitNumbers = filtered.slice(0, userListLimit);
+      state.userPermitNumbers = filtered;
       saveUserListCookie();
       clearUserRoute("List changed. Recalculate driving distances when ready.");
       await renderUserList();
@@ -5604,20 +5616,32 @@
       }
       const numbers = rows.map(row => clean(row.permit_number)).filter(Boolean);
       const next = [...state.userPermitNumbers];
+      // FIX-037. A cap-aware partial add, ported from list.html (FEAT-035).
+      // This used to unshift everything onto the head and then slice the result
+      // back to length — which trims the TAIL, so adding to a full list
+      // silently deleted the permits saved LONGEST, with no warning and no
+      // undo. An add must never remove something the user already had.
       let added = 0;
+      let skipped = 0;
       numbers.forEach(number => {
-        if (next.includes(number)) return;
+        if (next.includes(number)) return; // already saved — neither added nor refused
+        if (next.length >= userListLimit) { skipped += 1; return; }
         next.unshift(number);
         added += 1;
       });
-      state.userPermitNumbers = next.slice(0, userListLimit);
+      state.userPermitNumbers = next;
       // FEAT-032. Before the save, so the appended line persists with the list.
-      // Count what LANDED, not what was offered: new permits are unshifted to
-      // the head, so they survive the slice above only up to the cap itself.
-      noteListSource(state.lists[targetId], Math.min(added, userListLimit), addSourceSummary());
+      // `added` is now exactly what landed, so the old Math.min guard is gone.
+      noteListSource(state.lists[targetId], added, addSourceSummary());
       saveUserListCookie();
       state.selectedPermitNumbers.clear();
       clearUserRoute("List changed. Recalculate driving distances when ready.");
+      // Say what was refused. Silence here is what made the data loss invisible.
+      if (skipped) {
+        state.userRouteSummary = `${fmt(added)} permit${added === 1 ? "" : "s"} added. `
+          + `${fmt(skipped)} could not be added — this list is full at ${fmt(userListLimit)} permits.`;
+        renderRouteSummary();
+      }
       await renderUserList();
       if (!skipModeRefresh) renderCurrentMode();
       if (!skipModeRefresh && activeCard()?.type === "permit") {
