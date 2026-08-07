@@ -7307,14 +7307,44 @@
         : `Added ${addr}, but it could not be placed on the map \u2014 it will sit out of drive-time sorting.`);
     }
 
-    function removeCustomStop(encodedId) {
+    async function removeCustomStop(encodedId) {
       const id = decodeURIComponent(encodedId);
       const list = activeList();
       if (!list || !list.custom) return;
+      const stop = list.custom.find(c => c.id === id);
+      if (!stop) return;
       list.custom = list.custom.filter(c => c.id !== id);
       saveUserLists();
       sendListOp({ f: "custom", v: list.custom || [] });
-      renderUserList();
+      const label = clean(stop.addr) || "the added address";
+      const message = `Removed ${label} from the list.`;
+      // Same tail and same undo as a permit removal — a hand-typed stop is a
+      // stop, so removing one has to invalidate the route too (FIX-042).
+      await commitUserListMembership("", message);
+      offerUndoRemove(message, async () => {
+        const back = activeList();
+        if (!back || (back.custom || []).some(c => c.id === id)) return;
+        // `stop` still carries its `pos`, and mergeCustomStops sorts by pos, so
+        // the stop number comes back with it — nothing else to restore.
+        back.custom = [...(back.custom || []), stop];
+        saveUserLists();
+        sendListOp({ f: "custom", v: back.custom });
+        await commitUserListMembership("", `Restored ${label} to the list.`);
+      });
+    }
+
+    // The row's X cannot know which remover it needs: a city permit is keyed by
+    // its number, a hand-typed stop by its custom_id, and customToRow leaves
+    // permit_number BLANK rather than fabricate one. The template used to call
+    // removePermitFromUserList(row.permit_number) for every row, so a custom
+    // stop's X passed "" and silently did nothing while removeCustomStop sat
+    // with zero call sites. One dispatch here keeps that rule in a single place
+    // — tickKeyFor already applies the same rule for the visited/called ticks.
+    async function removeStopFromUserList(encodedKey) {
+      const key = decodeURIComponent(encodedKey);
+      const list = activeList();
+      if (key && (list?.custom || []).some(c => c.id === key)) return removeCustomStop(encodedKey);
+      return removePermitFromUserList(encodedKey);
     }
 
     // ---- Visited checkbox (shared on the list) ----
@@ -8386,7 +8416,9 @@
     async function removePermitFromUserList(encodedNumber) {
       const number = decodeURIComponent(encodedNumber);
       const index = state.userPermitNumbers.indexOf(number);
-      if (index < 0) return;
+      // Never fail silently here: a silent no-op on exactly this path is what
+      // hid the un-removable hand-typed stop for as long as it did (FIX-042).
+      if (index < 0) return announceListAction("That stop is no longer in the list.");
       const note = state.userPermitNotes[number];
       const noteTs = state.userNoteTs[number];
       state.userPermitNumbers = state.userPermitNumbers.filter(item => item !== number);
@@ -8408,15 +8440,26 @@
     }
 
     async function clearUserList() {
-      if (!state.userPermitNumbers.length) {
+      const list = activeList();
+      // Hand-typed stops are list.custom, not userPermitNumbers — counting only
+      // the permits made "Clear list" refuse outright on a list of nothing but
+      // added addresses, and silently spare them on every other list (FIX-042).
+      const customStops = (list && list.custom) || [];
+      if (!state.userPermitNumbers.length && !customStops.length) {
         announceListAction("The permit list is already empty.");
         return;
       }
+      // The per-permit confirm went away in FIX-003 because it is reversible;
+      // this one clears the whole list at once and has no undo, so it stays.
       if (!window.confirm("Clear every permit and note from My Permit List?")) return;
       state.userPermitNumbers = [];
       state.userListNote = "";
       state.userPermitNotes = {};
       state.userNoteTs = {};
+      if (list) {
+        list.custom = [];
+        sendListOp({ f: "custom", v: [] });
+      }
       saveUserListCookie();
       saveUserNotes();
       clearUserRoute();
@@ -8934,7 +8977,7 @@
               ${options.reorder ? `ondragover="savedPermitDragOver(event, this)" ondragleave="savedPermitDragLeave(this)" ondrop="savedPermitDrop(event, this, '${enc(row.permit_number)}')"` : ""}
               onclick="${options.select ? `selectPermit(${i})` : `openPermitDetailFromEncoded('${enc(JSON.stringify(row))}')`}"
             >
-              ${options.remove ? `<td class="select-cell" data-label="Remove" onclick="event.stopPropagation()"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
+              ${options.remove ? `<td class="select-cell" data-label="Remove" onclick="event.stopPropagation()"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number || row.address || "this stop")} from list" onclick="event.stopPropagation(); removeStopFromUserList('${enc(tickKeyFor(row))}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell" data-label="Select" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
               ${options.move ? (() => {
                 const tk = tickKeyFor(row);
@@ -8963,8 +9006,16 @@
                 // FULL list, so from a filtered view it would often not appear
                 // to move at all. aria-disabled, not disabled, so the button
                 // stays focusable and can say why when pressed.
-                const btn = (glyph, dir, edge) => options.moveLocked
-                  ? `<button class="icon-button" aria-disabled="true" title="Clear the follow-up filter to reorder stops" aria-label="Move ${esc(row.permit_number)} ${dir < 0 ? "up" : "down"} — unavailable while the list is filtered" onclick="event.stopPropagation(); announceListAction('Clear the follow-up filter to reorder stops.')">${glyph}</button>`
+                // A hand-typed stop holds its place through its own `pos` in
+                // list.custom, which moveSavedPermitByOffset (an index into
+                // userPermitNumbers) cannot reach — so its arrows did nothing at
+                // all, silently. Same aria-disabled treatment as the filtered
+                // case until custom stops can really be reordered (FIX-042).
+                const moveBlocked = options.moveLocked
+                  ? "Clear the follow-up filter to reorder stops"
+                  : row.is_custom ? "An added address keeps the stop number it was typed with. Remove it and add it again to move it" : "";
+                const btn = (glyph, dir, edge) => moveBlocked
+                  ? `<button class="icon-button" aria-disabled="true" title="${esc(moveBlocked)}" aria-label="Move ${esc(row.permit_number || row.address || "this stop")} ${dir < 0 ? "up" : "down"} — unavailable" onclick="event.stopPropagation(); announceListAction('${esc(moveBlocked)}.')">${glyph}</button>`
                   : `<button class="icon-button" title="Move ${dir < 0 ? "up" : "down"}" aria-label="Move ${esc(row.permit_number)} ${dir < 0 ? "up" : "down"}" ${edge ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', ${dir})">${glyph}</button>`;
                 return `<td class="move-cell" data-label="Move"><div class="move-controls">${btn("&uarr;", -1, offset + i === 0)}${btn("&darr;", 1, offset + i >= total - 1)}</div></td>`;
               })() : ""}
