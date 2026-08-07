@@ -1,4 +1,9 @@
-# Lift the directory result caps (FEAT-040)
+# Lift the directory result caps (FEAT-044)
+
+> Renumbered from FEAT-040 on 2026-08-07. The board had already assigned
+> FEAT-040 to "Permit Map: filter by visited / not visited / called / not
+> called" on 2026-08-05, a day before this spec claimed the same ID. IDs are
+> unique forever, so the board wins and this work is FEAT-044.
 
 **Date:** 2026-08-06
 **Status:** design, awaiting approval
