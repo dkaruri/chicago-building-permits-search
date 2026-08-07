@@ -3329,6 +3329,11 @@
       pageSize: 100,
       searchToken: 0,
       resultSort: { key: null, direction: null },
+      // FEAT-044. In permits mode the browser holds ONE page and the server
+      // knows the size of the whole result set; this is the pager's
+      // denominator. Null until a permits fetch has answered. Contacts mode is
+      // still fully resident and ignores it.
+      permitTotal: null,
       cardStack: [],
       cardIndex: -1,
       selectedPermitNumbers: new Set(),
@@ -3543,8 +3548,16 @@
       if (Number.isInteger(last.page) && last.page > 0) {
         const target = Math.min(last.page, pageCount() - 1);
         if (target > 0) {
-          state.pageIndex = target;
-          renderCurrentMode();
+          if (pagedInServer()) {
+            // Only page 0's rows are in hand; setting the index alone would
+            // render them under page N's pager (FEAT-044).
+            const token = ++state.searchToken;
+            if (!(await fetchPermitsPage(target, token))) return;
+            renderPermits();
+          } else {
+            state.pageIndex = target;
+            renderCurrentMode();
+          }
         }
       }
       // Reopen the contractor card that was open when the page was left. This
@@ -3857,7 +3870,29 @@
       return collator.compare(clean(a), clean(b));
     }
 
+    // Mirrors the Worker's SORT_COLUMNS allowlist (worker/src/permits.js).
+    // `address` is absent on purpose: it is composed from three columns, has no
+    // single sortable one, and the server refuses it. Offering the control
+    // would promise an ordering that silently never happens.
+    const PERMIT_SORT_KEYS = ["permit_number", "permit_status", "issued", "cost"];
+
     async function setResultSort(key) {
+      // Permits are server-sorted and server-paged (FEAT-044): sorting the
+      // resident array here would order only the 150 rows on screen, so
+      // "most expensive" would mean "most expensive of this page". Every
+      // change of sort goes back to the server, from page 0.
+      if (state.mode === "open_permits") {
+        if (!PERMIT_SORT_KEYS.includes(key)) return;
+        if (state.resultSort.key !== key) {
+          state.resultSort = { key, direction: "asc" };
+        } else if (state.resultSort.direction === "asc") {
+          state.resultSort = { key, direction: "desc" };
+        } else {
+          state.resultSort = { key: null, direction: null };
+        }
+        await search();
+        return;
+      }
       if (state.resultSort.key !== key) {
         state.resultSort = { key, direction: "asc" };
       } else if (state.resultSort.direction === "asc") {
@@ -3885,6 +3920,62 @@
       return `<button class="sort-header" onclick="setResultSort('${key}')" aria-label="Sort ${esc(label)}"><span>${esc(label)}</span><span class="sort-icon">${icon}</span></button>`;
     }
 
+    // FEAT-044. One page of open permits, fetched with every filter, the sort
+    // and the count applied server-side. The browser used to hold a 1,000-row
+    // prefix of 40,868 and page within it, so the pager's "Page 1 of 7" was
+    // computed from the truncation and the last page looked like the end of the
+    // data. Returns true if this fetch is still the current one.
+    async function fetchPermitsPage(pageIndex, token) {
+      const cost = costRange();
+      if (cost.invalid) {
+        state.filteredRows = [];
+        state.permitTotal = 0;
+        state.pageIndex = 0;
+        return true;
+      }
+      const q = ($("q")?.value || "").trim();
+      const ward = ($("ward")?.value || "").trim();
+      const params = new URLSearchParams();
+      if (q) params.set("q", q);
+      if (ward) params.set("ward", ward);
+      if (cost.min != null) params.set("cost_min", String(cost.min));
+      if (cost.max != null) params.set("cost_max", String(cost.max));
+      // Server-side now: a post-fetch filter would shrink pages unpredictably
+      // and desynchronise them from the count the pager divides by.
+      if (usableProcessingOnly()) params.set("usable_processing", "1");
+      if (state.resultSort.key) {
+        params.set("sort", state.resultSort.key);
+        params.set("dir", state.resultSort.direction || "asc");
+      }
+      params.set("limit", String(state.pageSize));
+      params.set("offset", String(pageIndex * state.pageSize));
+
+      let data;
+      try {
+        const res = await fetch(`${API_BASE}/api/permits?${params}`);
+        data = await res.json();
+      } catch (error) {
+        if (token !== state.searchToken) return false;
+        state.filteredRows = [];
+        state.permitTotal = 0;
+        return true;
+      }
+      // The token guard has to wrap EVERY paged fetch, not just the first: a
+      // slow page-2 response landing after a newer page-1 would otherwise
+      // overwrite it, showing page 2's rows under page 1's pager.
+      if (token !== state.searchToken) return false;
+      state.filteredRows = Array.isArray(data.rows) ? data.rows : [];
+      state.permitTotal = Number.isFinite(data.total) ? data.total : state.filteredRows.length;
+      state.pageIndex = pageIndex;
+      // The server is the authority on which sort was actually applied. If it
+      // refused the key, drop the client's arrow rather than leave a header
+      // claiming an order that is not there.
+      if (state.resultSort.key && !data.sort) {
+        state.resultSort = { key: null, direction: null };
+      }
+      return true;
+    }
+
     async function search() {
       if (!state.manifest) return;
       if (state.mode === "map") {
@@ -3898,27 +3989,8 @@
       state.selectedPermitNumbers.clear();
       state.pageSize = state.mode === "open_permits" ? 150 : 100;
       if (state.mode === "open_permits") {
-        const q = ($("q")?.value || "").trim();
-        const ward = ($("ward")?.value || "").trim();
-        const cost = costRange();
-        if (cost.invalid) {
-          state.filteredRows = [];
-          renderPermits();
-          clearBusy(token);
-          return;
-        }
-        const params = new URLSearchParams();
-        if (q) params.set("q", q);
-        if (ward) params.set("ward", ward);
-        if (cost.min != null) params.set("cost_min", String(cost.min));
-        if (cost.max != null) params.set("cost_max", String(cost.max));
-        params.set("limit", "1000");
-        const res = await fetch(`${API_BASE}/api/permits?${params}`);
-        const data = await res.json();
+        await fetchPermitsPage(0, token);
         if (token !== state.searchToken) return;
-        let rows = data.rows;
-        if (usableProcessingOnly()) rows = rows.filter(r => hasUsableProcessing(r));
-        state.filteredRows = sortRows(rows);
         renderPermits();
       } else {
         const rows = await loadJson(state.mode);
@@ -5753,32 +5825,61 @@
       }
     }
 
+    // In permits mode filteredRows IS the page the server sent, so there is
+    // nothing to slice (FEAT-044). Every other mode is still fully resident.
+    function pagedInServer() {
+      return state.mode === "open_permits";
+    }
+
     function visibleSlice() {
+      if (pagedInServer()) {
+        state.visibleRows = state.filteredRows;
+        return state.visibleRows;
+      }
       const start = state.pageIndex * state.pageSize;
       state.visibleRows = state.filteredRows.slice(start, start + state.pageSize);
       return state.visibleRows;
     }
 
+    function totalRowCount() {
+      return pagedInServer() && state.permitTotal != null
+        ? state.permitTotal
+        : state.filteredRows.length;
+    }
+
     function resultCountText() {
-      if (!state.filteredRows.length) return "0 shown";
+      const total = totalRowCount();
+      if (!total || !state.filteredRows.length) return "0 shown";
       const start = state.pageIndex * state.pageSize + 1;
-      const end = Math.min((state.pageIndex + 1) * state.pageSize, state.filteredRows.length);
-      return `${fmt(start)}-${fmt(end)} of ${fmt(state.filteredRows.length)} shown`;
+      const end = pagedInServer()
+        ? start + state.filteredRows.length - 1
+        : Math.min((state.pageIndex + 1) * state.pageSize, total);
+      return `${fmt(start)}-${fmt(end)} of ${fmt(total)} shown`;
     }
 
     function pageCount() {
-      return Math.max(1, Math.ceil(state.filteredRows.length / state.pageSize));
+      return Math.max(1, Math.ceil(totalRowCount() / state.pageSize));
     }
 
-    function changePage(delta) {
+    async function changePage(delta) {
       const next = Math.min(Math.max(state.pageIndex + delta, 0), pageCount() - 1);
       if (next === state.pageIndex) return;
+      if (pagedInServer()) {
+        // Refetch rather than slice: the other 40,000-odd rows were never here.
+        const token = ++state.searchToken;
+        setBusy("Loading");
+        await nextFrame();
+        const current = await fetchPermitsPage(next, token);
+        if (!current) return;
+        captureLastView();
+        renderPermits();
+        clearBusy(token);
+        return;
+      }
       state.pageIndex = next;
       captureLastView();
       if (state.mode === "map") {
         renderMapSideList();
-      } else if (state.mode === "open_permits") {
-        renderPermits();
       } else {
         renderContacts();
       }
@@ -5921,6 +6022,7 @@
         select: true,
         remove: false,
         sortable: true,
+        serverSorted: true,
         emptyText: "No matching permits."
       });
       $("results").scrollTop = 0;
@@ -5942,7 +6044,15 @@
       const removeHead = options.remove ? "<th class=\"select-cell\" aria-label=\"Remove permits\"></th>" : "";
       const notesHead = options.notes ? "<th>Notes</th>" : "";
       const moveHead = options.move ? "<th class=\"move-cell\" aria-label=\"Move permits\"></th>" : "";
-      const head = (label, key) => options.sortable === false ? esc(label) : sortHeader(label, key);
+      // `serverSorted` marks the open-permits view, where ordering happens in
+      // SoQL over the whole result set. Only the server's allowlist can be
+      // offered there — a sortable Address header would ask for an order the
+      // Worker refuses and quietly hand back the default (FEAT-044). Saved
+      // lists are fully resident and keep every column sortable.
+      const head = (label, key) =>
+        options.sortable === false || (options.serverSorted && !PERMIT_SORT_KEYS.includes(key))
+          ? esc(label)
+          : sortHeader(label, key);
       const tableClass = options.select ? "results-table permits-table" : options.notes ? "saved-permits-table" : "";
       return `
         <table class="${tableClass}">

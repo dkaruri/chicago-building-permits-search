@@ -15,10 +15,37 @@ import {
 } from "./socrata.js";
 
 /**
- * GET /api/permits?q=&ward=&status=&type=&contact_name=&cost_min=&cost_max=&limit=&offset=
+ * Client sort key -> SoQL column. FEAT-044.
+ *
+ * An allowlist, not a passthrough: these land in `$order` and must never be
+ * interpolated from user input. An unrecognised key falls back to the default
+ * AND is reported back in the response as `sort`, so the client can tell that
+ * what it asked for is not what it got — a silent fallback here would be the
+ * same class of lie as the truncation this feature is fixing.
+ *
+ * `address` is deliberately absent. It is composed from street_number,
+ * street_direction and street_name and has no single sortable column;
+ * approximating it as `street_name, street_number` would sort "100" before
+ * "99" within a street, because street_number is TEXT in the source. Rather
+ * than ship an ordering that is subtly wrong, address is not sortable.
+ */
+const SORT_COLUMNS = {
+  issued: "issue_date",
+  cost: "reported_cost",
+  permit_number: "permit_",
+  permit_status: "permit_status",
+};
+
+const DEFAULT_ORDER = "issue_date DESC";
+
+/**
+ * GET /api/permits?q=&ward=&status=&type=&contact_name=&cost_min=&cost_max=
+ *                 &usable_processing=&sort=&dir=&limit=&offset=
  *
  * Proxies to Socrata with contact pivoting.
- * Returns { rows, row_count, offset, limit }.
+ * Returns { rows, row_count, total, offset, limit, sort, dir }.
+ * `total` counts every row matching the filters, not the page — the client
+ * pages against it, so it must come from the SAME where-clause as the rows.
  */
 export async function handlePermits(url, env) {
   const q = url.searchParams.get("q") || "";
@@ -69,6 +96,29 @@ export async function handlePermits(url, env) {
     ).join(" OR ");
     whereClauses.push(`(${contactSearch})`);
   }
+  // FEAT-044. "Usable processing only" used to filter client-side AFTER the
+  // fetch. Once the client pages against `total`, a post-fetch filter would
+  // shrink pages unpredictably and desynchronise them from the count — so the
+  // rule has to live where the counting happens.
+  if (url.searchParams.get("usable_processing") === "1") {
+    whereClauses.push("processing_time > 0");
+  }
+
+  // Built ONCE and handed to both queries. If the count and the rows could be
+  // built from different clauses the pager would confidently page past the end
+  // of the result set, or stop short of it.
+  const where = whereClauses.join(" AND ");
+
+  const sortKey = url.searchParams.get("sort") || "";
+  const column = SORT_COLUMNS[sortKey];
+  const dir = url.searchParams.get("dir") === "asc" ? "asc" : "desc";
+  // NULL LAST is not decoration. Socrata sorts NULLs FIRST on DESC, and 3,646
+  // of 40,868 open permits have no reported_cost (8.9%, measured 2026-08-07) —
+  // so "sort by Cost, highest first" would have opened on roughly 24 pages of
+  // blank-cost permits before the most expensive one. Only reported_cost is
+  // nullable among these four today (issue_date, permit_status and permit_ all
+  // measured zero), but it costs nothing to be right if that changes.
+  const order = column ? `${column} ${dir.toUpperCase()} NULL LAST` : DEFAULT_ORDER;
 
   const selectCols = [
     "permit_",
@@ -95,13 +145,19 @@ export async function handlePermits(url, env) {
     ),
   ].join(",");
 
-  const rows = await query(env, {
-    $select: selectCols,
-    $where: whereClauses.join(" AND "),
-    $order: "issue_date DESC",
-    $limit: String(limit),
-    $offset: String(offset),
-  });
+  // Both in flight together — the count is a separate round trip and there is
+  // no reason to pay for it serially.
+  const [rows, countRows] = await Promise.all([
+    query(env, {
+      $select: selectCols,
+      $where: where,
+      $order: order,
+      $limit: String(limit),
+      $offset: String(offset),
+    }),
+    query(env, { $select: "count(1)", $where: where }),
+  ]);
+  const total = parseInt(countRows?.[0]?.count_1 ?? "", 10);
 
   const results = rows.map((row) => {
     const contacts = pivotContacts(row);
@@ -135,7 +191,20 @@ export async function handlePermits(url, env) {
     };
   });
 
-  return json({ rows: results, row_count: results.length, offset, limit });
+  return json({
+    rows: results,
+    row_count: results.length,
+    // Null rather than 0 if the count query came back unparseable: a client
+    // that pages against 0 shows "no results" for a full page of rows, whereas
+    // a null is an obvious "unknown" it can fall back on.
+    total: Number.isFinite(total) ? total : null,
+    offset,
+    limit,
+    // Echoed so the client can see whether its sort was honoured. "" means the
+    // default order, including when an unsupported key was asked for.
+    sort: column ? sortKey : "",
+    dir: column ? dir : "desc",
+  });
 }
 
 /**
