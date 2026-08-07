@@ -3429,7 +3429,15 @@
     const mapSettingsKey = "chi_permit_map_settings";
     // Shared with list.html, which has used it for its view since 2026-07-27.
     const lastViewKey = "chi_permit_last_view";
-    const userListLimit = 220;
+    // FIX-046. Must match list.html  the three pages share one stored list,
+    // so a lower number here does not "limit" anything, it DESTROYS permits the
+    // list page legitimately holds. Measured 2026-08-07: opening a 400-permit
+    // list on this page cut it to 220 and lost 180. The 1000 is FEAT-035's
+    // measured ceiling (a Durable Object 128 KiB per-value limit and an OSRM
+    // request budget, both of which bind on list.html only); this page runs no
+    // publish, route, optimizer or export path, so it adds no new pressure.
+    // worker/test/list-cap.test.mjs fails if the three ever drift apart again.
+    const userListLimit = 1000;
     const appModes = ["general_contractors", "open_subs", "open_permits"];
     const openPermitStatuses = new Set(["ACTIVE", "SUSPENDED", "PHASED PERMITTING"]);
 
@@ -4884,7 +4892,13 @@
     }
 
     function saveUserListCookie() {
-      state.userPermitNumbers = Array.from(new Set(state.userPermitNumbers)).slice(0, userListLimit);
+      // FIX-046. Deduplicate, but do NOT trim to the cap here. A SAVE must never
+      // destroy data: the cap belongs where an add happens, because only that
+      // code knows it is adding rather than persisting what the user already
+      // has. This line is what silently cut a 400-permit list to 220 and lost
+      // 180 permits when the caps disagreed  the add paths had already been
+      // made cap-aware by FIX-037, and this quietly undid that guarantee.
+      state.userPermitNumbers = Array.from(new Set(state.userPermitNumbers));
       const list = activeList();
       if (list) list.permits = [...state.userPermitNumbers];
       saveUserLists();
