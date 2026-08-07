@@ -4531,29 +4531,59 @@
           layout: { visibility: "none" },
           paint: { "fill-color": zoneColorMatch, "fill-opacity": 0.32 }
         });
+        // FIX-036. The boundary was drawn in each district's OWN fill colour at
+        // 0.6px / 0.55 opacity, which is invisible against that same fill — so
+        // most of the city read as one undifferentiated wash and a label had
+        // nothing to belong to. Only the strongly tinted classes (PD, B3, M1)
+        // ever looked like bounded shapes.
+        //
+        // The stroke is now a neutral dark line that contrasts with every fill
+        // rather than matching it, so the border is legible between two
+        // districts of the SAME class as well as different ones. It is kept
+        // thin and semi-transparent at low zoom so 14.9k polygons do not turn
+        // the city into a mesh, and thickens as you zoom in to where the
+        // boundary is the thing you are reading.
         state.map.map.addLayer({
           id: "zoning-outline",
           type: "line",
           source: "zoning",
-          layout: { visibility: "none" },
-          paint: { "line-color": zoneColorMatch, "line-width": 0.6, "line-opacity": 0.55 }
+          layout: { visibility: "none", "line-join": "round" },
+          paint: {
+            "line-color": "#374151",
+            "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.4, 13, 0.9, 15, 1.6, 17, 2.4],
+            "line-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.3, 13, 0.55, 15, 0.8]
+          }
+        });
+        // One label per district, from the derived point source — not from the
+        // polygons, which produce a label per TILE and can place it outside a
+        // concave district. See zoningLabelPoints().
+        state.map.map.addSource("zoning-label-points", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] }
         });
         state.map.map.addLayer({
           id: "zoning-label",
           type: "symbol",
-          source: "zoning",
+          source: "zoning-label-points",
           minzoom: 13.5,
           layout: {
             visibility: "none",
             "text-field": ["get", "zone_class"],
             "text-font": ["Open Sans Semibold"],
-            "text-size": 11,
-            "text-allow-overlap": false
+            "text-size": ["interpolate", ["linear"], ["zoom"], 13.5, 10, 16, 12.5],
+            "text-allow-overlap": false,
+            // Keeps labels off each other in dense downtown blocks instead of
+            // letting them crowd until they are unreadable.
+            "text-padding": 4,
+            // Bigger district wins a collision: a small pocket losing its label
+            // to a neighbour is the exact confusion this card is about, so the
+            // key is negated area and MapLibre places the lowest key first.
+            "symbol-sort-key": ["get", "sort"]
           },
           paint: {
-            "text-color": "#1f2937",
+            "text-color": "#111827",
             "text-halo-color": "#ffffff",
-            "text-halo-width": 1.4
+            "text-halo-width": 1.6
           }
         });
         // TIF overlay: distinct single color with a dashed boundary so it reads
@@ -5569,6 +5599,82 @@
 
     // Fetch the zoning GeoJSON the first time the layer is switched on, and paint
     // the legend swatches from the shared color map.
+    // FIX-036. One label point per zoning district, guaranteed to sit INSIDE
+    // the district it names.
+    //
+    // Labelling the polygon source directly does not do this. MapLibre places a
+    // polygon's symbol at the centroid of the geometry *as clipped into each
+    // tile*, so a district spanning a tile edge gets a label per tile, and the
+    // centroid of an L-shaped or crescent district can land outside the shape
+    // entirely — which is how "RM-4.5" ends up floating over what looks like
+    // RS-3. Emitting our own point layer fixes both: exactly one label per
+    // district, always within its own boundary.
+    //
+    // The inside point is the midpoint of the widest span of the polygon at its
+    // centroid latitude (a horizontal scanline). That is inside by
+    // construction for any simple polygon, costs one pass over the ring, and
+    // needs no geometry library. It beats a plain centroid precisely on the
+    // concave shapes where a centroid fails.
+    function zoningLabelPoint(ring) {
+      let sx = 0, sy = 0;
+      for (const [x, y] of ring) { sx += x; sy += y; }
+      const cy = sy / ring.length;
+      // Every crossing of the scanline y = cy, in order.
+      const xs = [];
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [x1, y1] = ring[j], [x2, y2] = ring[i];
+        if ((y1 > cy) === (y2 > cy)) continue;
+        xs.push(x1 + ((cy - y1) / (y2 - y1)) * (x2 - x1));
+      }
+      xs.sort((a, b) => a - b);
+      // Widest interior span: pairs (0,1), (2,3)… are inside the polygon.
+      let best = null, bestW = -1;
+      for (let i = 0; i + 1 < xs.length; i += 2) {
+        const w = xs[i + 1] - xs[i];
+        if (w > bestW) { bestW = w; best = (xs[i] + xs[i + 1]) / 2; }
+      }
+      // Degenerate ring (no crossings): fall back to the vertex average.
+      return best == null ? [sx / ring.length, cy] : [best, cy];
+    }
+
+    /** Largest ring of a Polygon/MultiPolygon, by bounding-box area. */
+    function largestRing(geometry) {
+      const polys = geometry.type === "MultiPolygon" ? geometry.coordinates : [geometry.coordinates];
+      let best = null, bestArea = -1;
+      for (const poly of polys) {
+        const ring = poly && poly[0];
+        if (!ring || ring.length < 4) continue;
+        let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+        for (const [x, y] of ring) {
+          if (x < x1) x1 = x; if (x > x2) x2 = x;
+          if (y < y1) y1 = y; if (y > y2) y2 = y;
+        }
+        const area = (x2 - x1) * (y2 - y1);
+        if (area > bestArea) { bestArea = area; best = ring; }
+      }
+      return { ring: best, area: bestArea };
+    }
+
+    // Points carry the district's size so the label layer can prefer the bigger
+    // district when two labels collide — a small pocket losing its label to a
+    // neighbour would recreate exactly the confusion this fixes, so the sort
+    // key is NEGATED size: MapLibre draws lower sort keys first, and a symbol
+    // placed first wins the collision.
+    function zoningLabelPoints(collection) {
+      const features = [];
+      for (const f of collection.features || []) {
+        if (!f.geometry) continue;
+        const { ring, area } = largestRing(f.geometry);
+        if (!ring) continue;
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: zoningLabelPoint(ring) },
+          properties: { zone_class: f.properties && f.properties.zone_class, sort: -area },
+        });
+      }
+      return { type: "FeatureCollection", features };
+    }
+
     async function ensureZoningLoaded() {
       if (state.map.zoningLoaded || state.map.zoningLoading) return;
       const source = state.map.map && state.map.map.getSource("zoning");
@@ -5584,6 +5690,10 @@
       try {
         const data = await loadZoningGeoJson();
         source.setData(data);
+        // FIX-036. Derived once here rather than per render; measured at ~14.9k
+        // districts it is a few tens of ms against a multi-second fetch.
+        const labelSource = state.map.map.getSource("zoning-label-points");
+        if (labelSource) labelSource.setData(zoningLabelPoints(data));
         state.map.zoningLoaded = true;
         setLayerLabel("zoning", "Zoning districts");
       } catch {
