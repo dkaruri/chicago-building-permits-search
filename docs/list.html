@@ -903,6 +903,16 @@
       background: var(--surface-subtle);
     }
 
+    /* The undo offered after a removal sits inline in a sentence, but it is a
+       recovery action reached on a phone — so it gets a real touch target, the
+       same exception .user-list-desc-wrap .linkish makes (FIX-003). */
+    .list-action-status .linkish {
+      min-height: 44px;
+      padding-inline: 8px;
+      display: inline-flex;
+      align-items: center;
+    }
+
     .route-source {
       margin: -3px 0 10px;
       color: var(--muted);
@@ -1198,8 +1208,15 @@
       vertical-align: middle;
     }
 
-    td.select-cell:hover {
+    /* The select cell IS the target — its onclick toggles the checkbox. The
+       remove cell only absorbs near-misses (FIX-003), so it must not advertise
+       itself as clickable. */
+    td.select-cell:not([data-label="Remove"]):hover {
       background: var(--primary-soft);
+    }
+
+    td.select-cell[data-label="Remove"] {
+      cursor: default;
     }
 
     .icon-button {
@@ -2918,14 +2935,18 @@
       }
 
       /* Float the remove button to the top-right corner instead of a full row.
-         width:auto overrides the responsive td width:100% so right:8px anchors. */
+         width:auto overrides the responsive td width:100% so the anchor holds.
+         FIX-003: the inset lives in the cell's PADDING rather than in top/right,
+         so the button renders in the same place but the cell adds an 8px halo
+         that absorbs near-misses. The cell stops propagation, so a miss is a
+         no-op instead of opening the permit. */
       body.list-page .saved-permits-table td[data-label="Remove"] {
         position: absolute;
-        top: 8px;
-        right: 8px;
+        top: 0;
+        right: 0;
         left: auto;
         width: auto !important;
-        padding: 0;
+        padding: 8px;
         margin: 0;
       }
       body.list-page .saved-permits-table td[data-label="Remove"]::before {
@@ -8322,16 +8343,14 @@
       }
     }
 
-    async function removePermitFromUserList(encodedNumber) {
-      const number = decodeURIComponent(encodedNumber);
-      if (!window.confirm(`Remove permit ${number} from My Permit List?`)) return;
-      state.userPermitNumbers = state.userPermitNumbers.filter(item => item !== number);
-      delete state.userPermitNotes[number];
-      delete state.userNoteTs[number];
+    // Everything the two halves of a removal share: persist, invalidate the
+    // route, redraw whichever surface is showing. Factored out so undo restores
+    // through exactly the same path it removed through (FIX-003).
+    async function commitUserListMembership(number, message) {
       saveUserListCookie();
       saveUserNotes();
       clearUserRoute("List changed. Recalculate driving distances when ready.");
-      announceListAction(`Removed permit ${number} from the list.`);
+      announceListAction(message);
       await renderUserList();
       const skipModeRefresh = state.mode === "map";
       if (!skipModeRefresh) renderCurrentMode();
@@ -8339,6 +8358,53 @@
         refreshCard();
       }
       if (skipModeRefresh) refreshMapSavedPermitState(number);
+    }
+
+    // FIX-003: removal is instant. The safety net is a short-lived undo in the
+    // existing #list-action-status line, not a confirm() on every single tap —
+    // one dialog per permit made clearing a route's worth of stops slow, and a
+    // reversible mistake does not need a modal.
+    let undoRemoveTimer = null;
+    function offerUndoRemove(message, restore) {
+      const node = $("list-action-status");
+      if (!node) return;
+      clearTimeout(undoRemoveTimer);
+      node.textContent = message + " ";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "linkish";
+      button.textContent = "Undo";
+      button.onclick = () => { clearTimeout(undoRemoveTimer); restore(); };
+      node.appendChild(button);
+      // Expires by rewriting the line as plain text; nothing else holds a
+      // reference to the closure, so the removal simply becomes permanent.
+      undoRemoveTimer = setTimeout(() => {
+        if (node.contains(button)) announceListAction(message);
+      }, 12000);
+    }
+
+    async function removePermitFromUserList(encodedNumber) {
+      const number = decodeURIComponent(encodedNumber);
+      const index = state.userPermitNumbers.indexOf(number);
+      if (index < 0) return;
+      const note = state.userPermitNotes[number];
+      const noteTs = state.userNoteTs[number];
+      state.userPermitNumbers = state.userPermitNumbers.filter(item => item !== number);
+      delete state.userPermitNotes[number];
+      delete state.userNoteTs[number];
+      const message = `Removed permit ${number} from the list.`;
+      await commitUserListMembership(number, message);
+      offerUndoRemove(message, async () => {
+        if (state.userPermitNumbers.includes(number)) return;
+        const next = state.userPermitNumbers.slice();
+        // Back to its own stop number, not appended to the end — the list is a
+        // route, so position is data.
+        next.splice(Math.min(index, next.length), 0, number);
+        state.userPermitNumbers = next;
+        if (note !== undefined) state.userPermitNotes[number] = note;
+        if (noteTs !== undefined) state.userNoteTs[number] = noteTs;
+        await commitUserListMembership(number, `Restored permit ${number} to the list.`);
+      });
     }
 
     async function clearUserList() {
@@ -8868,7 +8934,7 @@
               ${options.reorder ? `ondragover="savedPermitDragOver(event, this)" ondragleave="savedPermitDragLeave(this)" ondrop="savedPermitDrop(event, this, '${enc(row.permit_number)}')"` : ""}
               onclick="${options.select ? `selectPermit(${i})` : `openPermitDetailFromEncoded('${enc(JSON.stringify(row))}')`}"
             >
-              ${options.remove ? `<td class="select-cell" data-label="Remove"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
+              ${options.remove ? `<td class="select-cell" data-label="Remove" onclick="event.stopPropagation()"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell" data-label="Select" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
               ${options.move ? (() => {
                 const tk = tickKeyFor(row);
