@@ -883,6 +883,35 @@
       font-weight: 700;
     }
 
+    /* FEAT-040. Ported byte-for-byte from list.html so the two pages' filter
+       chips cannot drift: 44px touch target, an inverted pressed fill driven by
+       --tc, and a check glyph so the pressed state is never colour alone.
+       The glyph is written as the CSS escape \2713 deliberately — it was once
+       two literal mojibake characters that painted visible garbage on every
+       pressed chip, and an escape cannot be corrupted by an encoding round trip. */
+    button.tag { cursor: pointer; font-family: inherit; width: auto; min-height: 44px; padding: .4rem .75rem; }
+    button.tag[aria-pressed="true"] { background: var(--tc); color: var(--panel); }
+    button.tag[aria-pressed="true"]::before { content: "\2713"; font-size: .8em; }
+
+    .list-filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 8px 0 0;
+    }
+
+    .list-filter-status {
+      color: var(--muted);
+      font-size: 12.5px;
+    }
+
+    /* Both members of a pair share a colour — the label text is what
+       distinguishes them, and sharing keeps the pair legible as a pair. Same
+       assignments as list.html's FEAT-031 chips. */
+    #map-filter-visited, #map-filter-not-visited { --tc: var(--accent); }
+    #map-filter-called, #map-filter-not-called { --tc: var(--t5); }
+
     .tag.clickable,
     .permit-card.clickable {
       cursor: pointer;
@@ -2152,6 +2181,14 @@
       .map-drawer button,
       .map-detail-actions button {
         width: 100%;
+      }
+      /* FEAT-040. `.map-drawer button` above is 0-1-1 and sits LATER in the
+         file than `button.tag` (also 0-1-1), so it wins and stretched every
+         filter chip to the full drawer width — one chip per row, measured
+         346px. Exactly the trap FIX-019 hit on list.html at 348px. A chip is
+         not a form control and has to opt out explicitly; 0-2-1 beats it. */
+      .map-drawer .list-filters button.tag {
+        width: auto;
       }
       .map-drawer-head .icon-button {
         width: 36px;
@@ -3592,8 +3629,105 @@
         q: "",
         radiusMiles: "",
         excludedWorkTypes: [],
-        propertyUse: ""
+        propertyUse: "",
+        // FEAT-040. null | "yes" | "no", persisted with every other map filter
+        // so a reload does not silently drop them.
+        visited: null,
+        called: null
       };
+    }
+
+    // FEAT-040. Visited/called are per-LIST flags (list.ticks / list.called,
+    // keyed by permit number), but the map shows the whole city. Scope decision,
+    // recorded on the card before this was built: the filter speaks about every
+    // permit in ANY of your lists, and a permit counts as visited if ANY list
+    // records a visit — the flag records a real-world action (you went to the
+    // address), and which list it was written on is bookkeeping. So
+    // "not visited" means: in at least one list, and visited in none.
+    //
+    // This is the one place the map deliberately diverges from list.html, whose
+    // chips are scoped to the active list. The status strip says so on screen.
+    function mapFlagIndex() {
+      const listed = new Set(), visited = new Set(), called = new Set();
+      for (const list of Object.values(state.lists || {})) {
+        for (const number of list.permits || []) {
+          const key = clean(number);
+          if (key) listed.add(key);
+        }
+        // Custom stops are keyed by custom_id and never match a map permit
+        // number, so they simply do not participate — correct, not a gap.
+        for (const [key, on] of Object.entries(list.ticks || {})) {
+          if (on) { visited.add(clean(key)); listed.add(clean(key)); }
+        }
+        for (const [key, on] of Object.entries(list.called || {})) {
+          if (on) { called.add(clean(key)); listed.add(clean(key)); }
+        }
+      }
+      return { listed, visited, called };
+    }
+
+    function mapFlagFilterOn(settings) {
+      return !!(settings.visited || settings.called);
+    }
+
+    // Pressing the chip that is already on turns the facet off, so every chip is
+    // its own escape route and "all" needs no chip of its own — list.html's rule.
+    async function setMapFlagFilter(facet, want) {
+      const settings = loadMapSettings();
+      settings[facet] = settings[facet] === want ? null : want;
+      // No explicit save here: applyMapFilters() runs saveMapSettingsFromControls(),
+      // which writes this same settings object wholesale. These two facets ride
+      // along because they live on it — which is also why nothing in that
+      // function may ever rebuild them from a control that might be absent
+      // (see the FEAT-024 note there about the work-type list).
+      await applyMapFilters();
+    }
+
+    const MAP_FLAG_CHIPS = [
+      ["map-filter-visited", "visited", "yes"],
+      ["map-filter-not-visited", "visited", "no"],
+      ["map-filter-called", "called", "yes"],
+      ["map-filter-not-called", "called", "no"],
+    ];
+
+    // The bar hides itself when nothing has been visited or called in ANY list
+    // and no facet is on: a filter for a state that cannot occur yet is a dead
+    // control, and on this page it would also silently empty the map. Once any
+    // flag exists all four chips appear together — showing "Visited" but hiding
+    // "Called" would read as though calls were not trackable at all.
+    function renderMapFlagFilters() {
+      const bar = $("map-flag-filters");
+      if (!bar) return;
+      const settings = loadMapSettings();
+      const flags = mapFlagIndex();
+      bar.hidden = !flags.visited.size && !flags.called.size && !mapFlagFilterOn(settings);
+      for (const [id, facet, want] of MAP_FLAG_CHIPS) {
+        const chip = $(id);
+        if (chip) chip.setAttribute("aria-pressed", settings[facet] === want ? "true" : "false");
+      }
+      const status = $("map-flag-filter-status");
+      if (!status) return;
+      if (mapFlagFilterOn(settings)) {
+        // Says the SCOPE, not just the count — pressing a chip silently drops
+        // ~40,000 permits the flags cannot speak about, and the user is owed
+        // that fact in words rather than being left to infer it from the map.
+        status.textContent = `Showing only your ${fmt(flags.listed.size)} saved `
+          + `${flags.listed.size === 1 ? "permit" : "permits"} · `
+          + `${fmt(state.map.filteredRows.length)} match`;
+      } else {
+        const tally = [];
+        if (flags.visited.size) tally.push(`${fmt(flags.visited.size)} visited`);
+        if (flags.called.size) tally.push(`${fmt(flags.called.size)} called`);
+        status.textContent = tally.join(" · ");
+      }
+    }
+
+    /** Does this row survive the visited/called facets? Assumes scoping already applied. */
+    function mapRowMatchesFlags(row, settings, flags) {
+      const key = clean(row.n);
+      if (settings.visited && flags.visited.has(key) !== (settings.visited === "yes")) return false;
+      if (settings.called && flags.called.has(key) !== (settings.called === "yes")) return false;
+      return true;
     }
 
     function loadMapSettings() {
@@ -4195,6 +4329,21 @@
                 </select>
               </label>
             </div>
+            <!-- FEAT-040. Same chips, same wording and same semantics as
+                 list.html's FEAT-031 bar so the two pages cannot drift: within a
+                 pair the chips are mutually exclusive, across pairs they
+                 combine, and pressing the active chip clears that facet — so
+                 every chip is its own escape route and "all" needs no chip.
+                 The bar hides itself when nothing has been visited or called in
+                 any list, because a filter for a state that cannot occur yet is
+                 a dead control (list.html's rule, kept deliberately). -->
+            <div id="map-flag-filters" class="list-filters" role="group" aria-label="Filter the map by permits you have visited or called" hidden>
+              <button type="button" id="map-filter-visited" class="tag" aria-pressed="false" onclick="setMapFlagFilter('visited', 'yes')">Visited</button>
+              <button type="button" id="map-filter-not-visited" class="tag" aria-pressed="false" onclick="setMapFlagFilter('visited', 'no')">Not visited</button>
+              <button type="button" id="map-filter-called" class="tag" aria-pressed="false" onclick="setMapFlagFilter('called', 'yes')">Called</button>
+              <button type="button" id="map-filter-not-called" class="tag" aria-pressed="false" onclick="setMapFlagFilter('called', 'no')">Not called</button>
+              <span id="map-flag-filter-status" class="list-filter-status small" role="status" aria-live="polite"></span>
+            </div>
             <!-- FEAT-024. The district codes are in the option text, and this note
                  states the limit of the signal: zoning says what a district ALLOWS,
                  not what stands on the lot. -->
@@ -4752,8 +4901,19 @@
       state.map.workTypeCounts = [...workTypeCounts];
       syncMapWorkTypeList();
       const excludedWorkTypes = new Set(mapExcludedWorkTypes(settings));
+      // FEAT-040. Pressing a visited/called chip implicitly scopes the map to
+      // permits that are in one of your lists — the only permits the flags can
+      // honestly speak about. Treating the other ~40,000 as "not visited" would
+      // be a lie. The status strip states the scope whenever this is on.
+      const flags = mapFlagIndex();
+      const flagFilter = mapFlagFilterOn(settings);
+      state.map.flagCounts = null;
       state.map.filteredRows = state.map.filteredRows.filter(row => {
         if (excludedWorkTypes.size && excludedWorkTypes.has(mapWorkTypeKey(row))) return false;
+        if (flagFilter) {
+          if (!flags.listed.has(clean(row.n))) return false;
+          if (!mapRowMatchesFlags(row, settings, flags)) return false;
+        }
         return mapRowMatchesPropertyUse(row, propertyUse);
       }).map(row => ({
         ...row,
@@ -5081,7 +5241,18 @@
       const useNote = state.map.propertyUseFallback
         ? " | zoning data could not be loaded, so the property-use filter is off — apply filters again to retry"
         : useOption && useOption.value ? ` | ${esc(useOption.label)}` : "";
-      $("map-status-strip").textContent = `${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` | ${esc(settings.neighborhood)}` : ""}${settings.q ? ` | ${fmt(matches)} highlighted for "${esc(settings.q)}"${geocoded}` : ""}${radiusNote}${workTypeNote}${useNote}`;
+      // FEAT-040. Same reason as the note above, only sharper: a visited/called
+      // chip silently drops every permit that is in none of your lists — about
+      // 40,000 of them — and the drawer it was pressed in may be collapsed by
+      // the time anyone reads this. State the scope, not just the facet.
+      const flagNames = [];
+      if (settings.visited) flagNames.push(settings.visited === "yes" ? "visited" : "not visited");
+      if (settings.called) flagNames.push(settings.called === "yes" ? "called" : "not called");
+      const flagNote = flagNames.length
+        ? ` | your saved permits only, ${flagNames.join(" and ")}`
+        : "";
+      $("map-status-strip").textContent = `${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` | ${esc(settings.neighborhood)}` : ""}${settings.q ? ` | ${fmt(matches)} highlighted for "${esc(settings.q)}"${geocoded}` : ""}${radiusNote}${workTypeNote}${useNote}${flagNote}`;
+      renderMapFlagFilters();
       if (hasSearch && searchRows.length) {
         const searchHeader = `<div class="map-result-divider">Search matches for "${esc(settings.q)}" stay pinned above visible permits.</div>`;
         const searchMarkup = searchRows.map(mapResultButton).join("");
