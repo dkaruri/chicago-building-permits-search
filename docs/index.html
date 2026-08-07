@@ -3670,10 +3670,29 @@
         if (!quiet) $("results").innerHTML = `<div class="empty">Loading ${name.replaceAll("_", " ")}...</div>`;
         const apiCategory = name === "general_contractors" ? "general_contractor" : name === "open_subs" ? "open_tech" : null;
         if (apiCategory) {
-          const res = await fetch(`${API_BASE}/api/profiles?category=${apiCategory}&limit=5000`);
-          if (!res.ok) throw new Error(`Failed to load ${name}`);
-          const data = await res.json();
-          state.data[name] = data.rows;
+          // FEAT-044. This asked for limit=5000, which silently cut 793 of
+          // 5,793 general contractors and 2,432 of 7,432 open subs — the same
+          // truncation the Worker's own ceiling caused, just on the client
+          // side, and removing only the server's left this one in place.
+          //
+          // A single generous limit would only move the cliff, so this pages
+          // until it holds `total`. In practice that is ONE request; the point
+          // is that growth past the page size can never truncate silently
+          // again, which is the entire failure mode being fixed.
+          const PROFILE_PAGE = 20000;
+          const rows = [];
+          let total = 0;
+          do {
+            const res = await fetch(
+              `${API_BASE}/api/profiles?category=${apiCategory}&limit=${PROFILE_PAGE}&offset=${rows.length}`);
+            if (!res.ok) throw new Error(`Failed to load ${name}`);
+            const data = await res.json();
+            total = Number.isFinite(data.total) ? data.total : rows.length + data.rows.length;
+            rows.push(...data.rows);
+            // An empty page with rows still owed would otherwise spin forever.
+            if (!data.rows.length) break;
+          } while (rows.length < total);
+          state.data[name] = rows;
         } else {
           throw new Error(`Unknown data: ${name}`);
         }
