@@ -39,7 +39,14 @@ export async function handleProfiles(url, env) {
     );
   }
 
-  const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 5000);
+  // FEAT-044: no ceiling. `total` above is computed from `rows` BEFORE this
+  // slice, so the cap was never protecting anything — every row is already in
+  // memory from KV, and the clamp only discarded some of them on the way out.
+  // It silently hid 793 of 5,793 general contractors and 2,432 of 7,432 open
+  // subs (32.7%), with nothing in the UI to say results had been cut.
+  // The default stays small for callers that pass no limit.
+  const requested = parseInt(url.searchParams.get("limit") || "50");
+  const limit = Number.isFinite(requested) && requested > 0 ? requested : 50;
   const offset = parseInt(url.searchParams.get("offset") || "0");
   const page = rows.slice(offset, offset + limit);
 
