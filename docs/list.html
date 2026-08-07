@@ -6015,7 +6015,13 @@
     }
 
     function saveUserListCookie() {
-      state.userPermitNumbers = Array.from(new Set(state.userPermitNumbers)).slice(0, userListLimit);
+      // FIX-046. Deduplicate, but do NOT trim to the cap here. A SAVE must never
+      // destroy data: the cap belongs where an add happens, because only that
+      // code knows it is adding rather than persisting what the user already
+      // has. This line is what silently cut a 400-permit list to 220 and lost
+      // 180 permits when the caps disagreed  the add paths had already been
+      // made cap-aware by FIX-037, and this quietly undid that guarantee.
+      state.userPermitNumbers = Array.from(new Set(state.userPermitNumbers));
       const list = activeList();
       if (list) list.permits = [...state.userPermitNumbers];
       saveUserLists();
