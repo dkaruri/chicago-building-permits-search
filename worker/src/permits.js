@@ -123,6 +123,7 @@ export async function handlePermits(url, env) {
   const selectCols = [
     "permit_",
     "permit_status",
+    "permit_milestone",
     "permit_type",
     "review_type",
     "issue_date",
@@ -170,6 +171,7 @@ export async function handlePermits(url, env) {
     return {
       permit_number: row.permit_,
       permit_status: row.permit_status,
+      permit_milestone: row.permit_milestone,
       permit_type: row.permit_type,
       review_type: row.review_type,
       issue_date: (row.issue_date || "").slice(0, 10),
