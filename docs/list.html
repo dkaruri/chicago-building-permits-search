@@ -5278,7 +5278,7 @@
       const dateTo = `${lastMonth}-${String(endDate.getDate()).padStart(2, "0")}`;
       const SOCRATA = "https://data.cityofchicago.org/resource/ydr8-5enu.json";
       const contactCols = Array.from({length: 15}, (_, i) => `contact_${i+1}_type,contact_${i+1}_name`).join(",");
-      const select = `permit_,permit_status,permit_type,review_type,issue_date,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
+      const select = `permit_,permit_status,permit_milestone,permit_type,review_type,issue_date,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
       const where = `permit_status in('ACTIVE','SUSPENDED','PHASED PERMITTING') AND issue_date>='${dateFrom}T00:00:00' AND issue_date<='${dateTo}T23:59:59' AND latitude IS NOT NULL`;
       const params = new URLSearchParams({ $select: select, $where: where, $order: "issue_date DESC", $limit: "50000" });
       const res = await fetch(`${SOCRATA}?${params}`);
@@ -5294,7 +5294,7 @@
           else if (type.includes("CONTRACTOR") || type.includes("ARCHITECT") || type.includes("ENGINEER") || type.includes("EXPEDIT") || type.includes("MASON")) subs.push(name);
         }
         return {
-          n: row.permit_, s: row.permit_status, t: row.permit_type, r: row.review_type,
+          n: row.permit_, s: row.permit_status, ms: row.permit_milestone, t: row.permit_type, r: row.review_type,
           d: (row.issue_date || "").slice(0, 10),
           a: [row.street_number, row.street_direction, row.street_name].filter(Boolean).join(" "),
           w: row.ward, cn: row.community_area, st: row.street_name, wt: row.work_type,
@@ -5311,6 +5311,7 @@
       return {
         permit_number: row.n,
         permit_status: row.s,
+        permit_milestone: row.ms,
         permit_type: row.t,
         review_type: row.r,
         issue_date: row.d,
@@ -5343,6 +5344,7 @@
         </div>
         <div class="tag-row">
           <span class="tag">${esc(permit.permit_status)}</span>
+          ${permitStageChip(permit)}
           <span class="tag">${esc(permit.permit_type)}</span>
           <span class="tag">${fmt(permit.gc_open_jobs || 0)} GC open jobs</span>
           ${permit.ward ? `<span class="tag clickable" onclick="searchWard('${enc(permit.ward)}')">Ward ${esc(permit.ward)}</span>` : ""}
@@ -5873,7 +5875,7 @@
         <button class="map-result ${state.map.activePermitNumber === row.n ? "is-active" : ""} ${Number(row.m || 0) === 1 ? "is-match" : ""}" onclick="selectMapPermitByNumber('${enc(row.n)}')">
           <strong>${esc(row.n)} &middot; ${esc(row.a)}</strong>
           <span>${esc(row.d)} &middot; ${esc(communityAreaName(row.cn) || "Unknown neighborhood")} &middot; ${fmt(row.go || 0)} GC open jobs</span>
-          <span>${esc(row.wt || row.t || "")}</span>
+          <span>${esc(row.wt || row.t || "")} ${permitStageChip(mapRowToPermit(row))}</span>
         </button>`;
     }
 
@@ -6986,7 +6988,7 @@
       // so omitting them made every saved permit report "No owner named".
       const contactCols = Array.from({length: 15}, (_, i) =>
         `contact_${i+1}_type,contact_${i+1}_name,contact_${i+1}_city,contact_${i+1}_state,contact_${i+1}_zipcode`).join(",");
-      const select = `permit_,permit_status,permit_type,review_type,issue_date,processing_time,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
+      const select = `permit_,permit_status,permit_milestone,permit_type,review_type,issue_date,processing_time,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
       const inList = nums.map(n => `'${n}'`).join(",");
       const params = new URLSearchParams({ $select: select, $where: `permit_ in(${inList})`, $limit: "50000" });
       try {
@@ -7011,6 +7013,7 @@
           const mapped = {
             permit_number: row.permit_,
             permit_status: row.permit_status,
+            permit_milestone: row.permit_milestone,
             permit_type: row.permit_type,
             review_type: row.review_type,
             issue_date: (row.issue_date || "").slice(0, 10),
@@ -10484,7 +10487,7 @@
       return `${pager}
         <div class="pm-tablewrap"><table aria-label="Open permits for ${esc(name)}">
           <thead><tr><th>Permit</th><th>Issued</th><th>Address</th><th>Cost</th></tr></thead>
-          <tbody>${rows.map(r => `<tr tabindex="0" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target.closest('tr')===this){event.preventDefault();this.click();}" onclick="openPermitDetailFromEncoded('${enc(JSON.stringify(r))}')"><td><strong>${esc(r.permit_number)}</strong><br><span class="small">${esc(r.permit_status)}</span></td><td class="num">${esc(r.issue_date)}</td><td>${esc(r.address)}</td><td class="num">${money(r.reported_cost)}</td></tr>`).join("")}</tbody>
+          <tbody>${rows.map(r => `<tr tabindex="0" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target.closest('tr')===this){event.preventDefault();this.click();}" onclick="openPermitDetailFromEncoded('${enc(JSON.stringify(r))}')"><td><strong>${esc(r.permit_number)}</strong><br><span class="small">${esc(r.permit_status)}</span>${(() => { const c = permitStageChip(r); return c ? `<br><span class="small">${c}</span>` : ""; })()}</td><td class="num">${esc(r.issue_date)}</td><td>${esc(r.address)}</td><td class="num">${money(r.reported_cost)}</td></tr>`).join("")}</tbody>
         </table></div>`;
     }
 
