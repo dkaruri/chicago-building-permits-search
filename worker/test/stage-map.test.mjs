@@ -82,38 +82,44 @@ test("closed-permit milestone values are NOT in the table", () => {
   }
 });
 
-test("permitStage resolves status before milestone", () => {
-  // Extract the real function from the page and run it, so the test exercises
-  // shipped code rather than a copy that can drift.
-  const src = read("index.html");
+// Extract the real function from a page and run it, so the test exercises
+// shipped code rather than a copy that can drift.
+function loadPermitStage(page) {
+  const src = read(page);
   const table = src.match(/const\s+PERMIT_STAGES\s*=\s*\{[\s\S]*?\};/)[0];
   const fn = src.match(/function\s+permitStage\s*\(row\)\s*\{[\s\S]*?\n    \}/)[0];
-  const permitStage = Function(`"use strict";
+  return Function(`"use strict";
     const clean = v => (v == null ? "" : String(v));
     ${table}
     ${fn}
     return permitStage;`)();
+}
 
-  assert.equal(permitStage({ permit_status: "ACTIVE", permit_milestone: "INSPECTIONS" }), "progress");
-  assert.equal(permitStage({ permit_status: "SUSPENDED", permit_milestone: "SUSPENDED" }), "halted");
-  assert.equal(permitStage({ permit_status: "ACTIVE", permit_milestone: "PERMIT ISSUED (FEE DUE)" }), "fee");
-  assert.equal(permitStage({ permit_status: "PHASED PERMITTING", permit_milestone: "INSPECTIONS" }), "progress");
-  assert.equal(permitStage({ permit_status: "COMPLETE", permit_milestone: "COMPLETE" }), "complete");
+for (const page of PAGES) {
+  test(`permitStage resolves status before milestone (${page})`, () => {
+    const permitStage = loadPermitStage(page);
 
-  // The 13,973-permit trap: closed, but the milestone still says work is live.
-  assert.equal(permitStage({ permit_status: "EXPIRED", permit_milestone: "INSPECTIONS" }), "ended",
-    "a closed permit must never read as In progress");
-  assert.equal(permitStage({ permit_status: "REVOKED", permit_milestone: "INSPECTIONS" }), "ended");
-  assert.equal(permitStage({ permit_status: "CANCELLED", permit_milestone: "INSPECTIONS" }), "ended");
-  assert.equal(permitStage({ permit_status: "COMPLETE", permit_milestone: "CERTIFICATE OF OCCUPANCY ISSUED" }), "complete");
+    assert.equal(permitStage({ permit_status: "ACTIVE", permit_milestone: "INSPECTIONS" }), "progress", page);
+    assert.equal(permitStage({ permit_status: "SUSPENDED", permit_milestone: "SUSPENDED" }), "halted", page);
+    assert.equal(permitStage({ permit_status: "ACTIVE", permit_milestone: "PERMIT ISSUED (FEE DUE)" }), "fee", page);
+    assert.equal(permitStage({ permit_status: "PHASED PERMITTING", permit_milestone: "INSPECTIONS" }), "progress", page);
+    assert.equal(permitStage({ permit_status: "COMPLETE", permit_milestone: "COMPLETE" }), "complete", page);
 
-  // No chip rather than a placeholder.
-  assert.equal(permitStage({ permit_status: null, permit_milestone: null }), "");
-  assert.equal(permitStage({ permit_status: "", permit_milestone: "" }), "");
-  assert.equal(permitStage({ permit_status: "ACTIVE", permit_milestone: "SOMETHING NEW" }), "");
-  assert.equal(permitStage({}), "");
-  assert.equal(permitStage(null), "");
+    // The 13,973-permit trap: closed, but the milestone still says work is live.
+    assert.equal(permitStage({ permit_status: "EXPIRED", permit_milestone: "INSPECTIONS" }), "ended",
+      `${page}: a closed permit must never read as In progress`);
+    assert.equal(permitStage({ permit_status: "REVOKED", permit_milestone: "INSPECTIONS" }), "ended", page);
+    assert.equal(permitStage({ permit_status: "CANCELLED", permit_milestone: "INSPECTIONS" }), "ended", page);
+    assert.equal(permitStage({ permit_status: "COMPLETE", permit_milestone: "CERTIFICATE OF OCCUPANCY ISSUED" }), "complete", page);
 
-  // Case and whitespace tolerance — Socrata has shipped padded values before.
-  assert.equal(permitStage({ permit_status: "active", permit_milestone: " inspections " }), "progress");
-});
+    // No chip rather than a placeholder.
+    assert.equal(permitStage({ permit_status: null, permit_milestone: null }), "", page);
+    assert.equal(permitStage({ permit_status: "", permit_milestone: "" }), "", page);
+    assert.equal(permitStage({ permit_status: "ACTIVE", permit_milestone: "SOMETHING NEW" }), "", page);
+    assert.equal(permitStage({}), "", page);
+    assert.equal(permitStage(null), "", page);
+
+    // Case and whitespace tolerance — Socrata has shipped padded values before.
+    assert.equal(permitStage({ permit_status: "active", permit_milestone: " inspections " }), "progress", page);
+  });
+}

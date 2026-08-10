@@ -1223,7 +1223,10 @@
       line-height: 1.25;
     }
 
-    .map-result span {
+    /* `> span` is deliberate: a descendant selector here (0-1-1) outranks the
+       stage chip's own .stage class (0-1-0) and flattened it to a full-width
+       grey block. Fourth occurrence of that trap in this repo. */
+    .map-result > span {
       display: block;
       margin-top: 3px;
       color: var(--muted);
@@ -4228,6 +4231,7 @@
         </div>
         ${permitFacts(permit, [
           ["Issued", permit.issue_date],
+          ["Stage", clean(permit.permit_milestone)],
           ["Address", permit.address],
           ["Neighborhood", communityAreaName(row.cn)],
           ["Work type", permit.work_type],
