@@ -1902,6 +1902,38 @@
        The label is always a word, so colour is reinforcement, never the only
        cue. No icon: Material Symbols renders ligature names as literal text
        until it loads (FIX-027). */
+    /* FEAT-047. Tri-state filter option. `width: auto` is load-bearing: these
+       pages carry a global `button { width: 100% }` (FIX-022) that would
+       otherwise stretch every option across the drawer. 44px min-height is the
+       touch target — the row is the control, not the little box. */
+    .tri {
+      width: auto;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 44px;
+      padding: 6px 8px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--ink);
+      font-size: 12.5px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .tri:hover { background: var(--panel-2); }
+    .tri:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+    .tri-box {
+      width: 20px; height: 20px; flex: none;
+      display: flex; align-items: center; justify-content: center;
+      border: 1.5px solid var(--line-strong); border-radius: 5px;
+      background: var(--field); color: var(--muted);
+      font-size: 13px; font-weight: 800; line-height: 1;
+    }
+    .tri[data-state="include"] .tri-box { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+    .tri[data-state="exclude"] .tri-box { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+    .tri-label { flex: 1; min-width: 0; }
+    .tri-count { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
     .stage {
       display: inline-flex;
       align-items: center;
@@ -9018,6 +9050,25 @@
       if (f.include.length && !f.include.includes(value)) return false;
       if (f.exclude.includes(value)) return false;
       return true;
+    }
+    // One option row. A NATIVE <button>, not a div with role="button": a real
+    // button is keyboard-operable without a keydown handler, and a tabindex
+    // element with only an onclick is keyboard-dead — this repo has shipped
+    // that three times.
+    //
+    // The state goes in the ACCESSIBLE NAME. aria-checked="mixed" is not usable
+    // here: it means "partially checked", not "excluded", and would announce
+    // something false. The glyphs are plain characters, never Material Symbols
+    // ligatures, which render as literal text until the font loads (FIX-027).
+    function triStateOptionHtml(opt) {
+      const state = opt.state || "";
+      const mark = state === "include" ? "✓" : state === "exclude" ? "✗" : "";
+      const said = state === "include" ? "included, activate to exclude"
+        : state === "exclude" ? "excluded, activate to clear"
+        : "not filtered, activate to include";
+      const count = opt.count == null ? "" : `<span class="tri-count">${fmt(opt.count)}</span>`;
+      return `<button type="button" class="tri" data-state="${esc(state)}" data-value="${esc(opt.value)}"
+        aria-label="${esc(opt.label)}, ${said}" onclick="${opt.onclick}"><span class="tri-box" aria-hidden="true">${mark}</span><span class="tri-label">${esc(opt.label)}</span>${count}</button>`;
     }
     // Total over all 7 permit_status values plus null (843,715 rows). Returns ""
     // for anything unrecognised, which renders NO chip rather than a placeholder
