@@ -6058,6 +6058,60 @@
       showPermitDetail(JSON.parse(decodeURIComponent(encoded)));
     }
 
+    // FEAT-046. Construction stage, from ydr8-5enu's permit_milestone column.
+    // Spec: docs/superpowers/specs/2026-08-10-permit-milestones-design.md
+    //
+    // Triplicated deliberately — there is no shared module on this site — and
+    // held in agreement by worker/test/stage-map.test.mjs, the same guard
+    // FIX-046 needed after three copies of one cap silently disagreed.
+    //
+    // These are the 11 values that appear on OPEN permits (measured against
+    // Socrata 2026-08-10, 100% coverage every issue year 2015-2026). Closed
+    // permits are deliberately absent: they are decided by permit_status below,
+    // because 13,973 of them carry an in-progress milestone after expiring or
+    // being revoked mid-inspection, and reading milestone first would label an
+    // EXPIRED permit "In progress".
+    const PERMIT_STAGES = {
+      "PERMIT ISSUED (FEE DUE)": "fee",
+      "INSPECTION ELIGIBLE": "notstarted",
+      "INSPECTIONS": "progress",
+      "PROGRESS INSPECTIONS": "progress",
+      "INSPECTIONS (CERTIFICATE OF OCCUPANCY REQUIRED)": "finishing",
+      "CERTIFICATE OF OCCUPANCY PENDING": "finishing",
+      "CERTIFICATE OF OCCUPANCY PENDING (TEMPORARY OR PARTIAL OCCUPANCY APPROVED)": "finishing",
+      "POST CONSTRUCTION FILING": "finishing",
+      "FINAL INSPECTION": "finishing",
+      "SUSPENDED": "halted",
+      "STOP WORK": "halted"
+    };
+    const PERMIT_STAGE_LABELS = {
+      fee: "Fee due",
+      notstarted: "Not started",
+      progress: "In progress",
+      finishing: "Finishing",
+      halted: "Halted",
+      complete: "Complete",
+      ended: "Ended early"
+    };
+    // Total over all 7 permit_status values plus null (843,715 rows). Returns ""
+    // for anything unrecognised, which renders NO chip rather than a placeholder
+    // — FIX-012's rule that no sample means no pill, never a zero.
+    function permitStage(row) {
+      const status = clean(row && row.permit_status).trim().toUpperCase();
+      if (status === "COMPLETE") return "complete";
+      if (status === "EXPIRED" || status === "CANCELLED" || status === "REVOKED") return "ended";
+      if (status !== "ACTIVE" && status !== "SUSPENDED" && status !== "PHASED PERMITTING") return "";
+      return PERMIT_STAGES[clean(row && row.permit_milestone).trim().toUpperCase()] || "";
+    }
+    // The chip. Carries the verbatim city value as its title, so the grouping
+    // never hides what the dataset actually said.
+    function permitStageChip(row) {
+      const stage = permitStage(row);
+      if (!stage) return "";
+      const raw = clean(row && row.permit_milestone).trim();
+      return `<span class="stage stage-${stage}"${raw ? ` title="${esc(raw)}"` : ""}>${esc(PERMIT_STAGE_LABELS[stage])}</span>`;
+    }
+
     function permitFacts(row, facts) {
       const items = facts
         .filter(([label, value]) => clean(value) !== "")
