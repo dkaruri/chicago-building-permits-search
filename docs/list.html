@@ -10325,6 +10325,7 @@
           <div class="pm-content">
           <div class="pm-tagrow">
             <span class="pm-tag">${esc(row.permit_status)}</span>
+            ${permitStageChip(row)}
             <span class="pm-tag">${esc(row.permit_type)}</span>
             ${row.reported_cost ? `<span class="pm-tag num">${money(row.reported_cost)}</span>` : ""}
           </div>`,
@@ -10340,6 +10341,7 @@
             ["Issue date", clean(row.issue_date)],
             ["Permit type", clean(row.permit_type)],
             ["Status", clean(row.permit_status)],
+            ["Stage", clean(row.permit_milestone)],
             ["Building type", bt, approx],
             ["Review type", clean(row.review_type)],
             ["Work type", clean(row.work_type)],
