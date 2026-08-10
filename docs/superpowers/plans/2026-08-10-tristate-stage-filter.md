@@ -479,16 +479,51 @@ extend the existing one in `renderMapSideList` in all three pages:
         setMapResultListHtml(rows.length ? rows.map(mapResultButton).join("") : `<div class="empty" role="status">No permits match these map filters.<br><button type="button" class="map-clear-filters" onclick="resetMapSettings()">Clear filters</button></div>`, scrollTop);
 ```
 
-`class="linkish"` is NOT available here — it exists only in `list.html`. Add a
-rule for the new class beside the `.tri` block from Task 2, in all three pages:
+`class="linkish"` is NOT available here — it exists only in `list.html`.
+
+**Task 3 shipped four classes with no CSS at all** (`.map-filter-group`,
+`.tri-list`, `.tri-hint`, and a `.linkish` Clear button), so the dropdown
+currently renders unstyled. Fixing that is part of this task. Add one block
+beside the `.tri` rules from Task 2, in **`docs/map.html` only** — the other two
+pages have no map drawer:
 
 ```css
-    /* The way out of an impossible filter. Rule B lets includes and excludes
-       compose into nothing, and an empty list with no action reads as broken. */
-    .map-clear-filters {
+    /* FEAT-047. The dropdown shell. <details> supplies open/close and keyboard
+       operation natively, so the summary is the 44px header and needs no
+       handler of its own. The default disclosure marker is removed because the
+       summary is a flex row; list-style AND the -webkit- rule are both required
+       to cover every engine. */
+    .map-filter-group {
+      margin-top: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .map-filter-group > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 44px;
+      padding: 0 10px;
+      list-style: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .map-filter-group > summary::-webkit-details-marker { display: none; }
+    .map-filter-group > summary b { color: var(--ink); }
+    .map-filter-group > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 8px; }
+    .tri-list { display: flex; flex-direction: column; padding: 4px; border-top: 1px solid var(--line); }
+    .tri-hint { margin: 0; padding: 6px 10px 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
+    /* The way out of an impossible filter, and the dropdown's own Clear. Rule B
+       lets includes and excludes compose into nothing, and a result with no
+       action reads as broken. `width: auto` is load-bearing against the global
+       `button { width: 100% }`. */
+    .map-clear-filters, .tri-hint .linkish {
       width: auto;
       min-height: 44px;
-      margin-top: 6px;
       padding: 0 10px;
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -498,6 +533,7 @@ rule for the new class beside the `.tri` block from Task 2, in all three pages:
       font-weight: 700;
       cursor: pointer;
     }
+    .map-clear-filters { margin-top: 6px; }
 ```
 
 `resetMapSettings()` clears every filter, not only the stage — that is the
