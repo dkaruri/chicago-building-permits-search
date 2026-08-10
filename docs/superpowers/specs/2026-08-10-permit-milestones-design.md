@@ -48,19 +48,28 @@ both rather than resolving the disagreement on the user's behalf.
 
 The city's 11 values are too long for a chip — `INSPECTIONS (CERTIFICATE OF
 OCCUPANCY REQUIRED)` is 47 characters and its distinguishing words are at the
-end, so truncation destroys it. The UI shows six stages — four for open
+end, so truncation destroys it. The UI shows seven stages — five for open
 permits, two for closed; the verbatim value is always available.
 
-Open permits:
+Open permits, in lifecycle order:
 
 | Stage | Open permits | Raw `permit_milestone` values |
 |---|---:|---|
-| Not started | 7,209 | `INSPECTION ELIGIBLE`, `PERMIT ISSUED (FEE DUE)` |
+| Fee due | 632 | `PERMIT ISSUED (FEE DUE)` |
+| Not started | 6,577 | `INSPECTION ELIGIBLE` |
 | In progress | 24,545 | `INSPECTIONS`, `PROGRESS INSPECTIONS` |
 | Finishing | 1,748 | `INSPECTIONS (CERTIFICATE OF OCCUPANCY REQUIRED)`, `CERTIFICATE OF OCCUPANCY PENDING`, `CERTIFICATE OF OCCUPANCY PENDING (TEMPORARY OR PARTIAL OCCUPANCY APPROVED)`, `POST CONSTRUCTION FILING`, `FINAL INSPECTION` |
 | Halted | 7,503 | `SUSPENDED`, `STOP WORK` |
 
 Counts sum to 41,005, matching the open-permit total exactly.
+
+**Fee due is its own stage, not folded into Not started.** The city has issued
+the permit but is still owed money on it, which is a different situation from
+a paid permit waiting on its first inspection — and it is one of the two
+states `permit_status` cannot express at all (it reads plain `ACTIVE`). 632
+permits is small, but it is a specific, actionable condition rather than a
+long tail, and burying it inside a 7,209-permit bucket is what made it
+invisible in the first place.
 
 ### Closed permits
 
@@ -92,7 +101,7 @@ The rule below is total over that set.
 1. `COMPLETE` → **Complete**
 2. `EXPIRED` / `CANCELLED` / `REVOKED` → **Ended early**
 3. `ACTIVE` / `SUSPENDED` / `PHASED PERMITTING` → look up `permit_milestone`
-   in the four-stage table above
+   in the five-stage open table above
 4. anything else → **no chip**
 
 Step 3 always hits: milestone is 100% populated across the open set, and no
@@ -172,12 +181,18 @@ A colour per stage, drawn entirely from existing tokens — no new palette:
 
 | Stage | Text | Background |
 |---|---|---|
+| Fee due | `--teal` | transparent, `--teal` border |
 | Not started | `--muted` | transparent, `--line` border |
 | In progress | `--primary` | `--primary-soft` |
 | Finishing | `--accent` | `--accent-soft` |
 | Halted | `--danger` | `--danger-soft` |
 | Complete | `--muted` | transparent, `--line` border |
 | Ended early | `--warning` | `--warning-soft` |
+
+`--teal` is already defined in both themes and is used by no other chip, so
+Fee due costs no new token. It takes the outlined treatment because there is
+no `--teal-soft`, and adding one to fill a 632-permit stage is not worth a
+palette change.
 
 `Halted` and `Ended early` are deliberately different colours. Halted is an
 open permit whose work has stopped and can resume; Ended early is a permit
@@ -189,14 +204,16 @@ other closed-only.
 
 Measured contrast, both themes:
 
-| | Not started | In progress | Finishing | Halted | Complete | Ended early |
-|---|---:|---:|---:|---:|---:|---:|
-| Light | 6.32 | 6.77 | **4.80** | 5.95 | 6.32 | 4.89 |
-| Dark | 8.51 | 6.95 | 7.35 | 7.03 | 8.51 | 9.38 |
+| | Fee due | Not started | In progress | Finishing | Halted | Complete | Ended early |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Light | 6.02 | 6.32 | 6.77 | **4.80** | 5.95 | 6.32 | 4.89 |
+| Dark | 10.32 | 8.51 | 6.95 | 7.35 | 7.03 | 8.51 | 9.38 |
 
-All twelve pairs clear 4.5:1. Finishing (4.80) and Ended early (4.89), both in
-light mode, are the tightest and are the pairs to re-measure if the chip's
-font size ever drops.
+All fourteen pairs clear 4.5:1. The transparent-background chips were also
+measured against `--row-alt`, since `permitTable` stripes its rows: Fee due
+holds at 5.90 light / 10.64 dark, Not started and Complete at 6.20 / 8.77.
+Finishing (4.80) and Ended early (4.89), both in light mode, are the tightest
+pairs and the ones to re-measure if the chip's font size ever drops.
 
 **No icons.** The obvious way to satisfy "never meaning by colour alone" is a
 glyph, but this app's Material Symbols font renders ligature names as literal
