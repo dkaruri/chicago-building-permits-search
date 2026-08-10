@@ -27,10 +27,11 @@ The project has never selected the column.
 
 Measured live against Socrata on 2026-08-10:
 
-- **100% populated on open permits, every issue year 2015–2026.** The 302,070
-  dataset-wide nulls are all closed or completed permits, which every surface
-  here already filters out. Unlike the assessor parcel class (FEAT-038, 87.7%
-  sourced), this needs no "no data" affordance on the open set.
+- **100% populated on open permits, every issue year 2015–2026**, and 100%
+  populated on closed permits too. The 302,070 dataset-wide nulls are rows
+  that also have no `permit_status` — pre-system records, not permits any
+  surface here routinely shows. Unlike the assessor parcel class (FEAT-038,
+  87.7% sourced), this needs no "no data" affordance.
 - 41,005 open permits carry a milestone.
 
 Two states are invisible in the tool today because `permit_status` cannot
@@ -47,8 +48,10 @@ both rather than resolving the disagreement on the user's behalf.
 
 The city's 11 values are too long for a chip — `INSPECTIONS (CERTIFICATE OF
 OCCUPANCY REQUIRED)` is 47 characters and its distinguishing words are at the
-end, so truncation destroys it. The UI shows four ordered stages; the verbatim
-value is always available.
+end, so truncation destroys it. The UI shows six stages — four for open
+permits, two for closed; the verbatim value is always available.
+
+Open permits:
 
 | Stage | Open permits | Raw `permit_milestone` values |
 |---|---:|---|
@@ -59,12 +62,45 @@ value is always available.
 
 Counts sum to 41,005, matching the open-permit total exactly.
 
-**No chip is rendered** for `COMPLETE`, `CANCELLED`, `EXPIRED`, `DENIED`, for
-an unrecognised string, or for a null/empty value. Those permits are closed;
-`permit_status` already says so, and a stage is a claim about live
-construction. This follows FIX-012's rule — no sample means no pill, never a
-zero. A saved permit that closes after being saved hits this path and
-correctly loses its chip.
+### Closed permits
+
+Closed permits reach the UI by exactly one path. The Worker defaults every
+query to open statuses (`permits.js:68`), so the only way to see a closed
+permit is to have saved it while it was open and have it close since;
+`ensurePermitMap()` re-fetches by permit number with no status filter. That
+makes the saved lists — and the overlay opened from them — the home for these
+two stages.
+
+| Stage | Permits | `permit_status` |
+|---|---:|---|
+| Complete | 484,221 | `COMPLETE` |
+| Ended early | 16,419 | `EXPIRED`, `CANCELLED`, `REVOKED` |
+
+**A closed permit's chip is decided by `permit_status`, never by
+`permit_milestone`.** 13,973 closed permits carry an in-progress milestone —
+their permit expired or was revoked while inspections were still running.
+Keying off milestone would label an `EXPIRED` permit **In progress**, which is
+actively wrong. `permit_status` is present on every closed permit, so it is
+the reliable signal; the milestone survives as the verbatim detail, which is
+where "expired during INSPECTIONS" remains recoverable.
+
+### Resolution order
+
+`permit_status` is enumerated: 7 values plus null, totalling 843,715 rows.
+The rule below is total over that set.
+
+1. `COMPLETE` → **Complete**
+2. `EXPIRED` / `CANCELLED` / `REVOKED` → **Ended early**
+3. `ACTIVE` / `SUSPENDED` / `PHASED PERMITTING` → look up `permit_milestone`
+   in the four-stage table above
+4. anything else → **no chip**
+
+Step 3 always hits: milestone is 100% populated across the open set, and no
+open permit carries a closed milestone value. Step 4 is reached only by the
+302,070 rows that have neither a status nor a milestone — pre-system records
+that can appear only if a user saved one directly. For those, and only those,
+no chip renders rather than a placeholder, per FIX-012's rule that no sample
+means no pill.
 
 ## Where the mapping lives
 
@@ -140,16 +176,27 @@ A colour per stage, drawn entirely from existing tokens — no new palette:
 | In progress | `--primary` | `--primary-soft` |
 | Finishing | `--accent` | `--accent-soft` |
 | Halted | `--danger` | `--danger-soft` |
+| Complete | `--muted` | transparent, `--line` border |
+| Ended early | `--warning` | `--warning-soft` |
+
+`Halted` and `Ended early` are deliberately different colours. Halted is an
+open permit whose work has stopped and can resume; Ended early is a permit
+that is over. Collapsing them onto `--danger` would say those are the same
+situation. `Complete` shares the neutral treatment with `Not started` — both
+are states where there is nothing happening and nothing to chase — and they
+never appear in the same list in practice, since one is open-only and the
+other closed-only.
 
 Measured contrast, both themes:
 
-| | Not started | In progress | Finishing | Halted |
-|---|---:|---:|---:|---:|
-| Light | 6.32 | 6.77 | **4.80** | 5.95 |
-| Dark | 8.51 | 6.95 | 7.35 | 7.03 |
+| | Not started | In progress | Finishing | Halted | Complete | Ended early |
+|---|---:|---:|---:|---:|---:|---:|
+| Light | 6.32 | 6.77 | **4.80** | 5.95 | 6.32 | 4.89 |
+| Dark | 8.51 | 6.95 | 7.35 | 7.03 | 8.51 | 9.38 |
 
-All ten pairs clear 4.5:1. Finishing in light mode at 4.80:1 is the tightest
-and is the pair to re-measure if the chip's font size ever drops.
+All twelve pairs clear 4.5:1. Finishing (4.80) and Ended early (4.89), both in
+light mode, are the tightest and are the pairs to re-measure if the chip's
+font size ever drops.
 
 **No icons.** The obvious way to satisfy "never meaning by colour alone" is a
 glyph, but this app's Material Symbols font renders ligature names as literal
@@ -162,14 +209,19 @@ distinction.
 
 - `worker/test/stage-map.test.mjs` — parse the table from all three HTML
   files, assert deep equality. Red if any copy drifts.
-- Mapping unit coverage: all 11 city values, plus `null`, `""`, an
-  unrecognised string, and the four closed values, asserting no chip.
+- Mapping unit coverage: all 11 open milestone values; all 7 `permit_status`
+  values; the closed-status-with-open-milestone case (`EXPIRED` +
+  `INSPECTIONS` must give **Ended early**, never In progress — this is the
+  13,973-permit trap); and `null` status with `null` milestone, asserting no
+  chip. An unrecognised string in either field must also produce no chip
+  rather than throwing.
 - Worker test: `permit_milestone` survives `selectCols` into the response row.
 - Headless verify at desktop **and** iPhone 13, asserting chip geometry and
   that the Status cell's second line does not overflow — geometry, not DOM
   presence, per the standing instruction.
 - Mutation controls: break the mapping table, drop the field from one
-  `$select`, and remove the closed-value guard; each must turn a test red.
+  `$select`, and reorder the resolution so milestone is consulted before
+  status on a closed permit; each must turn a test red.
 - `ui-ux-pro-max` second pass before landing.
 
 ## Out of scope
