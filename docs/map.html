@@ -910,6 +910,52 @@
     .tri[data-state="exclude"] .tri-box { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
     .tri-label { flex: 1; min-width: 0; }
     .tri-count { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+    /* FEAT-047. The dropdown shell. <details> supplies open/close and keyboard
+       operation natively, so the summary is the 44px header and needs no
+       handler of its own. The default disclosure marker is removed because the
+       summary is a flex row; list-style AND the -webkit- rule are both required
+       to cover every engine. */
+    .map-filter-group {
+      margin-top: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .map-filter-group > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 44px;
+      padding: 0 10px;
+      list-style: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .map-filter-group > summary::-webkit-details-marker { display: none; }
+    .map-filter-group > summary b { color: var(--ink); }
+    .map-filter-group > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 8px; }
+    .tri-list { display: flex; flex-direction: column; padding: 4px; border-top: 1px solid var(--line); }
+    .tri-hint { margin: 0; padding: 6px 10px 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
+    /* The way out of an impossible filter, and the dropdown's own Clear. Rule B
+       lets includes and excludes compose into nothing, and a result with no
+       action reads as broken. `width: auto` is load-bearing against the global
+       `button { width: 100% }`. */
+    .map-clear-filters, .tri-hint .linkish {
+      width: auto;
+      min-height: 44px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--primary);
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .map-clear-filters { margin-top: 6px; }
     .stage {
       display: inline-flex;
       align-items: center;
@@ -3735,6 +3781,17 @@
       if (f.exclude.length) parts.push(`${f.exclude.length} excluded`);
       return parts.join(", ");
     }
+    // Presence is not enough once a filter has a DIRECTION: from the closed
+    // drawer a user cannot otherwise tell whether a stage was included or
+    // excluded. Reads as: "In progress, Finishing, not Halted".
+    function mapStageNote(settings) {
+      const f = normalizeTriState(settings && settings.stages);
+      const name = s => PERMIT_STAGE_LABELS[s] || s;
+      const bits = [];
+      if (f.include.length) bits.push(f.include.map(name).join(", "));
+      if (f.exclude.length) bits.push("not " + f.exclude.map(name).join(", not "));
+      return bits.length ? ` | ${bits.join(", ")}` : "";
+    }
 
     // FEAT-040. Visited/called are per-LIST flags (list.ticks / list.called,
     // keyed by permit number), but the map shows the whole city. Scope decision,
@@ -5433,7 +5490,7 @@
       const flagNote = flagNames.length
         ? ` | your saved permits only, ${flagNames.join(" and ")}`
         : "";
-      $("map-status-strip").textContent = `${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` | ${esc(settings.neighborhood)}` : ""}${settings.q ? ` | ${fmt(matches)} highlighted for "${esc(settings.q)}"${geocoded}` : ""}${radiusNote}${workTypeNote}${useNote}${flagNote}`;
+      $("map-status-strip").textContent = `${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` | ${esc(settings.neighborhood)}` : ""}${settings.q ? ` | ${fmt(matches)} highlighted for "${esc(settings.q)}"${geocoded}` : ""}${radiusNote}${workTypeNote}${useNote}${flagNote}${mapStageNote(settings)}`;
       renderMapFlagFilters();
       if (hasSearch && searchRows.length) {
         const searchHeader = `<div class="map-result-divider">Search matches for "${esc(settings.q)}" stay pinned above visible permits.</div>`;
@@ -5443,7 +5500,7 @@
         setMapResultListHtml(searchHeader + searchMarkup + divider + otherMarkup, scrollTop);
         return;
       }
-      setMapResultListHtml(rows.length ? rows.map(mapResultButton).join("") : `<div class="empty">No permits match these map filters.</div>`, scrollTop);
+      setMapResultListHtml(rows.length ? rows.map(mapResultButton).join("") : `<div class="empty" role="status">No permits match these map filters.<br><button type="button" class="map-clear-filters" onclick="resetMapSettings()">Clear filters</button></div>`, scrollTop);
     }
 
     function setMapResultListHtml(html, scrollTop = 0) {
