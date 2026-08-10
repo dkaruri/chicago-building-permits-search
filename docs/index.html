@@ -6208,7 +6208,7 @@
               ${options.remove ? `<td class="select-cell" data-label="Remove" onclick="event.stopPropagation()"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell" data-label="Select" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
               <td data-label="Permit"><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
-              <td data-label="Status">${esc(row.permit_status)}</td>
+              <td data-label="Status">${esc(row.permit_status)}${(() => { const c = permitStageChip(row); return c ? `<br><span class="small">${c}</span>` : ""; })()}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
               <td data-label="Address">${esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
               <td data-label="Cost" class="money">${money(row.reported_cost)}</td>
