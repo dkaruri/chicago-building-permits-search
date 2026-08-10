@@ -7616,18 +7616,31 @@
     // saved-list table columns) rather than a fresh lookup path. The three run
     // in parallel; each fills independently so one slow source cannot hold the
     // others at "…".
+    // FIX-045. The paragraph above says each source fills independently. Until
+    // now the code did the opposite: one `await Promise.all(jobs)` gated ALL
+    // three fills, so the Cook County parcel lookup added by FEAT-038 held Zone
+    // and TIF at "…" long after their own answer had arrived — on the live site
+    // that is a third-party API, so users waited on it for free. Each source now
+    // writes its own spans the moment it settles, and a rejection fills too
+    // rather than leaving "…" on screen forever.
     async function fillPermitGeo(body, row) {
       const num = clean(row.permit_number);
+      const fillZoneTif = () => {
+        const zone = body.querySelector(`.geo-zone[data-permit="${CSS.escape(num)}"]`);
+        const tif = body.querySelector(`.geo-tif[data-permit="${CSS.escape(num)}"]`);
+        if (zone) zone.textContent = geoZoneCache.get(num) || "—";
+        if (tif) tif.textContent = geoTifCache.get(num) || "—";
+      };
+      const fillUse = () => {
+        const use = body.querySelector(`.parcel-use[data-permit="${CSS.escape(num)}"]`);
+        if (use) use.innerHTML = parcelUseHtml(parcelUseCache.get(num) || null, row);
+      };
       const jobs = [];
-      if (!geoZoneCache.has(num) || !geoTifCache.has(num)) jobs.push(resolveGeoForRows([row]));
-      if (!parcelUseCache.has(num)) jobs.push(ensurePermitParcelUse(row));
+      if (geoZoneCache.has(num) && geoTifCache.has(num)) fillZoneTif();
+      else jobs.push(resolveGeoForRows([row]).then(fillZoneTif, fillZoneTif));
+      if (parcelUseCache.has(num)) fillUse();
+      else jobs.push(ensurePermitParcelUse(row).then(fillUse, fillUse));
       if (jobs.length) { try { await Promise.all(jobs); } catch {} }
-      const zone = body.querySelector(`.geo-zone[data-permit="${CSS.escape(num)}"]`);
-      const tif = body.querySelector(`.geo-tif[data-permit="${CSS.escape(num)}"]`);
-      const use = body.querySelector(`.parcel-use[data-permit="${CSS.escape(num)}"]`);
-      if (zone) zone.textContent = geoZoneCache.get(num) || "—";
-      if (tif) tif.textContent = geoTifCache.get(num) || "—";
-      if (use) use.innerHTML = parcelUseHtml(parcelUseCache.get(num) || null, row);
     }
 
     // Public entry point for opening a permit's detail overlay. Starts a fresh
