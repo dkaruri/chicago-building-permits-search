@@ -7385,6 +7385,41 @@
       complete: "Complete",
       ended: "Ended early"
     };
+    // FEAT-047. The tri-state filter control: off -> include -> exclude -> off.
+    // All the behaviour is in these four pure functions so it can be tested
+    // without a browser; the renderer below is only markup.
+    //
+    // Triplicated because this site has no shared module, and held in agreement
+    // by worker/test/tristate.test.mjs — the guard FIX-046 needed after three
+    // copies of one constant silently disagreed.
+    function normalizeTriState(value) {
+      // Storage can hold anything a previous version wrote, or nothing at all.
+      const list = v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : []);
+      return { include: list(value && value.include), exclude: list(value && value.exclude) };
+    }
+    function triStateOf(filter, value) {
+      const f = normalizeTriState(filter);
+      if (f.include.includes(value)) return "include";
+      if (f.exclude.includes(value)) return "exclude";
+      return "";
+    }
+    function cycleTriState(filter, value) {
+      const f = normalizeTriState(filter);
+      const include = new Set(f.include), exclude = new Set(f.exclude);
+      if (include.has(value)) { include.delete(value); exclude.add(value); }
+      else if (exclude.has(value)) { exclude.delete(value); }
+      else { include.add(value); }
+      return { include: [...include], exclude: [...exclude] };
+    }
+    // Rule B: includes narrow, excludes remove, and BOTH always apply. The
+    // rejected alternative let any include silence the excludes, which lets a
+    // control the user has visibly set stop doing anything — that reads as a bug.
+    function matchesTriState(value, filter) {
+      const f = normalizeTriState(filter);
+      if (f.include.length && !f.include.includes(value)) return false;
+      if (f.exclude.includes(value)) return false;
+      return true;
+    }
     // Total over all 7 permit_status values plus null (843,715 rows). Returns ""
     // for anything unrecognised, which renders NO chip rather than a placeholder
     // — FIX-012's rule that no sample means no pill, never a zero.
