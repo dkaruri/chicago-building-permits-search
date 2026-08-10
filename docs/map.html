@@ -3773,6 +3773,27 @@
       settings.stages = { include: [], exclude: [] };
       await applyMapFilters();
     }
+    // FEAT-047 fix (found during Task 5 headless verification). renderMapShell
+    // paints the drawer once, BEFORE the first applyMapFilters has computed
+    // state.map.stageCounts — so the tri-list rendered inline in the template
+    // was always empty on first load, and nothing ever re-rendered it after a
+    // click either (unlike syncMapWorkTypeList for the analogous FEAT-024
+    // checklist). Mirrors that function: called every time stageCounts is
+    // recomputed, so marks/counts/summary stay live across every filter change.
+    function syncMapStageList() {
+      const list = document.querySelector("#map-stage-details .tri-list");
+      const summaryMark = document.querySelector("#map-stage-summary b");
+      if (!list) return;
+      const settings = loadMapSettings();
+      list.innerHTML = (state.map.stageCounts || []).map(([stage, n]) => triStateOptionHtml({
+        value: stage,
+        label: PERMIT_STAGE_LABELS[stage] || stage,
+        count: n,
+        state: triStateOf(settings.stages, stage),
+        onclick: `setMapStageFilter('${enc(stage)}')`,
+      })).join("");
+      if (summaryMark) summaryMark.textContent = mapStageSummaryText(settings);
+    }
     function mapStageSummaryText(settings) {
       const f = normalizeTriState(settings && settings.stages);
       if (!f.include.length && !f.exclude.length) return "all";
@@ -5110,6 +5131,7 @@
         if (stage) stageCounts.set(stage, (stageCounts.get(stage) || 0) + 1);
       }
       state.map.stageCounts = [...stageCounts];
+      syncMapStageList();
       const excludedWorkTypes = new Set(mapExcludedWorkTypes(settings));
       // FEAT-040. Pressing a visited/called chip implicitly scopes the map to
       // permits that are in one of your lists — the only permits the flags can
