@@ -3702,11 +3702,38 @@
         radiusMiles: "",
         excludedWorkTypes: [],
         propertyUse: "",
+        // FEAT-047. Additive: loadMapSettings spreads defaults under whatever is
+        // stored, so settings saved before this shipped get it for free. No
+        // migration needed — unlike the four keys FEAT-050 has to convert.
+        stages: { include: [], exclude: [] },
         // FEAT-040. null | "yes" | "no", persisted with every other map filter
         // so a reload does not silently drop them.
         visited: null,
         called: null
       };
+    }
+
+    // Mirrors setMapFlagFilter deliberately. There is NO explicit save call:
+    // applyMapFilters() runs saveMapSettingsFromControls(), which writes this
+    // same settings object wholesale, so `stages` rides along because it lives
+    // on it. Both are async for the same reason setMapFlagFilter is.
+    async function setMapStageFilter(value) {
+      const settings = loadMapSettings();
+      settings.stages = cycleTriState(settings.stages, value);
+      await applyMapFilters();
+    }
+    async function clearMapStageFilter() {
+      const settings = loadMapSettings();
+      settings.stages = { include: [], exclude: [] };
+      await applyMapFilters();
+    }
+    function mapStageSummaryText(settings) {
+      const f = normalizeTriState(settings && settings.stages);
+      if (!f.include.length && !f.exclude.length) return "all";
+      const parts = [];
+      if (f.include.length) parts.push(`${f.include.length} included`);
+      if (f.exclude.length) parts.push(`${f.exclude.length} excluded`);
+      return parts.join(", ");
     }
 
     // FEAT-040. Visited/called are per-LIST flags (list.ticks / list.called,
@@ -4419,6 +4446,19 @@
               <button type="button" id="map-filter-not-called" class="tag" aria-pressed="false" onclick="setMapFlagFilter('called', 'no')">Not called</button>
               <span id="map-flag-filter-status" class="list-filter-status small" role="status" aria-live="polite"></span>
             </div>
+            <details class="map-filter-group" id="map-stage-details">
+              <summary id="map-stage-summary">Construction stage <b>${mapStageSummaryText(settings)}</b></summary>
+              <div class="tri-list" role="group" aria-label="Filter by construction stage">
+                ${(state.map.stageCounts || []).map(([stage, n]) => triStateOptionHtml({
+                  value: stage,
+                  label: PERMIT_STAGE_LABELS[stage] || stage,
+                  count: n,
+                  state: triStateOf(settings.stages, stage),
+                  onclick: `setMapStageFilter('${enc(stage)}')`,
+                })).join("")}
+              </div>
+              <p class="tri-hint">Click to include, again to exclude, again to clear. <button type="button" class="linkish" onclick="clearMapStageFilter()">Clear</button></p>
+            </details>
             <!-- FEAT-024. The district codes are in the option text, and this note
                  states the limit of the signal: zoning says what a district ALLOWS,
                  not what stands on the lot. -->
@@ -5005,6 +5045,14 @@
       }
       state.map.workTypeCounts = [...workTypeCounts];
       syncMapWorkTypeList();
+      // Counted BEFORE the stage exclusion, so ticking one option never changes
+      // the number beside another. Same rule as FEAT-024's work-type counts.
+      const stageCounts = new Map();
+      for (const row of state.map.filteredRows) {
+        const stage = permitStage(mapRowToPermit(row));
+        if (stage) stageCounts.set(stage, (stageCounts.get(stage) || 0) + 1);
+      }
+      state.map.stageCounts = [...stageCounts];
       const excludedWorkTypes = new Set(mapExcludedWorkTypes(settings));
       // FEAT-040. Pressing a visited/called chip implicitly scopes the map to
       // permits that are in one of your lists — the only permits the flags can
@@ -5014,6 +5062,7 @@
       const flagFilter = mapFlagFilterOn(settings);
       state.map.flagCounts = null;
       state.map.filteredRows = state.map.filteredRows.filter(row => {
+        if (!matchesTriState(permitStage(mapRowToPermit(row)), settings.stages)) return false;
         if (excludedWorkTypes.size && excludedWorkTypes.has(mapWorkTypeKey(row))) return false;
         if (flagFilter) {
           if (!flags.listed.has(clean(row.n))) return false;
