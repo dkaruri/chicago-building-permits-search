@@ -305,8 +305,18 @@ git commit -m "FEAT-047: tri-state option renderer and styling"
 ### Task 3: The Stage dropdown, wired
 
 **Files:**
-- Modify: `docs/map.html` — `defaultMapSettings` (~3659), `applyMapFilters` (~4908), `renderMapShell` (~4318)
-- Modify: `docs/index.html`, `docs/list.html` — the same three functions, to keep the copies in step
+- Modify: `docs/map.html` ONLY — `defaultMapSettings` (~3659), `applyMapFilters` (~4908), `renderMapShell` (~4318)
+
+**PLAN CORRECTION (2026-08-10, found during execution).** An earlier draft said to
+change all three pages. That is wrong, and measuring settles it: `index.html` and
+`list.html` carry a **vestigial** map mode whose `applyMapFilters` is 39 lines with
+**zero** `workTypeCounts`, **zero** second filter pass and **zero** flag filters,
+against map.html's 138 lines. FEAT-024 (work types), FEAT-038 (property use) and
+FEAT-040 (visited/called) were all applied to `map.html` alone — map filters are a
+map.html feature, and that is the established pattern this task follows.
+
+Tasks 1 and 2 correctly went into all three pages: those are generic helpers with a
+drift test, and FEAT-048 will use them on `list.html`. Only the *wiring* is map-only.
 
 **Interfaces:**
 - Consumes: `matchesTriState`, `cycleTriState`, `triStateOf`, `triStateOptionHtml` (Tasks 1–2); `permitStage`, `PERMIT_STAGE_LABELS` (FEAT-046).
@@ -424,7 +434,11 @@ git commit -m "FEAT-047: Stage dropdown on the map, counted before exclusion"
 ### Task 4: Direction in the status strip, and an empty state
 
 **Files:**
-- Modify: `docs/index.html`, `docs/list.html`, `docs/map.html` — the status-strip line in `applyMapFilters` (~5355 in map.html)
+- Modify: `docs/map.html` ONLY — the status-strip line in `applyMapFilters` (~5355) and the empty branch in `renderMapSideList`
+
+Same correction as Task 3: `index.html` and `list.html` carry a vestigial map mode
+with no status strip of this shape and no flag/work-type filters. Map filters are a
+map.html feature.
 
 **Interfaces:**
 - Consumes: `normalizeTriState`, `PERMIT_STAGE_LABELS`.
