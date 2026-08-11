@@ -2,9 +2,6 @@ name = "chi-permits-api"
 main = "src/index.js"
 compatibility_date = "2024-12-01"
 
-[triggers]
-crons = ["0 6 * * *"]  # 6 AM UTC daily — rebuild profiles + license cache
-
 [[kv_namespaces]]
 binding = "CACHE"
 id = "ef1c7094f8ec473aa1d1a00a63a392b3"
