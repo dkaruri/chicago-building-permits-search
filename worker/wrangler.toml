@@ -25,4 +25,9 @@ new_sqlite_classes = ["ListRoom"]
 [vars]
 SOCRATA_DOMAIN = "data.cityofchicago.org"
 DATASET_ID = "ydr8-5enu"
-ALLOWED_ORIGIN = "https://dkaruri.github.io"
+# Comma-separated. The FIRST entry is the default returned to any caller that
+# sends no Origin, so production must stay first. localhost:8791 is here so a
+# local preview of a test branch exercises the REAL API instead of silently
+# falling back to the stale bundled JSON — without it, every Worker call from a
+# local page is blocked by CORS and only the direct-Socrata map still works.
+ALLOWED_ORIGIN = "https://dkaruri.github.io,http://localhost:8791"
