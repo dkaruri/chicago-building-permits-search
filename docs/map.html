@@ -870,6 +870,113 @@
     .money { color: var(--warning); font-weight: 800; }
     .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 
+    /* FEAT-046. Construction stage. Every colour is an existing token — no new
+       palette. Measured contrast, light/dark: Fee due 6.02/10.32, Not started
+       6.32/8.51, In progress 6.77/6.95, Finishing 4.80/7.35, Halted 5.95/7.03,
+       Complete 6.32/8.51, Ended early 4.89/9.38. Finishing and Ended early are
+       the tightest — re-measure both if this font-size ever drops.
+       The label is always a word, so colour is reinforcement, never the only
+       cue. No icon: Material Symbols renders ligature names as literal text
+       until it loads (FIX-027). */
+    /* FEAT-047. Tri-state filter option. `width: auto` is load-bearing: these
+       pages carry a global `button { width: 100% }` (FIX-022) that would
+       otherwise stretch every option across the drawer. 44px min-height is the
+       touch target — the row is the control, not the little box. */
+    .tri {
+      width: auto;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 44px;
+      padding: 6px 8px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--ink);
+      font-size: 12.5px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .tri:hover { background: var(--panel-2); }
+    .tri:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+    .tri-box {
+      width: 20px; height: 20px; flex: none;
+      display: flex; align-items: center; justify-content: center;
+      border: 1.5px solid var(--line-strong); border-radius: 5px;
+      background: var(--field); color: var(--muted);
+      font-size: 13px; font-weight: 800; line-height: 1;
+    }
+    .tri[data-state="include"] .tri-box { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+    .tri[data-state="exclude"] .tri-box { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+    .tri-label { flex: 1; min-width: 0; }
+    .tri-count { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+    /* FEAT-047. The dropdown shell. <details> supplies open/close and keyboard
+       operation natively, so the summary is the 44px header and needs no
+       handler of its own. The default disclosure marker is removed because the
+       summary is a flex row; list-style AND the -webkit- rule are both required
+       to cover every engine. */
+    .map-filter-group {
+      margin-top: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .map-filter-group > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 44px;
+      padding: 0 10px;
+      list-style: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .map-filter-group > summary::-webkit-details-marker { display: none; }
+    .map-filter-group > summary b { color: var(--ink); }
+    .map-filter-group > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 8px; }
+    .tri-list { display: flex; flex-direction: column; padding: 4px; border-top: 1px solid var(--line); }
+    .tri-hint { margin: 0; padding: 6px 10px 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
+    /* The way out of an impossible filter, and the dropdown's own Clear. Rule B
+       lets includes and excludes compose into nothing, and a result with no
+       action reads as broken. `width: auto` is load-bearing against the global
+       `button { width: 100% }`. */
+    .map-clear-filters, .tri-hint .linkish {
+      width: auto;
+      min-height: 44px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--primary);
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .map-clear-filters { margin-top: 6px; }
+    .stage {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .stage-fee { color: var(--teal); border-color: var(--teal); }
+    .stage-notstarted { color: var(--muted); border-color: var(--line); }
+    .stage-progress { color: var(--primary); border-color: var(--primary); background: var(--primary-soft); }
+    .stage-finishing { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+    .stage-halted { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
+    .stage-complete { color: var(--muted); border-color: var(--line); }
+    .stage-ended { color: var(--warning); border-color: var(--warning); background: var(--warning-soft); }
+
     .tag {
       display: inline-flex;
       align-items: center;
@@ -1514,7 +1621,10 @@
       line-height: 1.25;
     }
 
-    .map-result span {
+    /* `> span` is deliberate: a descendant selector here (0-1-1) outranks the
+       stage chip's own .stage class (0-1-0) and flattened it to a full-width
+       grey block. Fourth occurrence of that trap in this repo. */
+    .map-result > span {
       display: block;
       margin-top: 3px;
       color: var(--muted);
@@ -3638,11 +3748,70 @@
         radiusMiles: "",
         excludedWorkTypes: [],
         propertyUse: "",
+        // FEAT-047. Additive: loadMapSettings spreads defaults under whatever is
+        // stored, so settings saved before this shipped get it for free. No
+        // migration needed — unlike the four keys FEAT-050 has to convert.
+        stages: { include: [], exclude: [] },
         // FEAT-040. null | "yes" | "no", persisted with every other map filter
         // so a reload does not silently drop them.
         visited: null,
         called: null
       };
+    }
+
+    // Mirrors setMapFlagFilter deliberately. There is NO explicit save call:
+    // applyMapFilters() runs saveMapSettingsFromControls(), which writes this
+    // same settings object wholesale, so `stages` rides along because it lives
+    // on it. Both are async for the same reason setMapFlagFilter is.
+    async function setMapStageFilter(value) {
+      const settings = loadMapSettings();
+      settings.stages = cycleTriState(settings.stages, value);
+      await applyMapFilters();
+    }
+    async function clearMapStageFilter() {
+      const settings = loadMapSettings();
+      settings.stages = { include: [], exclude: [] };
+      await applyMapFilters();
+    }
+    // FEAT-047 fix (found during Task 5 headless verification). renderMapShell
+    // paints the drawer once, BEFORE the first applyMapFilters has computed
+    // state.map.stageCounts — so the tri-list rendered inline in the template
+    // was always empty on first load, and nothing ever re-rendered it after a
+    // click either (unlike syncMapWorkTypeList for the analogous FEAT-024
+    // checklist). Mirrors that function: called every time stageCounts is
+    // recomputed, so marks/counts/summary stay live across every filter change.
+    function syncMapStageList() {
+      const list = document.querySelector("#map-stage-details .tri-list");
+      const summaryMark = document.querySelector("#map-stage-summary b");
+      if (!list) return;
+      const settings = loadMapSettings();
+      list.innerHTML = (state.map.stageCounts || []).map(([stage, n]) => triStateOptionHtml({
+        value: stage,
+        label: PERMIT_STAGE_LABELS[stage] || stage,
+        count: n,
+        state: triStateOf(settings.stages, stage),
+        onclick: `setMapStageFilter('${enc(stage)}')`,
+      })).join("");
+      if (summaryMark) summaryMark.textContent = mapStageSummaryText(settings);
+    }
+    function mapStageSummaryText(settings) {
+      const f = normalizeTriState(settings && settings.stages);
+      if (!f.include.length && !f.exclude.length) return "all";
+      const parts = [];
+      if (f.include.length) parts.push(`${f.include.length} included`);
+      if (f.exclude.length) parts.push(`${f.exclude.length} excluded`);
+      return parts.join(", ");
+    }
+    // Presence is not enough once a filter has a DIRECTION: from the closed
+    // drawer a user cannot otherwise tell whether a stage was included or
+    // excluded. Reads as: "In progress, Finishing, not Halted".
+    function mapStageNote(settings) {
+      const f = normalizeTriState(settings && settings.stages);
+      const name = s => PERMIT_STAGE_LABELS[s] || s;
+      const bits = [];
+      if (f.include.length) bits.push(f.include.map(name).join(", "));
+      if (f.exclude.length) bits.push("not " + f.exclude.map(name).join(", not "));
+      return bits.length ? ` | ${bits.join(", ")}` : "";
     }
 
     // FEAT-040. Visited/called are per-LIST flags (list.ticks / list.called,
@@ -4049,7 +4218,7 @@
       const dateTo = `${lastMonth}-${String(endDate.getDate()).padStart(2, "0")}`;
       const SOCRATA = "https://data.cityofchicago.org/resource/ydr8-5enu.json";
       const contactCols = Array.from({length: 15}, (_, i) => `contact_${i+1}_type,contact_${i+1}_name`).join(",");
-      const select = `permit_,permit_status,permit_type,review_type,issue_date,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
+      const select = `permit_,permit_status,permit_milestone,permit_type,review_type,issue_date,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
       const where = `permit_status in('ACTIVE','SUSPENDED','PHASED PERMITTING') AND issue_date>='${dateFrom}T00:00:00' AND issue_date<='${dateTo}T23:59:59' AND latitude IS NOT NULL`;
       const params = new URLSearchParams({ $select: select, $where: where, $order: "issue_date DESC", $limit: "50000" });
       const res = await fetch(`${SOCRATA}?${params}`);
@@ -4079,7 +4248,7 @@
           }
         }
         return {
-          n: row.permit_, s: row.permit_status, t: row.permit_type, r: row.review_type,
+          n: row.permit_, s: row.permit_status, ms: row.permit_milestone, t: row.permit_type, r: row.review_type,
           d: (row.issue_date || "").slice(0, 10),
           a: [row.street_number, row.street_direction, row.street_name].filter(Boolean).join(" "),
           w: row.ward, cn: row.community_area, st: row.street_name, wt: row.work_type,
@@ -4096,6 +4265,7 @@
       return {
         permit_number: row.n,
         permit_status: row.s,
+        permit_milestone: row.ms,
         permit_type: row.t,
         review_type: row.r,
         issue_date: row.d,
@@ -4127,6 +4297,7 @@
         </div>
         <div class="tag-row">
           <span class="tag">${esc(permit.permit_status)}</span>
+          ${permitStageChip(permit)}
           <span class="tag">${esc(permit.permit_type)}</span>
           <span class="tag">${fmt(permit.gc_open_jobs || 0)} GC open jobs</span>
           ${permit.ward ? `<a class="tag clickable" href="index.html?mode=open_permits&ward=${enc(permit.ward)}">Ward ${esc(permit.ward)}</a>` : ""}
@@ -4135,6 +4306,7 @@
         </div>
         ${permitFacts(permit, [
           ["Issued", permit.issue_date],
+          ["Stage", clean(permit.permit_milestone)],
           ["Address", permit.address],
           ["Neighborhood", communityAreaName(row.cn)],
           ["Work type", permit.work_type],
@@ -4352,6 +4524,19 @@
               <button type="button" id="map-filter-not-called" class="tag" aria-pressed="false" onclick="setMapFlagFilter('called', 'no')">Not called</button>
               <span id="map-flag-filter-status" class="list-filter-status small" role="status" aria-live="polite"></span>
             </div>
+            <details class="map-filter-group" id="map-stage-details">
+              <summary id="map-stage-summary">Construction stage <b>${mapStageSummaryText(settings)}</b></summary>
+              <div class="tri-list" role="group" aria-label="Filter by construction stage">
+                ${(state.map.stageCounts || []).map(([stage, n]) => triStateOptionHtml({
+                  value: stage,
+                  label: PERMIT_STAGE_LABELS[stage] || stage,
+                  count: n,
+                  state: triStateOf(settings.stages, stage),
+                  onclick: `setMapStageFilter('${enc(stage)}')`,
+                })).join("")}
+              </div>
+              <p class="tri-hint">Click to include, again to exclude, again to clear. <button type="button" class="linkish" onclick="clearMapStageFilter()">Clear</button></p>
+            </details>
             <!-- FEAT-024. The district codes are in the option text, and this note
                  states the limit of the signal: zoning says what a district ALLOWS,
                  not what stands on the lot. -->
@@ -4938,6 +5123,15 @@
       }
       state.map.workTypeCounts = [...workTypeCounts];
       syncMapWorkTypeList();
+      // Counted BEFORE the stage exclusion, so ticking one option never changes
+      // the number beside another. Same rule as FEAT-024's work-type counts.
+      const stageCounts = new Map();
+      for (const row of state.map.filteredRows) {
+        const stage = permitStage(mapRowToPermit(row));
+        if (stage) stageCounts.set(stage, (stageCounts.get(stage) || 0) + 1);
+      }
+      state.map.stageCounts = [...stageCounts];
+      syncMapStageList();
       const excludedWorkTypes = new Set(mapExcludedWorkTypes(settings));
       // FEAT-040. Pressing a visited/called chip implicitly scopes the map to
       // permits that are in one of your lists — the only permits the flags can
@@ -4947,6 +5141,7 @@
       const flagFilter = mapFlagFilterOn(settings);
       state.map.flagCounts = null;
       state.map.filteredRows = state.map.filteredRows.filter(row => {
+        if (!matchesTriState(permitStage(mapRowToPermit(row)), settings.stages)) return false;
         if (excludedWorkTypes.size && excludedWorkTypes.has(mapWorkTypeKey(row))) return false;
         if (flagFilter) {
           if (!flags.listed.has(clean(row.n))) return false;
@@ -5317,7 +5512,7 @@
       const flagNote = flagNames.length
         ? ` | your saved permits only, ${flagNames.join(" and ")}`
         : "";
-      $("map-status-strip").textContent = `${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` | ${esc(settings.neighborhood)}` : ""}${settings.q ? ` | ${fmt(matches)} highlighted for "${esc(settings.q)}"${geocoded}` : ""}${radiusNote}${workTypeNote}${useNote}${flagNote}`;
+      $("map-status-strip").textContent = `${esc(settings.dateFrom)} to ${esc(settings.dateTo)}${settings.neighborhood ? ` | ${esc(settings.neighborhood)}` : ""}${settings.q ? ` | ${fmt(matches)} highlighted for "${esc(settings.q)}"${geocoded}` : ""}${radiusNote}${workTypeNote}${useNote}${flagNote}${mapStageNote(settings)}`;
       renderMapFlagFilters();
       if (hasSearch && searchRows.length) {
         const searchHeader = `<div class="map-result-divider">Search matches for "${esc(settings.q)}" stay pinned above visible permits.</div>`;
@@ -5327,7 +5522,7 @@
         setMapResultListHtml(searchHeader + searchMarkup + divider + otherMarkup, scrollTop);
         return;
       }
-      setMapResultListHtml(rows.length ? rows.map(mapResultButton).join("") : `<div class="empty">No permits match these map filters.</div>`, scrollTop);
+      setMapResultListHtml(rows.length ? rows.map(mapResultButton).join("") : `<div class="empty" role="status">No permits match these map filters.<br><button type="button" class="map-clear-filters" onclick="resetMapSettings()">Clear filters</button></div>`, scrollTop);
     }
 
     function setMapResultListHtml(html, scrollTop = 0) {
@@ -5345,7 +5540,7 @@
         <button class="map-result ${state.map.activePermitNumber === row.n ? "is-active" : ""} ${Number(row.m || 0) === 1 ? "is-match" : ""}" onclick="selectMapPermitByNumber('${enc(row.n)}')">
           <strong>${esc(row.n)} &middot; ${esc(row.a)}</strong>
           <span>${esc(row.d)} &middot; ${esc(communityAreaName(row.cn) || "Unknown neighborhood")} &middot; ${fmt(row.go || 0)} GC open jobs</span>
-          <span>${esc(row.wt || row.t || "")}</span>
+          <span>${esc(row.wt || row.t || "")} ${permitStageChip(mapRowToPermit(row))}</span>
         </button>`;
     }
 
@@ -6439,7 +6634,7 @@
       if (!nums.length) return;
       const SOCRATA = "https://data.cityofchicago.org/resource/ydr8-5enu.json";
       const contactCols = Array.from({length: 15}, (_, i) => `contact_${i+1}_type,contact_${i+1}_name`).join(",");
-      const select = `permit_,permit_status,permit_type,review_type,issue_date,processing_time,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
+      const select = `permit_,permit_status,permit_milestone,permit_type,review_type,issue_date,processing_time,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
       const inList = nums.map(n => `'${n}'`).join(",");
       const params = new URLSearchParams({ $select: select, $where: `permit_ in(${inList})`, $limit: "50000" });
       try {
@@ -6458,6 +6653,7 @@
           const mapped = {
             permit_number: row.permit_,
             permit_status: row.permit_status,
+            permit_milestone: row.permit_milestone,
             permit_type: row.permit_type,
             review_type: row.review_type,
             issue_date: (row.issue_date || "").slice(0, 10),
@@ -7314,6 +7510,114 @@
       showPermitDetail(JSON.parse(decodeURIComponent(encoded)));
     }
 
+    // FEAT-046. Construction stage, from ydr8-5enu's permit_milestone column.
+    // Spec: docs/superpowers/specs/2026-08-10-permit-milestones-design.md
+    //
+    // Triplicated deliberately — there is no shared module on this site — and
+    // held in agreement by worker/test/stage-map.test.mjs, the same guard
+    // FIX-046 needed after three copies of one cap silently disagreed.
+    //
+    // These are the 11 values that appear on OPEN permits (measured against
+    // Socrata 2026-08-10, 100% coverage every issue year 2015-2026). Closed
+    // permits are deliberately absent: they are decided by permit_status below,
+    // because 13,973 of them carry an in-progress milestone after expiring or
+    // being revoked mid-inspection, and reading milestone first would label an
+    // EXPIRED permit "In progress".
+    const PERMIT_STAGES = {
+      "PERMIT ISSUED (FEE DUE)": "fee",
+      "INSPECTION ELIGIBLE": "notstarted",
+      "INSPECTIONS": "progress",
+      "PROGRESS INSPECTIONS": "progress",
+      "INSPECTIONS (CERTIFICATE OF OCCUPANCY REQUIRED)": "finishing",
+      "CERTIFICATE OF OCCUPANCY PENDING": "finishing",
+      "CERTIFICATE OF OCCUPANCY PENDING (TEMPORARY OR PARTIAL OCCUPANCY APPROVED)": "finishing",
+      "POST CONSTRUCTION FILING": "finishing",
+      "FINAL INSPECTION": "finishing",
+      "SUSPENDED": "halted",
+      "STOP WORK": "halted"
+    };
+    const PERMIT_STAGE_LABELS = {
+      fee: "Fee due",
+      notstarted: "Not started",
+      progress: "In progress",
+      finishing: "Finishing",
+      halted: "Halted",
+      complete: "Complete",
+      ended: "Ended early"
+    };
+    // FEAT-047. The tri-state filter control: off -> include -> exclude -> off.
+    // All the behaviour is in these four pure functions so it can be tested
+    // without a browser; the renderer below is only markup.
+    //
+    // Triplicated because this site has no shared module, and held in agreement
+    // by worker/test/tristate.test.mjs — the guard FIX-046 needed after three
+    // copies of one constant silently disagreed.
+    function normalizeTriState(value) {
+      // Storage can hold anything a previous version wrote, or nothing at all.
+      const list = v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : []);
+      return { include: list(value && value.include), exclude: list(value && value.exclude) };
+    }
+    function triStateOf(filter, value) {
+      const f = normalizeTriState(filter);
+      if (f.include.includes(value)) return "include";
+      if (f.exclude.includes(value)) return "exclude";
+      return "";
+    }
+    function cycleTriState(filter, value) {
+      const f = normalizeTriState(filter);
+      const include = new Set(f.include), exclude = new Set(f.exclude);
+      if (include.has(value)) { include.delete(value); exclude.add(value); }
+      else if (exclude.has(value)) { exclude.delete(value); }
+      else { include.add(value); }
+      return { include: [...include], exclude: [...exclude] };
+    }
+    // Rule B: includes narrow, excludes remove, and BOTH always apply. The
+    // rejected alternative let any include silence the excludes, which lets a
+    // control the user has visibly set stop doing anything — that reads as a bug.
+    function matchesTriState(value, filter) {
+      const f = normalizeTriState(filter);
+      if (f.include.length && !f.include.includes(value)) return false;
+      if (f.exclude.includes(value)) return false;
+      return true;
+    }
+    // One option row. A NATIVE <button>, not a div with role="button": a real
+    // button is keyboard-operable without a keydown handler, and a tabindex
+    // element with only an onclick is keyboard-dead — this repo has shipped
+    // that three times.
+    //
+    // The state goes in the ACCESSIBLE NAME. aria-checked="mixed" is not usable
+    // here: it means "partially checked", not "excluded", and would announce
+    // something false. The glyphs are plain characters, never Material Symbols
+    // ligatures, which render as literal text until the font loads (FIX-027).
+    function triStateOptionHtml(opt) {
+      const state = opt.state || "";
+      const mark = state === "include" ? "✓" : state === "exclude" ? "✗" : "";
+      const said = state === "include" ? "included, activate to exclude"
+        : state === "exclude" ? "excluded, activate to clear"
+        : "not filtered, activate to include";
+      const count = opt.count == null ? "" : `<span class="tri-count">${fmt(opt.count)}</span>`;
+      return `<button type="button" class="tri" data-state="${esc(state)}" data-value="${esc(opt.value)}"
+        aria-label="${esc(opt.label)}, ${said}" onclick="${opt.onclick}"><span class="tri-box" aria-hidden="true">${mark}</span><span class="tri-label">${esc(opt.label)}</span>${count}</button>`;
+    }
+    // Total over all 7 permit_status values plus null (843,715 rows). Returns ""
+    // for anything unrecognised, which renders NO chip rather than a placeholder
+    // — FIX-012's rule that no sample means no pill, never a zero.
+    function permitStage(row) {
+      const status = clean(row && row.permit_status).trim().toUpperCase();
+      if (status === "COMPLETE") return "complete";
+      if (status === "EXPIRED" || status === "CANCELLED" || status === "REVOKED") return "ended";
+      if (status !== "ACTIVE" && status !== "SUSPENDED" && status !== "PHASED PERMITTING") return "";
+      return PERMIT_STAGES[clean(row && row.permit_milestone).trim().toUpperCase()] || "";
+    }
+    // The chip. Carries the verbatim city value as its title, so the grouping
+    // never hides what the dataset actually said.
+    function permitStageChip(row) {
+      const stage = permitStage(row);
+      if (!stage) return "";
+      const raw = clean(row && row.permit_milestone).trim();
+      return `<span class="stage stage-${stage}"${raw ? ` title="${esc(raw)}"` : ""}>${esc(PERMIT_STAGE_LABELS[stage])}</span>`;
+    }
+
     function permitFacts(row, facts) {
       const items = facts
         .filter(([label, value]) => clean(value) !== "")
@@ -7372,7 +7676,7 @@
               ${options.remove ? `<td class="select-cell" data-label="Remove" onclick="event.stopPropagation()"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number)} from list" onclick="event.stopPropagation(); removePermitFromUserList('${enc(row.permit_number)}')">&times;</button></td>` : ""}
               ${options.select ? `<td class="select-cell" data-label="Select" onclick="togglePermitSelectionCell(event, this, '${enc(row.permit_number)}')"><input class="permit-check" type="checkbox" aria-label="Select permit ${esc(row.permit_number)}" ${state.selectedPermitNumbers.has(clean(row.permit_number)) ? "checked" : ""}></td>` : ""}
               <td data-label="Permit"><strong>${esc(row.permit_number)}</strong><br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
-              <td data-label="Status">${esc(row.permit_status)}</td>
+              <td data-label="Status">${esc(row.permit_status)}${(() => { const c = permitStageChip(row); return c ? `<br><span class="small">${c}</span>` : ""; })()}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
               <td data-label="Address">${esc(row.address)}<br><span class="small">${esc(row.work_type)}</span></td>
               <td data-label="Ward">${esc(row.ward)}</td>

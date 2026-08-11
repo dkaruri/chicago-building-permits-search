@@ -711,15 +711,8 @@
       width: auto;
     }
 
-    /* FEAT-031's four chips, same rules. Both members of a pair share a colour
-       — the label text is what distinguishes them, and sharing keeps the pair
-       legible as a pair. Measured against the panel in both themes, unpressed
-       (--tc on panel) and pressed (panel on --tc), which are the same figure:
-       --accent 5.36:1 light / 9.76:1 dark, --t5 7.76:1 / 8.61:1. All clear 4.5.
-       Pressed state is never colour alone — button.tag[aria-pressed="true"]
-       already prints a check glyph. */
-    #filter-visited, #filter-not-visited { --tc: var(--accent); }
-    #filter-called, #filter-not-called { --tc: var(--t5); }
+    /* Visited/Called are now .tri-pill (FEAT-048), styled by data-state via
+       the .tri-pill rules below — they no longer read --tc. */
 
     #filter-followup .material-symbols-outlined {
       font-size: 16px;
@@ -1674,7 +1667,10 @@
       line-height: 1.25;
     }
 
-    .map-result span {
+    /* `> span` is deliberate: a descendant selector here (0-1-1) outranks the
+       stage chip's own .stage class (0-1-0) and flattened it to a full-width
+       grey block. Fourth occurrence of that trap in this repo. */
+    .map-result > span {
       display: block;
       margin-top: 3px;
       color: var(--muted);
@@ -1890,6 +1886,104 @@
       line-height: 1.2;
       letter-spacing: 0;
     }
+
+    /* FEAT-046. Construction stage. Every colour is an existing token — no new
+       palette. Measured contrast, light/dark: Fee due 6.02/10.32, Not started
+       6.32/8.51, In progress 6.77/6.95, Finishing 4.80/7.35, Halted 5.95/7.03,
+       Complete 6.32/8.51, Ended early 4.89/9.38. Finishing and Ended early are
+       the tightest — re-measure both if this font-size ever drops.
+       The label is always a word, so colour is reinforcement, never the only
+       cue. No icon: Material Symbols renders ligature names as literal text
+       until it loads (FIX-027). */
+    /* FEAT-047. Tri-state filter option. `width: auto` is load-bearing: these
+       pages carry a global `button { width: 100% }` (FIX-022) that would
+       otherwise stretch every option across the drawer. 44px min-height is the
+       touch target — the row is the control, not the little box. */
+    .tri {
+      width: auto;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 44px;
+      padding: 6px 8px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--ink);
+      font-size: 12.5px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .tri:hover { background: var(--panel-2); }
+    .tri:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+    .tri-box {
+      width: 20px; height: 20px; flex: none;
+      display: flex; align-items: center; justify-content: center;
+      border: 1.5px solid var(--line-strong); border-radius: 5px;
+      background: var(--field); color: var(--muted);
+      font-size: 13px; font-weight: 800; line-height: 1;
+    }
+    .tri[data-state="include"] .tri-box { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+    .tri[data-state="exclude"] .tri-box { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+    .tri-label { flex: 1; min-width: 0; }
+    .tri-count { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+    /* FEAT-048. The list's filter row. `width: auto` is load-bearing against the
+       global `button { width: 100% }` (FIX-022). The mark is a plain character,
+       never a Material Symbols ligature, which renders as literal text until the
+       font loads (FIX-027) — and the state is in the accessible name regardless,
+       so it is never carried by colour or glyph alone. */
+    .tri-pill {
+      width: auto;
+      min-height: 44px;
+      padding: 6px 13px;
+      border: 1px solid var(--tag-border);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--tag-text);
+      font-size: 12.5px;
+      font-weight: 650;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .tri-pill[data-state="include"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+    .tri-pill[data-state="exclude"] { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+    .tri-pill:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .tri-list { display: flex; flex-direction: column; padding: 4px; border-top: 1px solid var(--line); }
+    .tri-hint { margin: 0; padding: 6px 10px 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
+    .list-filter-group { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+    .list-filter-group > summary {
+      display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px;
+      list-style: none; cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 700;
+    }
+    .list-filter-group > summary::-webkit-details-marker { display: none; }
+    .list-filter-group > summary b { color: var(--ink); }
+    .list-filter-group > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 8px; }
+    .list-clear-filters {
+      width: auto; min-height: 44px; padding: 0 10px;
+      border: 1px solid var(--line); border-radius: 8px;
+      background: var(--panel); color: var(--primary);
+      font-size: 12.5px; font-weight: 700; cursor: pointer;
+    }
+    .stage {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .stage-fee { color: var(--teal); border-color: var(--teal); }
+    .stage-notstarted { color: var(--muted); border-color: var(--line); }
+    .stage-progress { color: var(--primary); border-color: var(--primary); background: var(--primary-soft); }
+    .stage-finishing { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+    .stage-halted { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
+    .stage-complete { color: var(--muted); border-color: var(--line); }
+    .stage-ended { color: var(--warning); border-color: var(--warning); background: var(--warning-soft); }
 
     .permit-status {
       display: inline-flex;
@@ -3851,10 +3945,13 @@
            competing filter bar. Within a pair the chips are mutually exclusive;
            across pairs they combine. -->
       <div id="list-filters" class="list-filters" role="group" aria-label="Filter permits in this list" hidden>
-        <button type="button" id="filter-visited" class="tag" aria-pressed="false" onclick="setRowFilter('visited', 'yes')">Visited</button>
-        <button type="button" id="filter-not-visited" class="tag" aria-pressed="false" onclick="setRowFilter('visited', 'no')">Not visited</button>
-        <button type="button" id="filter-called" class="tag" aria-pressed="false" onclick="setRowFilter('called', 'yes')">Called</button>
-        <button type="button" id="filter-not-called" class="tag" aria-pressed="false" onclick="setRowFilter('called', 'no')">Not called</button>
+        <details class="list-filter-group" id="list-stage-details">
+          <summary id="list-stage-summary">Stage <b>all</b></summary>
+          <div class="tri-list" id="list-stage-list" role="group" aria-label="Filter by construction stage"></div>
+          <p class="tri-hint">Click to include, again to exclude, again to clear. <button type="button" class="list-clear-filters" onclick="clearListFilters()">Clear</button></p>
+        </details>
+        <button type="button" id="filter-visited" class="tri-pill" data-state="" onclick="setRowFilter('visited')">Visited</button>
+        <button type="button" id="filter-called" class="tri-pill" data-state="" onclick="setRowFilter('called')">Called</button>
         <button type="button" id="filter-followup" class="tag" aria-pressed="false" onclick="toggleFollowUpFilter()">
           <span class="material-symbols-outlined" aria-hidden="true">flag</span>Follow-up only
         </button>
@@ -3993,9 +4090,10 @@
       // View filters for the saved list. Deliberately NOT persisted: a filter
       // you forgot you set is how a list looks half-empty after a reload.
       // followUp is a plain on/off; visited and called are tri-state —
-      // null (don't care) / "yes" / "no" — because "not visited" is as useful a
-      // question as "visited" and the two cannot both be true (FEAT-031).
-      listFilters: { followUp: false, visited: null, called: null },
+      // null (don't care) / "include" / "exclude" — because "not visited" is as
+      // useful a question as "visited" and the two cannot both be true (FEAT-031,
+      // reshaped to include/exclude by FEAT-048).
+      listFilters: { followUp: false, visited: null, called: null, stages: { include: [], exclude: [] } },
       focalPoint: null,
       draggedPermitNumber: "",
       userRouteLegs: [],
@@ -4384,7 +4482,7 @@
       if (id && state.lists[id]) {
         // A view filter belongs to the list you set it on. Carried across, it
         // shows the next list as empty for a filter you never set there.
-        if (id !== state.activeListId) state.listFilters = { followUp: false, visited: null, called: null };
+        if (id !== state.activeListId) state.listFilters = listFilterDefaults();
         state.activeListId = id;
         state.userPermitNumbers = [...state.lists[id].permits];
         saveUserLists();
@@ -5249,7 +5347,7 @@
       const dateTo = `${lastMonth}-${String(endDate.getDate()).padStart(2, "0")}`;
       const SOCRATA = "https://data.cityofchicago.org/resource/ydr8-5enu.json";
       const contactCols = Array.from({length: 15}, (_, i) => `contact_${i+1}_type,contact_${i+1}_name`).join(",");
-      const select = `permit_,permit_status,permit_type,review_type,issue_date,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
+      const select = `permit_,permit_status,permit_milestone,permit_type,review_type,issue_date,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
       const where = `permit_status in('ACTIVE','SUSPENDED','PHASED PERMITTING') AND issue_date>='${dateFrom}T00:00:00' AND issue_date<='${dateTo}T23:59:59' AND latitude IS NOT NULL`;
       const params = new URLSearchParams({ $select: select, $where: where, $order: "issue_date DESC", $limit: "50000" });
       const res = await fetch(`${SOCRATA}?${params}`);
@@ -5265,7 +5363,7 @@
           else if (type.includes("CONTRACTOR") || type.includes("ARCHITECT") || type.includes("ENGINEER") || type.includes("EXPEDIT") || type.includes("MASON")) subs.push(name);
         }
         return {
-          n: row.permit_, s: row.permit_status, t: row.permit_type, r: row.review_type,
+          n: row.permit_, s: row.permit_status, ms: row.permit_milestone, t: row.permit_type, r: row.review_type,
           d: (row.issue_date || "").slice(0, 10),
           a: [row.street_number, row.street_direction, row.street_name].filter(Boolean).join(" "),
           w: row.ward, cn: row.community_area, st: row.street_name, wt: row.work_type,
@@ -5282,6 +5380,7 @@
       return {
         permit_number: row.n,
         permit_status: row.s,
+        permit_milestone: row.ms,
         permit_type: row.t,
         review_type: row.r,
         issue_date: row.d,
@@ -5314,12 +5413,14 @@
         </div>
         <div class="tag-row">
           <span class="tag">${esc(permit.permit_status)}</span>
+          ${permitStageChip(permit)}
           <span class="tag">${esc(permit.permit_type)}</span>
           <span class="tag">${fmt(permit.gc_open_jobs || 0)} GC open jobs</span>
           ${permit.ward ? `<span class="tag clickable" onclick="searchWard('${enc(permit.ward)}')">Ward ${esc(permit.ward)}</span>` : ""}
         </div>
         ${permitFacts(permit, [
           ["Issued", permit.issue_date],
+          ["Stage", clean(permit.permit_milestone)],
           ["Address", permit.address],
           ["Neighborhood", communityAreaName(row.cn)],
           ["Work type", permit.work_type],
@@ -5844,7 +5945,7 @@
         <button class="map-result ${state.map.activePermitNumber === row.n ? "is-active" : ""} ${Number(row.m || 0) === 1 ? "is-match" : ""}" onclick="selectMapPermitByNumber('${enc(row.n)}')">
           <strong>${esc(row.n)} &middot; ${esc(row.a)}</strong>
           <span>${esc(row.d)} &middot; ${esc(communityAreaName(row.cn) || "Unknown neighborhood")} &middot; ${fmt(row.go || 0)} GC open jobs</span>
-          <span>${esc(row.wt || row.t || "")}</span>
+          <span>${esc(row.wt || row.t || "")} ${permitStageChip(mapRowToPermit(row))}</span>
         </button>`;
     }
 
@@ -6957,7 +7058,7 @@
       // so omitting them made every saved permit report "No owner named".
       const contactCols = Array.from({length: 15}, (_, i) =>
         `contact_${i+1}_type,contact_${i+1}_name,contact_${i+1}_city,contact_${i+1}_state,contact_${i+1}_zipcode`).join(",");
-      const select = `permit_,permit_status,permit_type,review_type,issue_date,processing_time,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
+      const select = `permit_,permit_status,permit_milestone,permit_type,review_type,issue_date,processing_time,street_number,street_direction,street_name,work_type,work_description,reported_cost,ward,community_area,latitude,longitude,${contactCols}`;
       const inList = nums.map(n => `'${n}'`).join(",");
       const params = new URLSearchParams({ $select: select, $where: `permit_ in(${inList})`, $limit: "50000" });
       try {
@@ -6982,6 +7083,7 @@
           const mapped = {
             permit_number: row.permit_,
             permit_status: row.permit_status,
+            permit_milestone: row.permit_milestone,
             permit_type: row.permit_type,
             review_type: row.review_type,
             issue_date: (row.issue_date || "").slice(0, 10),
@@ -7594,24 +7696,37 @@
 
     // ---- List view filters (FEAT-034, extended by FEAT-031) ----
     // Three facets over one row set. `followUp` is on/off; `visited` and
-    // `called` are tri-state (null / "yes" / "no").
+    // `called` are tri-state (null / "include" / "exclude").
     //
     // Within a facet the two chips are MUTUALLY EXCLUSIVE — a permit cannot be
     // both visited and not visited, and offering the contradiction only to
     // render a guaranteed-empty table is a dead control. Across facets they
     // COMBINE, which is the question the field actually asks: visited + not
     // called = "been there, nobody has phoned yet".
+    // FEAT-048. One factory, so the initial value and the list-switch reset can
+    // never drift apart. Visited and Called are now tri-state ("include" |
+    // "exclude" | null) on FEAT-047's control; Follow-up stays a plain boolean
+    // on purpose, because "everything except follow-ups" is not a question
+    // anyone asks and it is the control most likely to be tapped in a hurry.
+    // Not persisted: this state is in-memory and resets when you switch lists,
+    // so there is no stored shape to migrate.
+    function listFilterDefaults() {
+      return { followUp: false, visited: null, called: null, stages: { include: [], exclude: [] } };
+    }
+
     function isListFiltered() {
       const f = state.listFilters;
-      return !!(f.followUp || f.visited || f.called);
+      const s = normalizeTriState(f.stages);
+      return !!(f.followUp || f.visited || f.called || s.include.length || s.exclude.length);
     }
 
     function visibleListRows(rows) {
       const f = state.listFilters;
       return rows.filter(row =>
         (!f.followUp || isFollowedUp(row))
-        && (!f.visited || isTicked(row) === (f.visited === "yes"))
-        && (!f.called || isCalled(row) === (f.called === "yes")));
+        && (!f.visited || isTicked(row) === (f.visited === "include"))
+        && (!f.called || isCalled(row) === (f.called === "include"))
+        && matchesTriState(permitStage(row), f.stages));
     }
 
     function toggleFollowUpFilter() {
@@ -7620,39 +7735,48 @@
       announceFilterState();
     }
 
-    // Pressing the chip that is already on turns the facet off, so every chip
-    // is its own escape route and "all" needs no chip of its own.
-    function setRowFilter(facet, want) {
-      state.listFilters[facet] = state.listFilters[facet] === want ? null : want;
+    // Cycles off -> include -> exclude -> off, matching the map's dropdown so
+    // the two surfaces behave identically.
+    function setRowFilter(facet) {
+      const now = state.listFilters[facet];
+      state.listFilters[facet] = now === "include" ? "exclude" : now === "exclude" ? null : "include";
+      renderUserList();
+      announceFilterState();
+    }
+    function setListStageFilter(value) {
+      state.listFilters.stages = cycleTriState(state.listFilters.stages, value);
       renderUserList();
       announceFilterState();
     }
 
     function clearListFilters() {
-      state.listFilters = { followUp: false, visited: null, called: null };
+      state.listFilters = listFilterDefaults();
       renderUserList();
       announceListAction("Showing all permits in this list.");
     }
 
     // Says which filters are on, in words — the chips' pressed state is visual,
-    // and this is what a screen reader hears after a tap.
-    function announceFilterState() {
+    // and this is what a screen reader hears after a tap. Shared with
+    // noRowsMatchText so the two can never disagree about what is on.
+    function activeFilterWords() {
       const f = state.listFilters;
+      const s = normalizeTriState(f.stages);
+      const name = st => PERMIT_STAGE_LABELS[st] || st;
       const on = [];
       if (f.followUp) on.push("flagged for follow-up");
-      if (f.visited) on.push(f.visited === "yes" ? "visited" : "not visited");
-      if (f.called) on.push(f.called === "yes" ? "called" : "not called");
+      if (f.visited) on.push(f.visited === "include" ? "visited" : "not visited");
+      if (f.called) on.push(f.called === "include" ? "called" : "not called");
+      if (s.include.length) on.push(s.include.map(name).join(" or "));
+      if (s.exclude.length) on.push("not " + s.exclude.map(name).join(", not "));
+      return on;
+    }
+
+    function announceFilterState() {
+      const on = activeFilterWords();
       announceListAction(on.length
         ? `Showing only permits ${on.join(" and ")}.`
         : "Showing all permits in this list.");
     }
-
-    const ROW_FILTER_CHIPS = [
-      ["filter-visited", "visited", "yes"],
-      ["filter-not-visited", "visited", "no"],
-      ["filter-called", "called", "yes"],
-      ["filter-not-called", "called", "no"],
-    ];
 
     // The bar hides itself when NOTHING has been flagged, visited or called and
     // no filter is on: a filter for a state that cannot occur yet is a dead
@@ -7666,31 +7790,72 @@
       const flagged = rows.filter(isFollowedUp).length;
       const visited = rows.filter(isTicked).length;
       const called = rows.filter(isCalled).length;
-      bar.hidden = !flagged && !visited && !called && !isListFiltered();
-      btn.setAttribute("aria-pressed", state.listFilters.followUp ? "true" : "false");
-      for (const [id, facet, want] of ROW_FILTER_CHIPS) {
-        const chip = $(id);
-        if (chip) chip.setAttribute("aria-pressed", state.listFilters[facet] === want ? "true" : "false");
+      // Only stages PRESENT in this list, counted over the whole list rather
+      // than the filtered view, so ticking one option never moves the numbers
+      // beside the others. Computed BEFORE the bar's hide test, because whether
+      // any stage exists is now part of that decision.
+      const stageCounts = new Map();
+      for (const row of rows) {
+        const stage = permitStage(row);
+        if (stage) stageCounts.set(stage, (stageCounts.get(stage) || 0) + 1);
       }
+      // FEAT-048. The old rule hid the bar until something was visited, called or
+      // flagged — right for those chips, because a filter for a state that cannot
+      // occur yet is a dead control. Stage is not like that: EVERY permit has one,
+      // so on a fresh list where nobody has ticked anything the whole bar hid and
+      // the stage filter was unreachable. Caught by t77 asserting the bar is
+      // usable on an unflagged list.
+      bar.hidden = !flagged && !visited && !called && !stageCounts.size && !isListFiltered();
+      btn.setAttribute("aria-pressed", state.listFilters.followUp ? "true" : "false");
       // Counts, not just "N of M": on an unfiltered list they are the reason to
-      // reach for a chip in the first place.
+      // reach for a chip in the first place. Once a filter IS on, the line states
+      // its DIRECTION as well as the tally — "Showing 3 of 5" alone cannot tell
+      // you whether a stage was included or excluded, which is the whole point of
+      // a tri-state control.
       const tally = [];
       if (visited) tally.push(`${fmt(visited)} visited`);
       if (called) tally.push(`${fmt(called)} called`);
       if (flagged) tally.push(`${fmt(flagged)} flagged`);
+      const words = activeFilterWords();
       $("list-filter-status").textContent = isListFiltered()
-        ? `Showing ${fmt(filtered.length)} of ${fmt(rows.length)}`
+        ? `Showing ${fmt(filtered.length)} of ${fmt(rows.length)}${words.length ? ` · ${words.join(", ")}` : ""}`
         : tally.join(" · ");
+      const stageList = $("list-stage-list");
+      if (stageList) {
+        stageList.innerHTML = [...stageCounts].map(([stage, n]) => triStateOptionHtml({
+          value: stage,
+          label: PERMIT_STAGE_LABELS[stage] || stage,
+          count: n,
+          state: triStateOf(state.listFilters.stages, stage),
+          onclick: `setListStageFilter('${enc(stage)}')`,
+        })).join("");
+      }
+      const stageSummary = document.querySelector("#list-stage-summary b");
+      if (stageSummary) {
+        const s = normalizeTriState(state.listFilters.stages);
+        stageSummary.textContent = !s.include.length && !s.exclude.length ? "all"
+          : [s.include.length ? `${s.include.length} included` : "", s.exclude.length ? `${s.exclude.length} excluded` : ""].filter(Boolean).join(", ");
+      }
+      const stageDetails = $("list-stage-details");
+      if (stageDetails) stageDetails.hidden = stageCounts.size === 0;
+      for (const facet of ["visited", "called"]) {
+        const pill = $(`filter-${facet}`);
+        if (!pill) continue;
+        const st = state.listFilters[facet] || "";
+        pill.dataset.state = st;
+        const label = facet === "visited" ? "Visited" : "Called";
+        const said = st === "include" ? "included, activate to exclude"
+          : st === "exclude" ? "excluded, activate to clear"
+          : "not filtered, activate to include";
+        pill.setAttribute("aria-label", `${label}, ${said}`);
+        pill.textContent = st === "include" ? `✓ ${label}` : st === "exclude" ? `✗ ${label}` : label;
+      }
     }
 
     // Names the filters that emptied the view, so the empty state says which
     // control to reach for rather than the old hard-coded follow-up sentence.
     function noRowsMatchText() {
-      const f = state.listFilters;
-      const on = [];
-      if (f.followUp) on.push("flagged for follow-up");
-      if (f.visited) on.push(f.visited === "yes" ? "visited" : "not visited");
-      if (f.called) on.push(f.called === "yes" ? "called" : "not called");
+      const on = activeFilterWords();
       return `No permits in this list are ${on.join(" and ")}.`;
     }
 
@@ -8913,6 +9078,114 @@
       openPermitDetail(JSON.parse(decodeURIComponent(encoded)));
     }
 
+    // FEAT-046. Construction stage, from ydr8-5enu's permit_milestone column.
+    // Spec: docs/superpowers/specs/2026-08-10-permit-milestones-design.md
+    //
+    // Triplicated deliberately — there is no shared module on this site — and
+    // held in agreement by worker/test/stage-map.test.mjs, the same guard
+    // FIX-046 needed after three copies of one cap silently disagreed.
+    //
+    // These are the 11 values that appear on OPEN permits (measured against
+    // Socrata 2026-08-10, 100% coverage every issue year 2015-2026). Closed
+    // permits are deliberately absent: they are decided by permit_status below,
+    // because 13,973 of them carry an in-progress milestone after expiring or
+    // being revoked mid-inspection, and reading milestone first would label an
+    // EXPIRED permit "In progress".
+    const PERMIT_STAGES = {
+      "PERMIT ISSUED (FEE DUE)": "fee",
+      "INSPECTION ELIGIBLE": "notstarted",
+      "INSPECTIONS": "progress",
+      "PROGRESS INSPECTIONS": "progress",
+      "INSPECTIONS (CERTIFICATE OF OCCUPANCY REQUIRED)": "finishing",
+      "CERTIFICATE OF OCCUPANCY PENDING": "finishing",
+      "CERTIFICATE OF OCCUPANCY PENDING (TEMPORARY OR PARTIAL OCCUPANCY APPROVED)": "finishing",
+      "POST CONSTRUCTION FILING": "finishing",
+      "FINAL INSPECTION": "finishing",
+      "SUSPENDED": "halted",
+      "STOP WORK": "halted"
+    };
+    const PERMIT_STAGE_LABELS = {
+      fee: "Fee due",
+      notstarted: "Not started",
+      progress: "In progress",
+      finishing: "Finishing",
+      halted: "Halted",
+      complete: "Complete",
+      ended: "Ended early"
+    };
+    // FEAT-047. The tri-state filter control: off -> include -> exclude -> off.
+    // All the behaviour is in these four pure functions so it can be tested
+    // without a browser; the renderer below is only markup.
+    //
+    // Triplicated because this site has no shared module, and held in agreement
+    // by worker/test/tristate.test.mjs — the guard FIX-046 needed after three
+    // copies of one constant silently disagreed.
+    function normalizeTriState(value) {
+      // Storage can hold anything a previous version wrote, or nothing at all.
+      const list = v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : []);
+      return { include: list(value && value.include), exclude: list(value && value.exclude) };
+    }
+    function triStateOf(filter, value) {
+      const f = normalizeTriState(filter);
+      if (f.include.includes(value)) return "include";
+      if (f.exclude.includes(value)) return "exclude";
+      return "";
+    }
+    function cycleTriState(filter, value) {
+      const f = normalizeTriState(filter);
+      const include = new Set(f.include), exclude = new Set(f.exclude);
+      if (include.has(value)) { include.delete(value); exclude.add(value); }
+      else if (exclude.has(value)) { exclude.delete(value); }
+      else { include.add(value); }
+      return { include: [...include], exclude: [...exclude] };
+    }
+    // Rule B: includes narrow, excludes remove, and BOTH always apply. The
+    // rejected alternative let any include silence the excludes, which lets a
+    // control the user has visibly set stop doing anything — that reads as a bug.
+    function matchesTriState(value, filter) {
+      const f = normalizeTriState(filter);
+      if (f.include.length && !f.include.includes(value)) return false;
+      if (f.exclude.includes(value)) return false;
+      return true;
+    }
+    // One option row. A NATIVE <button>, not a div with role="button": a real
+    // button is keyboard-operable without a keydown handler, and a tabindex
+    // element with only an onclick is keyboard-dead — this repo has shipped
+    // that three times.
+    //
+    // The state goes in the ACCESSIBLE NAME. aria-checked="mixed" is not usable
+    // here: it means "partially checked", not "excluded", and would announce
+    // something false. The glyphs are plain characters, never Material Symbols
+    // ligatures, which render as literal text until the font loads (FIX-027).
+    function triStateOptionHtml(opt) {
+      const state = opt.state || "";
+      const mark = state === "include" ? "✓" : state === "exclude" ? "✗" : "";
+      const said = state === "include" ? "included, activate to exclude"
+        : state === "exclude" ? "excluded, activate to clear"
+        : "not filtered, activate to include";
+      const count = opt.count == null ? "" : `<span class="tri-count">${fmt(opt.count)}</span>`;
+      return `<button type="button" class="tri" data-state="${esc(state)}" data-value="${esc(opt.value)}"
+        aria-label="${esc(opt.label)}, ${said}" onclick="${opt.onclick}"><span class="tri-box" aria-hidden="true">${mark}</span><span class="tri-label">${esc(opt.label)}</span>${count}</button>`;
+    }
+    // Total over all 7 permit_status values plus null (843,715 rows). Returns ""
+    // for anything unrecognised, which renders NO chip rather than a placeholder
+    // — FIX-012's rule that no sample means no pill, never a zero.
+    function permitStage(row) {
+      const status = clean(row && row.permit_status).trim().toUpperCase();
+      if (status === "COMPLETE") return "complete";
+      if (status === "EXPIRED" || status === "CANCELLED" || status === "REVOKED") return "ended";
+      if (status !== "ACTIVE" && status !== "SUSPENDED" && status !== "PHASED PERMITTING") return "";
+      return PERMIT_STAGES[clean(row && row.permit_milestone).trim().toUpperCase()] || "";
+    }
+    // The chip. Carries the verbatim city value as its title, so the grouping
+    // never hides what the dataset actually said.
+    function permitStageChip(row) {
+      const stage = permitStage(row);
+      if (!stage) return "";
+      const raw = clean(row && row.permit_milestone).trim();
+      return `<span class="stage stage-${stage}"${raw ? ` title="${esc(raw)}"` : ""}>${esc(PERMIT_STAGE_LABELS[stage])}</span>`;
+    }
+
     function permitFacts(row, facts) {
       const items = facts
         .filter(([label, value]) => clean(value) !== "")
@@ -8999,7 +9272,7 @@
                   + box("tick-called", "Called", isCalled(row), flagByText("called", row), "toggleCalled");
               })() : ""}
               <td data-label="Permit">${options.move ? `<span class="list-ordinal" aria-label="Stop ${offset + i + 1}">${offset + i + 1}</span>` : ""}<strong>${esc(row.permit_number)}</strong>${options.move && isFollowedUp(row) ? followUpBadgeHtml(row) : ""}<br><span class="small">${esc(row.permit_type)}</span>${options.notes ? routeLegText(row) : ""}</td>
-              <td data-label="Status">${esc(row.permit_status)}</td>
+              <td data-label="Status">${esc(row.permit_status)}${(() => { const c = permitStageChip(row); return c ? `<br><span class="small">${c}</span>` : ""; })()}</td>
               <td data-label="Issued">${esc(row.issue_date)}</td>
               <td data-label="Address">${options.move && clean(row.address) ? (() => { const u = mapsUrls(row.address); return `<span class="maps-picker"><button type="button" class="address-open" aria-haspopup="true" aria-expanded="false" aria-controls="maps-menu-${offset + i}" onclick="event.stopPropagation(); toggleMapsMenu(this)">${esc(row.address)}<span class="chev" aria-hidden="true">▾</span></button><span class="maps-menu" id="maps-menu-${offset + i}" role="menu"><span class="maps-menu-label">Open in</span><a role="menuitem" href="${esc(u.apple)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Apple Maps</a><a role="menuitem" href="${esc(u.google)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Google Maps</a><a role="menuitem" href="${esc(u.waze)}" target="_blank" rel="noopener" onclick="event.stopPropagation(); closeAllMapsMenus()">Waze</a></span></span>`; })() : esc(row.address)}<br><span class="small">${esc(row.work_type)}</span>${row.is_custom ? (row.no_geo ? `<span class="added warn" title="Could not be placed on the map">\u26A0 No location</span>` : `<span class="added" title="Typed by hand, not matched to a city permit">\u270E Added by hand</span>`) : ""}</td>
               ${options.move ? (() => { const pu = row.is_custom ? customUse(row._use) : permitUse(row); if (pu.key === "unclear") return `<td data-label="Use"></td>`; const badge = row.is_custom ? `<span class="approx" title="Typed when this address was added">typed</span>` : `<span class="approx" title="Inferred from the work description \u2014 the permits dataset has no occupancy field">approx</span>`; return `<td data-label="Use"><span class="use use-${pu.key}">${pu.glyph} ${esc(pu.label)}</span>${badge}</td>`; })() : ""}
@@ -9021,7 +9294,7 @@
                   ? "Clear the follow-up filter to reorder stops"
                   : row.is_custom ? "An added address keeps the stop number it was typed with. Remove it and add it again to move it" : "";
                 const btn = (glyph, dir, edge) => moveBlocked
-                  ? `<button class="icon-button" aria-disabled="true" title="${esc(moveBlocked)}" aria-label="Move ${esc(row.permit_number || row.address || "this stop")} ${dir < 0 ? "up" : "down"} — unavailable" onclick="event.stopPropagation(); announceListAction('${esc(moveBlocked)}.')">${glyph}</button>`
+                  ? `<button class="icon-button" aria-disabled="true" title="${esc(moveBlocked)}" aria-label="Move ${esc(row.permit_number || row.address || "this stop")} ${dir < 0 ? "up" : "down"} — unavailable. ${esc(moveBlocked)}" onclick="event.stopPropagation(); announceListAction('${esc(moveBlocked)}.')">${glyph}</button>`
                   : `<button class="icon-button" title="Move ${dir < 0 ? "up" : "down"}" aria-label="Move ${esc(row.permit_number)} ${dir < 0 ? "up" : "down"}" ${edge ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', ${dir})">${glyph}</button>`;
                 return `<td class="move-cell" data-label="Move"><div class="move-controls">${btn("&uarr;", -1, offset + i === 0)}${btn("&darr;", 1, offset + i >= total - 1)}</div></td>`;
               })() : ""}
@@ -10242,6 +10515,7 @@
           <div class="pm-content">
           <div class="pm-tagrow">
             <span class="pm-tag">${esc(row.permit_status)}</span>
+            ${permitStageChip(row)}
             <span class="pm-tag">${esc(row.permit_type)}</span>
             ${row.reported_cost ? `<span class="pm-tag num">${money(row.reported_cost)}</span>` : ""}
           </div>`,
@@ -10257,6 +10531,7 @@
             ["Issue date", clean(row.issue_date)],
             ["Permit type", clean(row.permit_type)],
             ["Status", clean(row.permit_status)],
+            ["Stage", clean(row.permit_milestone)],
             ["Building type", bt, approx],
             ["Review type", clean(row.review_type)],
             ["Work type", clean(row.work_type)],
@@ -10399,7 +10674,7 @@
       return `${pager}
         <div class="pm-tablewrap"><table aria-label="Open permits for ${esc(name)}">
           <thead><tr><th>Permit</th><th>Issued</th><th>Address</th><th>Cost</th></tr></thead>
-          <tbody>${rows.map(r => `<tr tabindex="0" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target.closest('tr')===this){event.preventDefault();this.click();}" onclick="openPermitDetailFromEncoded('${enc(JSON.stringify(r))}')"><td><strong>${esc(r.permit_number)}</strong><br><span class="small">${esc(r.permit_status)}</span></td><td class="num">${esc(r.issue_date)}</td><td>${esc(r.address)}</td><td class="num">${money(r.reported_cost)}</td></tr>`).join("")}</tbody>
+          <tbody>${rows.map(r => `<tr tabindex="0" onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target.closest('tr')===this){event.preventDefault();this.click();}" onclick="openPermitDetailFromEncoded('${enc(JSON.stringify(r))}')"><td><strong>${esc(r.permit_number)}</strong><br><span class="small">${esc(r.permit_status)}</span>${(() => { const c = permitStageChip(r); return c ? `<br><span class="small">${c}</span>` : ""; })()}</td><td class="num">${esc(r.issue_date)}</td><td>${esc(r.address)}</td><td class="num">${money(r.reported_cost)}</td></tr>`).join("")}</tbody>
         </table></div>`;
     }
 
@@ -10648,18 +10923,31 @@
     // resolving via the existing geo cache/fetch (shared with the saved-list
     // table columns) rather than a fresh lookup path. The three run in parallel;
     // each fills independently so one slow source cannot hold the others at "…".
+    // FIX-045. The paragraph above says each source fills independently. Until
+    // now the code did the opposite: one `await Promise.all(jobs)` gated ALL
+    // three fills, so the Cook County parcel lookup added by FEAT-038 held Zone
+    // and TIF at "…" long after their own answer had arrived — on the live site
+    // that is a third-party API, so users waited on it for free. Each source now
+    // writes its own spans the moment it settles, and a rejection fills too
+    // rather than leaving "…" on screen forever.
     async function fillPermitGeo(body, row) {
       const num = clean(row.permit_number);
+      const fillZoneTif = () => {
+        const zone = body.querySelector(`.geo-zone[data-permit="${CSS.escape(num)}"]`);
+        const tif = body.querySelector(`.geo-tif[data-permit="${CSS.escape(num)}"]`);
+        if (zone) zone.textContent = geoZoneCache.get(num) || "—";
+        if (tif) tif.textContent = geoTifCache.get(num) || "—";
+      };
+      const fillUse = () => {
+        const use = body.querySelector(`.parcel-use[data-permit="${CSS.escape(num)}"]`);
+        if (use) use.innerHTML = parcelUseHtml(parcelUseCache.get(num) || null, row);
+      };
       const jobs = [];
-      if (!geoZoneCache.has(num) || !geoTifCache.has(num)) jobs.push(resolveGeoForRows([row]));
-      if (!parcelUseCache.has(num)) jobs.push(ensurePermitParcelUse(row));
+      if (geoZoneCache.has(num) && geoTifCache.has(num)) fillZoneTif();
+      else jobs.push(resolveGeoForRows([row]).then(fillZoneTif, fillZoneTif));
+      if (parcelUseCache.has(num)) fillUse();
+      else jobs.push(ensurePermitParcelUse(row).then(fillUse, fillUse));
       if (jobs.length) { try { await Promise.all(jobs); } catch {} }
-      const zone = body.querySelector(`.geo-zone[data-permit="${CSS.escape(num)}"]`);
-      const tif = body.querySelector(`.geo-tif[data-permit="${CSS.escape(num)}"]`);
-      const use = body.querySelector(`.parcel-use[data-permit="${CSS.escape(num)}"]`);
-      if (zone) zone.textContent = geoZoneCache.get(num) || "—";
-      if (tif) tif.textContent = geoTifCache.get(num) || "—";
-      if (use) use.innerHTML = parcelUseHtml(parcelUseCache.get(num) || null, row);
     }
 
     // Public entry point for opening a permit's detail overlay. Starts a fresh

@@ -164,5 +164,12 @@ static site.
   source text with a RAW python string; write astral emoji as `\U0001F4AC`, never
   `💬` (a lone surrogate throws on `.encode("utf-8")`).
 - **Overlay code is byte-identical across `list.html` and `index.html`** by design;
-  change both and verify the shared block matches. Stage `list.html` with
-  `git -c core.autocrlf=false add` (its blob is CRLF; index/map are LF).
+  change both and verify the shared block matches — compare RAW BYTES, not text,
+  or a line-ending difference passes as a match.
+- **All three pages are CRLF in the working tree** (re-measured 2026-08-10:
+  index 7,811/7,811, list 10,818/10,818, map 7,601/7,601), and `core.autocrlf`
+  is `true`. This line previously claimed index and map were LF; that was wrong
+  and cost a code review a false Critical before it was measured. Two
+  consequences: a multi-line search anchor written with `\n` silently never
+  matches, and a blob can still hold stray bare LF from an earlier commit — check
+  with `git diff --ignore-cr-at-eol` before believing an unexplained hunk.
