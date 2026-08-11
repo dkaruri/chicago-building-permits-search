@@ -711,15 +711,8 @@
       width: auto;
     }
 
-    /* FEAT-031's four chips, same rules. Both members of a pair share a colour
-       — the label text is what distinguishes them, and sharing keeps the pair
-       legible as a pair. Measured against the panel in both themes, unpressed
-       (--tc on panel) and pressed (panel on --tc), which are the same figure:
-       --accent 5.36:1 light / 9.76:1 dark, --t5 7.76:1 / 8.61:1. All clear 4.5.
-       Pressed state is never colour alone — button.tag[aria-pressed="true"]
-       already prints a check glyph. */
-    #filter-visited, #filter-not-visited { --tc: var(--accent); }
-    #filter-called, #filter-not-called { --tc: var(--t5); }
+    /* Visited/Called are now .tri-pill (FEAT-048), styled by data-state via
+       the .tri-pill rules below — they no longer read --tc. */
 
     #filter-followup .material-symbols-outlined {
       font-size: 16px;
@@ -4097,8 +4090,9 @@
       // View filters for the saved list. Deliberately NOT persisted: a filter
       // you forgot you set is how a list looks half-empty after a reload.
       // followUp is a plain on/off; visited and called are tri-state —
-      // null (don't care) / "yes" / "no" — because "not visited" is as useful a
-      // question as "visited" and the two cannot both be true (FEAT-031).
+      // null (don't care) / "include" / "exclude" — because "not visited" is as
+      // useful a question as "visited" and the two cannot both be true (FEAT-031,
+      // reshaped to include/exclude by FEAT-048).
       listFilters: { followUp: false, visited: null, called: null, stages: { include: [], exclude: [] } },
       focalPoint: null,
       draggedPermitNumber: "",
@@ -7702,7 +7696,7 @@
 
     // ---- List view filters (FEAT-034, extended by FEAT-031) ----
     // Three facets over one row set. `followUp` is on/off; `visited` and
-    // `called` are tri-state (null / "yes" / "no").
+    // `called` are tri-state (null / "include" / "exclude").
     //
     // Within a facet the two chips are MUTUALLY EXCLUSIVE — a permit cannot be
     // both visited and not visited, and offering the contradiction only to
@@ -7762,13 +7756,23 @@
     }
 
     // Says which filters are on, in words — the chips' pressed state is visual,
-    // and this is what a screen reader hears after a tap.
-    function announceFilterState() {
+    // and this is what a screen reader hears after a tap. Shared with
+    // noRowsMatchText so the two can never disagree about what is on.
+    function activeFilterWords() {
       const f = state.listFilters;
+      const s = normalizeTriState(f.stages);
+      const name = st => PERMIT_STAGE_LABELS[st] || st;
       const on = [];
       if (f.followUp) on.push("flagged for follow-up");
-      if (f.visited) on.push(f.visited === "yes" ? "visited" : "not visited");
-      if (f.called) on.push(f.called === "yes" ? "called" : "not called");
+      if (f.visited) on.push(f.visited === "include" ? "visited" : "not visited");
+      if (f.called) on.push(f.called === "include" ? "called" : "not called");
+      if (s.include.length) on.push(s.include.map(name).join(" or "));
+      if (s.exclude.length) on.push("not " + s.exclude.map(name).join(", not "));
+      return on;
+    }
+
+    function announceFilterState() {
+      const on = activeFilterWords();
       announceListAction(on.length
         ? `Showing only permits ${on.join(" and ")}.`
         : "Showing all permits in this list.");
@@ -7840,11 +7844,7 @@
     // Names the filters that emptied the view, so the empty state says which
     // control to reach for rather than the old hard-coded follow-up sentence.
     function noRowsMatchText() {
-      const f = state.listFilters;
-      const on = [];
-      if (f.followUp) on.push("flagged for follow-up");
-      if (f.visited) on.push(f.visited === "yes" ? "visited" : "not visited");
-      if (f.called) on.push(f.called === "yes" ? "called" : "not called");
+      const on = activeFilterWords();
       return `No permits in this list are ${on.join(" and ")}.`;
     }
 
