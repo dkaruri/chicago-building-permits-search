@@ -19,18 +19,36 @@ const ROUTES = [
   { pattern: /^\/api\/photo\//, handler: handlePhotos },
 ];
 
-function corsHeaders(env) {
+// ALLOWED_ORIGIN is a comma-separated list so a local preview can exercise the
+// real API. The browser compares Access-Control-Allow-Origin to its own origin
+// EXACTLY — a list is not a legal value — so the matching origin is echoed back
+// and everything else falls to the first entry, which keeps production the
+// default for any caller that sends no Origin at all.
+//
+// `Vary: Origin` is not decoration. The response now differs by request origin,
+// and without it any shared cache in front of this Worker may hand a response
+// minted for one origin to a browser on another, which fails in a way that
+// looks like a Worker bug and is not reproducible locally.
+function allowedOrigin(env, request) {
+  const configured = (env.ALLOWED_ORIGIN || "*").split(",").map(s => s.trim()).filter(Boolean);
+  if (configured.includes("*")) return "*";
+  const origin = request && request.headers.get("Origin");
+  return origin && configured.includes(origin) ? origin : (configured[0] || "*");
+}
+
+function corsHeaders(env, request) {
   return {
-    "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN || "*",
+    "Access-Control-Allow-Origin": allowedOrigin(env, request),
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    Vary: "Origin",
   };
 }
 
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders(env) });
+      return new Response(null, { status: 204, headers: corsHeaders(env, request) });
     }
 
     const url = new URL(request.url);
@@ -54,7 +72,7 @@ export default {
           const response = await route.handler(url, env, request);
           // Attach CORS headers to every response
           const headers = new Headers(response.headers);
-          for (const [k, v] of Object.entries(corsHeaders(env))) {
+          for (const [k, v] of Object.entries(corsHeaders(env, request))) {
             headers.set(k, v);
           }
           return new Response(response.body, {
@@ -62,7 +80,7 @@ export default {
             headers,
           });
         } catch (err) {
-          return json({ error: err.message }, 500, env);
+          return json({ error: err.message }, 500, env, request);
         }
       }
     }
@@ -91,20 +109,19 @@ export default {
         ],
       },
       200,
-      env
+      env,
+      request
     );
   },
 
-  // ponytail: cron can't run on CF free tier (10ms CPU). Use seed-kv.js locally.
-  async scheduled() {},
 };
 
-export function json(data, status = 200, env = {}) {
+export function json(data, status = 200, env = {}, request = null) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json",
-      ...corsHeaders(env),
+      ...corsHeaders(env, request),
     },
   });
 }
