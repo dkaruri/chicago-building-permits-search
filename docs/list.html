@@ -1342,6 +1342,24 @@
       background: var(--danger-soft);
     }
 
+    /* An arrow that cannot act has to LOOK like it cannot act — until FIX-043
+       both of these states were painted exactly like a working button, because
+       the author `color`/`background` above outrank the UA's :disabled styling.
+       Two different states, one appearance: an arrow at the end of the list is
+       genuinely `disabled`, while a filter-locked one is `aria-disabled` so it
+       keeps its place in the tab order and can say why when pressed.
+       Muted tokens rather than `opacity`, for the reason spelled out above the
+       .user-list-toolbar rule: fading composites text AND fill against the
+       surface. Later in the file than .icon-button:hover, so it wins there too
+       (equal specificity) and a dead arrow does not light up under the cursor. */
+    .icon-button:disabled,
+    .icon-button[aria-disabled="true"] {
+      border-color: var(--line);
+      color: var(--muted);
+      background: var(--panel);
+      cursor: not-allowed;
+    }
+
     .pager button:disabled {
       cursor: not-allowed;
       opacity: 0.45;
@@ -8653,45 +8671,120 @@
       return { added, skipped };
     }
 
-    async function moveSavedPermit(draggedNumber, targetNumber, placement = "before") {
-      if (!draggedNumber || !targetNumber || draggedNumber === targetNumber) return;
-      const next = state.userPermitNumbers.filter(number => number !== draggedNumber);
-      const targetIndex = next.indexOf(targetNumber);
-      if (targetIndex < 0) return;
-      next.splice(targetIndex + (placement === "after" ? 1 : 0), 0, draggedNumber);
-      state.userPermitNumbers = next;
+    // ---- Reordering (FIX-043) ----
+    // There is ONE order on screen and it has to be one order in the code. It
+    // is stored in two places — permits in state.userPermitNumbers, hand-typed
+    // stops in their own `pos` inside list.custom, spliced together by
+    // mergeCustomStops — and every mover here used to reach for the permits
+    // array alone. That single omission was two bugs wearing one coat: a
+    // hand-typed stop is not in that array at all, so its arrows moved nothing
+    // (FIX-042 made them at least say so), and a permit's arrow LEAPFROGGED any
+    // added address beside it, travelling two visible places on one press.
+    // So the movers below all work on the merged rows — what the user can
+    // actually see — and applyMergedOrder writes the result back to both
+    // stores. A press moves a stop exactly one place, whatever kind it is.
+    //
+    // Writing back means rewriting every custom stop's `pos`, which settles the
+    // open question from FIX-042: `pos` is not a permanent property of a
+    // hand-typed stop. It is only where the stop currently sits — the Add
+    // address dialog's "Position in list" chooses where it STARTS, exactly as a
+    // permit's index does.
+    function applyMergedOrder(merged) {
+      // Only permits that are currently rendered can be reordered: a saved
+      // number whose row has not hydrated is absent from `merged`. So permute
+      // the ones we know in place and leave the unknown ones on their existing
+      // slots — rebuilding the array from `merged` would DELETE them, and a
+      // reorder must never lose a permit.
+      const order = merged.filter(row => !row.is_custom).map(row => clean(row.permit_number));
+      const known = new Set(order);
+      let at = 0;
+      state.userPermitNumbers = state.userPermitNumbers.map(number => known.has(number) ? order[at++] : number);
       saveUserListCookie();
+      const list = activeList();
+      if (!list || !(list.custom || []).length) return;
+      // `pos` is a 1-based place in the merged list, which is exactly how
+      // mergeCustomStops reads it back — insert in ascending pos and each stop
+      // lands on the index it names.
+      list.custom = list.custom.map(c => {
+        const seat = merged.findIndex(row => row.custom_id === c.id);
+        return seat < 0 ? c : { ...c, pos: seat + 1 };
+      });
+      saveUserLists();
+      sendListOp({ f: "custom", v: list.custom });
+    }
+
+    function stopLabel(row) {
+      // A hand-typed stop has no permit number by design (customToRow), so the
+      // address is the only name it has.
+      return clean(row && (row.permit_number || row.address)) || "This stop";
+    }
+
+    async function moveStopTo(draggedKey, targetKey, placement = "before") {
+      if (!draggedKey || !targetKey || draggedKey === targetKey) return;
+      const rows = userListRows();
+      const from = rows.findIndex(row => tickKeyFor(row) === draggedKey);
+      if (from < 0) return;
+      const merged = rows.slice();
+      const [moved] = merged.splice(from, 1);
+      const targetIndex = merged.findIndex(row => tickKeyFor(row) === targetKey);
+      if (targetIndex < 0) return;
+      const seat = targetIndex + (placement === "after" ? 1 : 0);
+      merged.splice(seat, 0, moved);
+      applyMergedOrder(merged);
       clearUserRoute("List order changed. Recalculate driving distances when ready.");
-      announceListAction("Permit order updated.");
-      followPermitToPage(draggedNumber);
+      announceListAction(`${stopLabel(moved)} moved to stop ${seat + 1} of ${merged.length}.`);
+      followStopToPage(draggedKey);
       await renderUserList();
+    }
+
+    async function moveStopByOffset(encodedKey, delta) {
+      const key = decodeURIComponent(encodedKey);
+      const rows = userListRows();
+      const index = rows.findIndex(row => tickKeyFor(row) === key);
+      if (index < 0) return;
+      const nextIndex = Math.min(Math.max(index + delta, 0), rows.length - 1);
+      if (nextIndex === index) return;
+      const merged = rows.slice();
+      const [moved] = merged.splice(index, 1);
+      merged.splice(nextIndex, 0, moved);
+      applyMergedOrder(merged);
+      clearUserRoute("List order changed. Recalculate driving distances when ready.");
+      // "Permit moved." said nothing a screen-reader user could act on. Where it
+      // landed is the whole point of pressing the button.
+      announceListAction(`${stopLabel(moved)} moved to stop ${nextIndex + 1} of ${merged.length}.`);
+      followStopToPage(key);
+      await renderUserList();
+      refocusMoveButton(key, delta);
+    }
+
+    // renderUserList replaces the table's innerHTML, so the arrow that was just
+    // pressed no longer exists and focus falls to <body> — pressing it twice
+    // from the keyboard was impossible. Put focus back on the same arrow of the
+    // same row, wherever that row now is. If the stop landed at an end its
+    // arrow in that direction is `disabled` and cannot take focus, so fall back
+    // to the other one rather than dropping focus to the document.
+    function refocusMoveButton(key, delta) {
+      const tr = Array.from(document.querySelectorAll("#user-list tr[data-tick-row]"))
+        .find(row => row.dataset.tickRow === key);
+      if (!tr) return;
+      const arrows = tr.querySelectorAll(".move-controls .icon-button");
+      const wanted = arrows[delta < 0 ? 0 : 1];
+      const other = arrows[delta < 0 ? 1 : 0];
+      const target = wanted && !wanted.disabled ? wanted : other;
+      if (target && !target.disabled) target.focus();
     }
 
     // A stop moved across a page boundary would otherwise vanish from the view
     // — the move worked, but it looks like the row was deleted. Follow it to
     // whichever page it landed on. Measured against the rendered rows, not
     // userPermitNumbers, because custom stops are merged into the view.
-    function followPermitToPage(number) {
-      const target = clean(number);
-      const at = visibleListRows(userListRows()).findIndex(row => clean(row.permit_number) === target);
+    function followStopToPage(key) {
+      const at = visibleListRows(userListRows()).findIndex(row => tickKeyFor(row) === key);
       if (at >= 0) state.listPage = Math.floor(at / LIST_PAGE_SIZE);
     }
 
-    async function moveSavedPermitByOffset(encodedNumber, delta) {
-      const number = decodeURIComponent(encodedNumber);
-      const index = state.userPermitNumbers.indexOf(number);
-      if (index < 0) return;
-      const nextIndex = Math.min(Math.max(index + delta, 0), state.userPermitNumbers.length - 1);
-      if (nextIndex === index) return;
-      const next = state.userPermitNumbers.slice();
-      next.splice(index, 1);
-      next.splice(nextIndex, 0, number);
-      state.userPermitNumbers = next;
-      saveUserListCookie();
-      clearUserRoute("List order changed. Recalculate driving distances when ready.");
-      announceListAction("Permit moved.");
-      followPermitToPage(number);
-      await renderUserList();
+    function followPermitToPage(number) {
+      followStopToPage(clean(number));
     }
 
     function permitDragStart(event, encodedNumber) {
@@ -8757,16 +8850,22 @@
       delete row.dataset.dropPlacement;
     }
 
-    async function savedPermitDrop(event, row, encodedTargetNumber) {
+    async function savedPermitDrop(event, row, encodedTargetKey) {
       event.preventDefault();
       event.stopPropagation();
       const placement = row.dataset.dropPlacement || "before";
       row.classList.remove("drop-before", "drop-after");
       delete row.dataset.dropPlacement;
       const dragged = draggedPermitNumber(event);
-      const target = decodeURIComponent(encodedTargetNumber);
-      if (state.userPermitNumbers.includes(dragged)) {
-        await moveSavedPermit(dragged, target, placement);
+      const target = decodeURIComponent(encodedTargetKey);
+      // Both sides are now tickKeyFor keys, so drag lands a hand-typed stop
+      // exactly where the arrows would (FIX-043) — the two controls must not
+      // disagree about what a list's order is. Membership is asked of the
+      // rendered rows rather than userPermitNumbers, which a custom stop is
+      // never in; anything not already a stop is a permit dragged in from
+      // elsewhere on the page and gets added instead of moved.
+      if (userListRows().some(item => tickKeyFor(item) === dragged)) {
+        await moveStopTo(dragged, target, placement);
       } else {
         await addPermitNumberToUserList(dragged, target, placement);
       }
@@ -9513,9 +9612,9 @@
               ${options.move ? `data-tick-row="${esc(tickKeyFor(row))}"` : ""}
               class="${options.move && isTicked(row) ? "is-done" : ""}"
               draggable="${options.select || options.reorder ? "true" : "false"}"
-              ondragstart="permitDragStart(event, '${enc(row.permit_number)}')"
+              ondragstart="permitDragStart(event, '${enc(tickKeyFor(row))}')"
               ondragend="permitDragEnd()"
-              ${options.reorder ? `ondragover="savedPermitDragOver(event, this)" ondragleave="savedPermitDragLeave(this)" ondrop="savedPermitDrop(event, this, '${enc(row.permit_number)}')"` : ""}
+              ${options.reorder ? `ondragover="savedPermitDragOver(event, this)" ondragleave="savedPermitDragLeave(this)" ondrop="savedPermitDrop(event, this, '${enc(tickKeyFor(row))}')"` : ""}
               onclick="${options.select ? `selectPermit(${i})` : `openPermitDetailFromEncoded('${enc(JSON.stringify(row))}')`}"
             >
               ${options.remove ? `<td class="select-cell" data-label="Remove" onclick="event.stopPropagation()"><button class="icon-button danger" title="Remove from list" aria-label="Remove ${esc(row.permit_number || row.address || "this stop")} from list" onclick="event.stopPropagation(); removeStopFromUserList('${enc(tickKeyFor(row))}')">&times;</button></td>` : ""}
@@ -9547,17 +9646,19 @@
                 // FULL list, so from a filtered view it would often not appear
                 // to move at all. aria-disabled, not disabled, so the button
                 // stays focusable and can say why when pressed.
-                // A hand-typed stop holds its place through its own `pos` in
-                // list.custom, which moveSavedPermitByOffset (an index into
-                // userPermitNumbers) cannot reach — so its arrows did nothing at
-                // all, silently. Same aria-disabled treatment as the filtered
-                // case until custom stops can really be reordered (FIX-042).
+                // A hand-typed stop used to be blocked here too — it is not any
+                // more (FIX-043): every stop moves through the same merged
+                // order now, so there is nothing left to explain away.
                 const moveBlocked = options.moveLocked
                   ? "Clear the follow-up filter to reorder stops"
-                  : row.is_custom ? "An added address keeps the stop number it was typed with. Remove it and add it again to move it" : "";
+                  : "";
+                // Named for the label the same way the X and the ticks are: a
+                // hand-typed stop has no permit number, so this said "Move  up"
+                // to a screen reader before FIX-043.
+                const named = esc(row.permit_number || row.address || "this stop");
                 const btn = (glyph, dir, edge) => moveBlocked
-                  ? `<button class="icon-button" aria-disabled="true" title="${esc(moveBlocked)}" aria-label="Move ${esc(row.permit_number || row.address || "this stop")} ${dir < 0 ? "up" : "down"} — unavailable. ${esc(moveBlocked)}" onclick="event.stopPropagation(); announceListAction('${esc(moveBlocked)}.')">${glyph}</button>`
-                  : `<button class="icon-button" title="Move ${dir < 0 ? "up" : "down"}" aria-label="Move ${esc(row.permit_number)} ${dir < 0 ? "up" : "down"}" ${edge ? "disabled" : ""} onclick="event.stopPropagation(); moveSavedPermitByOffset('${enc(row.permit_number)}', ${dir})">${glyph}</button>`;
+                  ? `<button class="icon-button" aria-disabled="true" title="${esc(moveBlocked)}" aria-label="Move ${named} ${dir < 0 ? "up" : "down"} — unavailable. ${esc(moveBlocked)}" onclick="event.stopPropagation(); announceListAction('${esc(moveBlocked)}.')">${glyph}</button>`
+                  : `<button class="icon-button" title="Move ${dir < 0 ? "up" : "down"}" aria-label="Move ${named} ${dir < 0 ? "up" : "down"}" ${edge ? "disabled" : ""} onclick="event.stopPropagation(); moveStopByOffset('${enc(tickKeyFor(row))}', ${dir})">${glyph}</button>`;
                 return `<td class="move-cell" data-label="Move"><div class="move-controls">${btn("&uarr;", -1, offset + i === 0)}${btn("&darr;", 1, offset + i >= total - 1)}</div></td>`;
               })() : ""}
             </tr>`).join("")}</tbody>
