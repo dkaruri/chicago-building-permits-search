@@ -7790,25 +7790,36 @@
       const flagged = rows.filter(isFollowedUp).length;
       const visited = rows.filter(isTicked).length;
       const called = rows.filter(isCalled).length;
-      bar.hidden = !flagged && !visited && !called && !isListFiltered();
-      btn.setAttribute("aria-pressed", state.listFilters.followUp ? "true" : "false");
-      // Counts, not just "N of M": on an unfiltered list they are the reason to
-      // reach for a chip in the first place.
-      const tally = [];
-      if (visited) tally.push(`${fmt(visited)} visited`);
-      if (called) tally.push(`${fmt(called)} called`);
-      if (flagged) tally.push(`${fmt(flagged)} flagged`);
-      $("list-filter-status").textContent = isListFiltered()
-        ? `Showing ${fmt(filtered.length)} of ${fmt(rows.length)}`
-        : tally.join(" · ");
       // Only stages PRESENT in this list, counted over the whole list rather
       // than the filtered view, so ticking one option never moves the numbers
-      // beside the others.
+      // beside the others. Computed BEFORE the bar's hide test, because whether
+      // any stage exists is now part of that decision.
       const stageCounts = new Map();
       for (const row of rows) {
         const stage = permitStage(row);
         if (stage) stageCounts.set(stage, (stageCounts.get(stage) || 0) + 1);
       }
+      // FEAT-048. The old rule hid the bar until something was visited, called or
+      // flagged — right for those chips, because a filter for a state that cannot
+      // occur yet is a dead control. Stage is not like that: EVERY permit has one,
+      // so on a fresh list where nobody has ticked anything the whole bar hid and
+      // the stage filter was unreachable. Caught by t77 asserting the bar is
+      // usable on an unflagged list.
+      bar.hidden = !flagged && !visited && !called && !stageCounts.size && !isListFiltered();
+      btn.setAttribute("aria-pressed", state.listFilters.followUp ? "true" : "false");
+      // Counts, not just "N of M": on an unfiltered list they are the reason to
+      // reach for a chip in the first place. Once a filter IS on, the line states
+      // its DIRECTION as well as the tally — "Showing 3 of 5" alone cannot tell
+      // you whether a stage was included or excluded, which is the whole point of
+      // a tri-state control.
+      const tally = [];
+      if (visited) tally.push(`${fmt(visited)} visited`);
+      if (called) tally.push(`${fmt(called)} called`);
+      if (flagged) tally.push(`${fmt(flagged)} flagged`);
+      const words = activeFilterWords();
+      $("list-filter-status").textContent = isListFiltered()
+        ? `Showing ${fmt(filtered.length)} of ${fmt(rows.length)}${words.length ? ` · ${words.join(", ")}` : ""}`
+        : tally.join(" · ");
       const stageList = $("list-stage-list");
       if (stageList) {
         stageList.innerHTML = [...stageCounts].map(([stage, n]) => triStateOptionHtml({
