@@ -6805,7 +6805,9 @@
     async function addAllFromCard() {
       const desc = activeCard();
       if (!desc || desc.type !== "contact") return;
-      const rows = desc.permits || [];
+      // FIX-040. The card's filters decide what the table lists, so they decide
+      // what "Add all" adds too — same set the button's number is derived from.
+      const rows = cardFilteredPermits(desc);
       if (!rows.length) return;
       const targetId = await pickList(rows.length);
       if (!targetId) return;
@@ -7616,7 +7618,12 @@
         .map(m => clean(m.phone)).find(ph => ph && ph.toUpperCase() !== "NA") || "";
       const actions = [];
       if (phone) actions.push(`<a class="pm-act primary" href="tel:${esc(phone.replace(/[^\d+]/g, ""))}">Call ${esc(phone)}</a>`);
-      if (rows.length) actions.push(`<button class="pm-act" onclick="addAllFromCard()">Add all ${fmt(rows.length)} to list</button>`);
+      // FIX-040. The number states what "Add all" would add, so it counts the
+      // FILTERED set — the same one the table below lists and addAllFromCard
+      // adds. Kept focusable at zero (aria-disabled, not disabled) so a filter
+      // that matches nothing does not silently remove a control from the card.
+      const shown = cardFilteredPermits(desc).length;
+      if (rows.length) actions.push(`<button class="pm-act" onclick="addAllFromCard()" aria-disabled="${shown ? "false" : "true"}">Add all ${fmt(shown)} to list</button>`);
 
       return `<div class="pm-head stacked contact-card">
           <div class="pm-titlerow">
