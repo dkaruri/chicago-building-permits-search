@@ -752,6 +752,10 @@
       margin: -4px;
     }
 
+    /* The block already spaces its children; a trailing margin on the last one
+       (.list-note carries 10px) just reads as a gap under the list note. */
+    .list-header-fold-inner > :last-child { margin-bottom: 0; }
+
     .list-header-toggle {
       width: auto;
       min-height: 44px;
@@ -973,10 +977,12 @@
        a filter announced itself. The border and fill still appear only when
        there is something to say, so the reserved slot is invisible. */
     .list-action-status {
-      /* Two lines plus padding and border: at 390px "Showing only permits
-         flagged for follow-up." wraps, and a one-line reserve still moved the
-         table 10.8px. Sized in em so it tracks the smaller mobile type. */
-      min-height: calc(2.8em + 20px);
+      /* One line plus padding and border. Two lines are reserved at 390px
+         instead (see the mobile block) — "Showing only permits flagged for
+         follow-up." wraps there and a one-line reserve still moved the table
+         10.8px, while on desktop it never wraps and the extra line just reads
+         as a gap under the list note. */
+      min-height: calc(1.4em + 20px);
       margin: 8px 0 0;
       padding: 9px 10px;
       border: 1px solid transparent;
@@ -2077,14 +2083,29 @@
     }
     .tri-list { display: flex; flex-direction: column; padding: 4px; border-top: 1px solid var(--line); }
     .tri-hint { margin: 0; padding: 6px 10px 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
-    .list-filter-group { min-width: 132px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
-    .list-filter-group > summary {
-      display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px;
-      list-style: none; cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 700;
+    /* FEAT-052: now a button that opens #stage-picker, not a <details> summary.
+       `width: auto` is load-bearing against the global button { width: 100% }. */
+    .list-filter-group {
+      width: auto; min-width: 132px; min-height: 44px;
+      display: inline-flex; align-items: center; gap: 8px; padding: 0 10px;
+      border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+      cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 700;
     }
-    .list-filter-group > summary::-webkit-details-marker { display: none; }
-    .list-filter-group > summary b { color: var(--ink); }
-    .list-filter-group > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 8px; }
+    .list-filter-group b { color: var(--ink); }
+    .list-filter-group:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    #stage-picker {
+      border: 1px solid var(--line-strong); border-radius: 12px; padding: 1rem;
+      background: var(--panel); color: var(--ink); max-width: 420px; width: calc(100vw - 2rem);
+      max-height: calc(100vh - 3rem); overflow-y: auto; box-shadow: 0 12px 30px var(--shadow);
+    }
+    #stage-picker::backdrop { background: rgba(6, 14, 26, 0.55); }
+    #stage-picker h3 { margin: 0; font-size: 1.05rem; }
+    #stage-picker .tri-list { border-top: 0; padding: 0; }
+    #stage-picker .tri-summary { padding: .4rem 0 .6rem; }
+    #stage-picker .tri-hint { border-top: 0; padding: .5rem 0 0; }
+    /* Against the global button { width: 100% }: without this Done eats the
+       whole footer while Clear (which sets its own width) stays small. */
+    #stage-picker .dlg-foot button { width: auto; min-width: 110px; min-height: 44px; }
     .list-clear-filters {
       width: auto; min-height: 44px; padding: 0 10px;
       border: 1px solid var(--line); border-radius: 8px;
@@ -3140,6 +3161,12 @@
         font-size: 0.82rem;
       }
 
+      /* The announcement wraps to two lines at this width; reserve both, or the
+         table drops 10.8px the first time a filter speaks. */
+      body.list-page .list-action-status {
+        min-height: calc(2.8em + 20px);
+      }
+
       body.list-page .list-note {
         margin-top: 10px;
       }
@@ -4127,12 +4154,12 @@
         <div class="filter-line">
           <span class="filter-line-label" id="filter-line-permit">Permit</span>
           <div class="filter-line-controls" role="group" aria-labelledby="filter-line-permit">
-            <details class="list-filter-group" id="list-stage-details">
-              <summary id="list-stage-summary">Stage <b id="list-stage-count" class="stage-count">all</b></summary>
-              <p class="tri-summary" id="list-stage-words">All stages</p>
-              <div class="tri-list" id="list-stage-list" role="group" aria-label="Filter by construction stage"></div>
-              <p class="tri-hint">Click to include, again to exclude, again to clear. <button type="button" class="list-clear-filters" onclick="clearListFilters()">Clear</button></p>
-            </details>
+            <!-- A button into a modal, not an inline <details>: the options
+                 opened underneath and pushed the table down the page, and this
+                 is a selection task like Edit details, which is already a
+                 dialog. #list-stage-list stays the render target either way. -->
+            <button type="button" class="list-filter-group" id="list-stage-btn"
+                    aria-haspopup="dialog" onclick="openStagePicker()">Stage <b id="list-stage-count" class="stage-count">all</b></button>
           </div>
         </div>
         <div class="filter-line">
@@ -8041,10 +8068,11 @@
       if (stageBadge) stageBadge.textContent = !s.include.length && !s.exclude.length ? "all" : String(s.include.length + s.exclude.length);
       const stageWordsNode = $("list-stage-words");
       if (stageWordsNode) stageWordsNode.textContent = stageWords;
-      const stageSummary = $("list-stage-summary");
-      if (stageSummary) stageSummary.setAttribute("aria-label", `Stage: ${stageWords.toLowerCase()}`);
-      const stageDetails = $("list-stage-details");
-      if (stageDetails) stageDetails.hidden = stageCounts.size === 0;
+      const stageBtn = $("list-stage-btn");
+      if (stageBtn) {
+        stageBtn.setAttribute("aria-label", `Stage: ${stageWords.toLowerCase()}`);
+        stageBtn.hidden = stageCounts.size === 0;
+      }
       for (const facet of ["visited", "called"]) {
         const pill = $(`filter-${facet}`);
         if (!pill) continue;
@@ -8063,6 +8091,27 @@
         if (mark) mark.textContent = st === "include" ? "✓" : st === "exclude" ? "✗" : "";
         if (text) text.textContent = label;
       }
+    }
+
+    // FEAT-052. The stage options live in a modal, like Edit details: choosing
+    // a stage is a selection task, and opening them inline pushed the table down
+    // the page. Native <dialog> gives the focus trap, Escape and the backdrop
+    // for free; the options themselves are still painted by renderListFilters,
+    // which does not care where #list-stage-list sits.
+    function openStagePicker() {
+      const dlg = $("stage-picker");
+      if (!dlg || dlg.open) return;
+      // No focus-restore handler: showModal() already returns focus to whatever
+      // had it when the dialog opened, however it is dismissed. A handler here
+      // measured as dead code — mutating it out changed nothing.
+      dlg.showModal();
+      const first = dlg.querySelector(".tri");
+      if (first) first.focus();
+    }
+
+    function closeStagePicker() {
+      const dlg = $("stage-picker");
+      if (dlg && dlg.open) dlg.close();
     }
 
     // Names the filters that emptied the view, so the empty state says which
@@ -11226,6 +11275,18 @@
       <div id="permit-modal-body" class="permit-modal-body"></div>
     </div>
   </div>
+  <!-- FEAT-052. Static markup rather than innerHTML, so renderListFilters keeps
+       painting #list-stage-list and #list-stage-words wherever they live. -->
+  <dialog id="stage-picker" aria-modal="true" aria-labelledby="stage-picker-title">
+    <h3 id="stage-picker-title">Filter by construction stage</h3>
+    <p class="tri-summary" id="list-stage-words">All stages</p>
+    <div class="tri-list" id="list-stage-list" role="group" aria-label="Construction stages in this list"></div>
+    <p class="tri-hint">Click to include, again to exclude, again to clear.</p>
+    <div class="dlg-foot">
+      <button type="button" class="list-clear-filters" onclick="clearListFilters()">Clear</button>
+      <button type="button" class="primary" onclick="closeStagePicker()">Done</button>
+    </div>
+  </dialog>
   <dialog id="list-picker" aria-modal="true"></dialog>
   <dialog id="list-details" aria-modal="true"></dialog>
   <dialog id="add-address" aria-modal="true"></dialog>
