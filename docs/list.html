@@ -1934,6 +1934,43 @@
     .tri[data-state="exclude"] .tri-box { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
     .tri-label { flex: 1; min-width: 0; }
     .tri-count { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+    /* FEAT-048. The list's filter row. `width: auto` is load-bearing against the
+       global `button { width: 100% }` (FIX-022). The mark is a plain character,
+       never a Material Symbols ligature, which renders as literal text until the
+       font loads (FIX-027) — and the state is in the accessible name regardless,
+       so it is never carried by colour or glyph alone. */
+    .tri-pill {
+      width: auto;
+      min-height: 44px;
+      padding: 6px 13px;
+      border: 1px solid var(--tag-border);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--tag-text);
+      font-size: 12.5px;
+      font-weight: 650;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .tri-pill[data-state="include"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+    .tri-pill[data-state="exclude"] { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+    .tri-pill:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .tri-list { display: flex; flex-direction: column; padding: 4px; border-top: 1px solid var(--line); }
+    .tri-hint { margin: 0; padding: 6px 10px 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
+    .list-filter-group { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+    .list-filter-group > summary {
+      display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px;
+      list-style: none; cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 700;
+    }
+    .list-filter-group > summary::-webkit-details-marker { display: none; }
+    .list-filter-group > summary b { color: var(--ink); }
+    .list-filter-group > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 8px; }
+    .list-clear-filters {
+      width: auto; min-height: 44px; padding: 0 10px;
+      border: 1px solid var(--line); border-radius: 8px;
+      background: var(--panel); color: var(--primary);
+      font-size: 12.5px; font-weight: 700; cursor: pointer;
+    }
     .stage {
       display: inline-flex;
       align-items: center;
@@ -3915,10 +3952,13 @@
            competing filter bar. Within a pair the chips are mutually exclusive;
            across pairs they combine. -->
       <div id="list-filters" class="list-filters" role="group" aria-label="Filter permits in this list" hidden>
-        <button type="button" id="filter-visited" class="tag" aria-pressed="false" onclick="setRowFilter('visited', 'yes')">Visited</button>
-        <button type="button" id="filter-not-visited" class="tag" aria-pressed="false" onclick="setRowFilter('visited', 'no')">Not visited</button>
-        <button type="button" id="filter-called" class="tag" aria-pressed="false" onclick="setRowFilter('called', 'yes')">Called</button>
-        <button type="button" id="filter-not-called" class="tag" aria-pressed="false" onclick="setRowFilter('called', 'no')">Not called</button>
+        <details class="list-filter-group" id="list-stage-details">
+          <summary id="list-stage-summary">Stage <b>all</b></summary>
+          <div class="tri-list" id="list-stage-list" role="group" aria-label="Filter by construction stage"></div>
+          <p class="tri-hint">Click to include, again to exclude, again to clear. <button type="button" class="list-clear-filters" onclick="clearListFilters()">Clear</button></p>
+        </details>
+        <button type="button" id="filter-visited" class="tri-pill" data-state="" onclick="setRowFilter('visited')">Visited</button>
+        <button type="button" id="filter-called" class="tri-pill" data-state="" onclick="setRowFilter('called')">Called</button>
         <button type="button" id="filter-followup" class="tag" aria-pressed="false" onclick="toggleFollowUpFilter()">
           <span class="material-symbols-outlined" aria-hidden="true">flag</span>Follow-up only
         </button>
@@ -7734,13 +7774,6 @@
         : "Showing all permits in this list.");
     }
 
-    const ROW_FILTER_CHIPS = [
-      ["filter-visited", "visited", "yes"],
-      ["filter-not-visited", "visited", "no"],
-      ["filter-called", "called", "yes"],
-      ["filter-not-called", "called", "no"],
-    ];
-
     // The bar hides itself when NOTHING has been flagged, visited or called and
     // no filter is on: a filter for a state that cannot occur yet is a dead
     // control. Once any of the three exists, all the chips appear together —
@@ -7755,10 +7788,6 @@
       const called = rows.filter(isCalled).length;
       bar.hidden = !flagged && !visited && !called && !isListFiltered();
       btn.setAttribute("aria-pressed", state.listFilters.followUp ? "true" : "false");
-      for (const [id, facet, want] of ROW_FILTER_CHIPS) {
-        const chip = $(id);
-        if (chip) chip.setAttribute("aria-pressed", state.listFilters[facet] === want ? "true" : "false");
-      }
       // Counts, not just "N of M": on an unfiltered list they are the reason to
       // reach for a chip in the first place.
       const tally = [];
@@ -7768,6 +7797,44 @@
       $("list-filter-status").textContent = isListFiltered()
         ? `Showing ${fmt(filtered.length)} of ${fmt(rows.length)}`
         : tally.join(" · ");
+      // Only stages PRESENT in this list, counted over the whole list rather
+      // than the filtered view, so ticking one option never moves the numbers
+      // beside the others.
+      const stageCounts = new Map();
+      for (const row of rows) {
+        const stage = permitStage(row);
+        if (stage) stageCounts.set(stage, (stageCounts.get(stage) || 0) + 1);
+      }
+      const stageList = $("list-stage-list");
+      if (stageList) {
+        stageList.innerHTML = [...stageCounts].map(([stage, n]) => triStateOptionHtml({
+          value: stage,
+          label: PERMIT_STAGE_LABELS[stage] || stage,
+          count: n,
+          state: triStateOf(state.listFilters.stages, stage),
+          onclick: `setListStageFilter('${enc(stage)}')`,
+        })).join("");
+      }
+      const stageSummary = document.querySelector("#list-stage-summary b");
+      if (stageSummary) {
+        const s = normalizeTriState(state.listFilters.stages);
+        stageSummary.textContent = !s.include.length && !s.exclude.length ? "all"
+          : [s.include.length ? `${s.include.length} included` : "", s.exclude.length ? `${s.exclude.length} excluded` : ""].filter(Boolean).join(", ");
+      }
+      const stageDetails = $("list-stage-details");
+      if (stageDetails) stageDetails.hidden = stageCounts.size === 0;
+      for (const facet of ["visited", "called"]) {
+        const pill = $(`filter-${facet}`);
+        if (!pill) continue;
+        const st = state.listFilters[facet] || "";
+        pill.dataset.state = st;
+        const label = facet === "visited" ? "Visited" : "Called";
+        const said = st === "include" ? "included, activate to exclude"
+          : st === "exclude" ? "excluded, activate to clear"
+          : "not filtered, activate to include";
+        pill.setAttribute("aria-label", `${label}, ${said}`);
+        pill.textContent = st === "include" ? `✓ ${label}` : st === "exclude" ? `✗ ${label}` : label;
+      }
     }
 
     // Names the filters that emptied the view, so the empty state says which
