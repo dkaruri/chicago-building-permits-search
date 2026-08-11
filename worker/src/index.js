@@ -114,8 +114,6 @@ export default {
     );
   },
 
-  // ponytail: cron can't run on CF free tier (10ms CPU). Use seed-kv.js locally.
-  async scheduled() {},
 };
 
 export function json(data, status = 200, env = {}, request = null) {
