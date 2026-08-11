@@ -36,7 +36,7 @@ collaboration.
 
 ## Scale
 
-Figures from the most recent export manifest (`docs/data/manifest.json`):
+Figures measured against the live Socrata dataset (`ydr8-5enu`):
 
 | | |
 |---|---|
@@ -256,16 +256,11 @@ docs/                 GitHub Pages site (the deployed frontend)
   list.html           My Permit List
   disclaimer.html
   assets/
-  data/               generated — do not hand-edit
-    open_permits.json
-    general_contractors.json
-    open_subs.json
-    contractor_licenses.json
-    permit_map_index.json
-    manifest.json
-    zoning.geojson
-    tif.geojson
-    map/permits_YYYY_MM.json
+  data/               only what is genuinely static
+    zoning.geojson      reference geography, built by scripts/build_zoning.py
+    tif.geojson         reference geography, built by scripts/build_tif.py
+    general_contractors.json   fallback, used only when the Worker is unreachable
+    open_subs.json             fallback, same
 
 worker/               Cloudflare Worker — the API tier
   src/

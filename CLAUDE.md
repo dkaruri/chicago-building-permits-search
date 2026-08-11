@@ -1,24 +1,32 @@
 # Chicago Building Permits Search — project guide for Claude
 
 Static search/profile tool over the City of Chicago Building Permits dataset
-(Socrata `ydr8-5enu`), backed by a local DuckDB and published as a GitHub Pages
-static site.
+(Socrata `ydr8-5enu`), published as a GitHub Pages static site and backed by a
+Cloudflare Worker.
 
 ## Read this first
-- Despite the directory name (`chicago-building-permits-mcp`) and the original
-  task that created it ("install the MCP server at ..."), **there is no MCP
-  server wired up in this codebase**. `src/chi_permits/tools/` (`permits.py`,
-  `sql.py`) contains MCP-tool-shaped read functions, but nothing registers them
-  with `mcp`/`FastMCP`/stdio — they're called directly by `web.py` (the
-  Starlette local preview app). If asked to "run the MCP server," confirm
-  that's actually wanted: the current live product is the static GitHub Pages
-  site, not an MCP server.
-- Goal: surface City of Chicago Building Permits data (open permits, general
-  contractors, open subs) as a fast static search/browse tool, not an MCP
-  server. Repo pushes to
-  `https://github.com/dkaruri/chicago-building-permits-search`.
-- `README.md` documents refresh commands and data files — keep it in sync with
-  `static_export.py`'s output when JSON files are added or renamed.
+- **There is no Python, no DuckDB and no MCP server in this repo.** All of it —
+  `src/chi_permits/`, `ingest.py`, `static_export.py`, `web.py`, `pyproject.toml`
+  and the `refresh-pages-data.yml` workflow — was deleted in `42607fe`, "Delete
+  dead Python pipeline and cron.js after Worker API migration". This section
+  described that code for weeks after it was gone; if you are reading a claim
+  here about a file, check it exists before believing it.
+- The directory is still named `chicago-building-permits-mcp` for historical
+  reasons only. If asked to "run the MCP server", say there isn't one.
+- **Where the data actually comes from now:**
+  - Permits — LIVE from Socrata. The Worker's `/api/permits` for the directory
+    and the GC/open-sub card; `loadMapMonths` calls Socrata **directly** for the
+    map, and `ensurePermitMap` does the same to rehydrate saved permits.
+  - Profiles, contacts, stats — the Worker, reading KV that
+    `.github/workflows/seed-kv.yml` reseeds daily at 10:00 UTC.
+  - Lists, notes, tags, photos — the Worker (Durable Object + KV + R2).
+  - `docs/data/` holds only what is genuinely static: `zoning.geojson` and
+    `tif.geojson` (built by `scripts/build_zoning.py` / `build_tif.py`), plus
+    `general_contractors.json` and `open_subs.json`, which are reached ONLY by
+    `loadJson`'s fallback when the Worker is unreachable. `loadJson` throws for
+    any other name, so no other file in there can ever be fetched — which is why
+    the 378 MB of unreferenced exports were removed in 2026-08-11.
+- Repo pushes to `https://github.com/dkaruri/chicago-building-permits-search`.
 
 ## Kanban board (cross-repo — dkaruri/kanban)
 - The task board for this project lives OUTSIDE this repo:
@@ -56,9 +64,14 @@ static site.
 - `index.html` — <https://dkaruri.github.io/chicago-building-permits-search/> —
   search directory: open permits, general contractors, open subs.
 - `map.html` — <https://dkaruri.github.io/chicago-building-permits-search/map.html>
-  — MapLibre permit map. Lets a user filter by issue-date range
-  (`settings.dateFrom`/`dateTo`) and by general-contractor open-job-count range,
-  reading from the monthly `docs/data/map/permits_YYYY_MM.json` shards.
+  — MapLibre permit map, and the ONLY page with a real map: `index.html` and
+  `list.html` carry a vestigial 39-line `applyMapFilters` with none of the
+  filter scaffolding, so every map filter feature (FEAT-024/038/040/047) landed
+  here alone. `loadMapMonths` fetches the selected months **live from Socrata**
+  — the old `docs/data/map/*.json` shards were superseded by that migration and
+  deleted in 2026-08-11 (342 MB, zero references). Filters: issue-date range,
+  GC open-job count, permit value, radius, neighborhood, property use, work-type
+  exclusions, visited/called, and construction stage.
 - `list.html` — <https://dkaruri.github.io/chicago-building-permits-search/list.html>
   — "My Permit List": user-curated saved permits carried over from `index.html`
   / `map.html`. Supports notes, reordering, drive-distance estimates, Google
@@ -73,42 +86,34 @@ static site.
   itself.
 
 ## Architecture orientation
-- Two DuckDB tables: `permits` (one row per permit) and `contacts` (pivoted
-  from the permit's 15 `contact_N_*` slots into one row per contact per
-  permit). `ingest.py::_contact_category_expr` classifies each contact into
-  `general_contractor` / `open_tech` / `other` from the raw `contact_type`
-  string.
-- **Company vs. person classification is decided twice, two different ways** —
-  know which one a given code path uses before changing either:
-  - `ingest.py` derives the DB-level `contact_category` from a keyword match
-    on `contact_type`.
-  - `static_export.py`'s `_company_name_condition` / `_person_name_condition`
-    regexes re-derive company-like vs. person-like straight from the
-    `contact_name` string when building exported profile JSON.
-- Ingest (`ingest.py::run_ingest`) always builds into a `*.shadow.duckdb` file,
-  then atomically replaces the live `var/permits.duckdb`. Never open the live
-  DB read-write directly while diagnosing something live.
-- Full ingest paginates the Socrata CSV export (`PAGE_SIZE=50000`); when run
-  without `limit`, it also does a recent-issue-date backfill (default last 45
-  days, `CHI_PERMITS_RECENT_BACKFILL_DAYS`) to catch late-arriving rows.
-- `static_export.py` writes `docs/data/{open_permits,general_contractors,
-  open_subs,contractor_licenses,manifest}.json` plus monthly map shards
-  `docs/data/map/permits_YYYY_MM.json`. It cross-references contractor names
-  against `licensed_contractors.py`'s scrape of the City's licensed-contractor
-  lookup (multiple trade categories) via `normalize_license_name`, to attach
-  phone numbers where names match.
-- `tools/sql.py::run_sql_on` is a read-only, single-SELECT/WITH SQL sandbox
-  (regex-blocks mutating keywords, 100-row cap, 30s timeout) — reuse it rather
-  than writing a new ad hoc query runner if arbitrary read access is needed.
+- **Contacts are pivoted in the Worker, not a database.** A permit carries 15
+  `contact_N_*` slots; `worker/src/socrata.js::pivotContacts` flattens them, and
+  `classifyContact` sorts each into `general_contractor` / `open_tech` / `other`
+  from the raw `contact_type` string. That function is the single classifier —
+  the old second, regex-on-the-name classifier died with the Python exporter.
+- `worker/src/permits.js` builds an explicit SoQL `$select`. A column missing
+  from that list is silently absent from every response, and a column present
+  but unmapped is silently absent from the row — both invisible at runtime.
+  `worker/test/permits-milestone.test.mjs` guards one such column; add a
+  similar test when you add another.
+- `worker/seed-kv.js` is the only thing that writes KV. It runs from
+  `.github/workflows/seed-kv.yml`, never inside the Worker: it holds ~40,000
+  permits and ~320,000 owner rows at once, far past the Worker's 128 MB limit.
+  That workflow's header comment explains why the gap between runs IS the
+  precision of the observed close-time metric.
+- `worker/src/closure.js` and `principals.js` are reachable ONLY from
+  `seed-kv.js`, not from any route. They are not dead — check before "cleaning
+  them up".
 
 ## Running & testing
-- `uv sync`, then `uv run chi-permits init` (first load) / `uv run chi-permits
-  update` (refresh) / `uv run chi-permits export-static` (regenerate
-  `docs/data/*.json`) / `uv run chi-permits status`.
-- Local web preview: `uv run chi-permits-web` (Starlette + uvicorn on `:8765`)
-  — separate from the static Pages site; queries the live DuckDB directly.
-- Static site preview: `python -m http.server 8765 --directory docs`.
-- Tests: `uv run pytest` (currently only covers `tools/sql.py`'s validator).
+- Static site preview: `python -m http.server 8791 --directory docs`. **Use
+  port 8791** — the Worker's `ALLOWED_ORIGIN` names it, and on any other port
+  every API call is CORS-blocked while the map still works (it calls Socrata
+  directly), which reads as a feature bug and is not one.
+- Worker tests: `cd worker && node --test "test/*.test.mjs"`.
+- Browser suites: `node verify-tmp/t<N>-*.js`. See
+  [[chi-permits-headless-verify]] — they are gitignored and exist on one
+  machine only (tracked as FIX-020).
 - **Enable the pre-commit guard in a fresh clone:** `git config core.hooksPath
   scripts/hooks`. It blocks a commit that would introduce an invisible 0x08 or
   NUL byte into tracked source (FIX-030 — the class has bitten this repo four
@@ -117,15 +122,21 @@ static site.
   guard and does NOT depend on it. If `core.hooksPath` ever points at a
   directory that does not exist, git runs no hook and says nothing — that test
   catches it.
-- `scripts/accuracy_check.py` cross-checks local DuckDB counts, exported JSON
-  counts, live Socrata counts, and live City license-registry counts — run
-  after any ingest or export change.
 
 ## Automation
-- `.github/workflows/refresh-pages-data.yml` runs on a schedule (targeting
-  midnight/6am/noon America/Chicago, expressed as multiple UTC cron lines to
-  cover DST) and on manual dispatch: `chi-permits init` → `export-static` →
-  `accuracy_check.py` → auto-commits `docs/data/**/*.json`.
+- `.github/workflows/seed-kv.yml` is the ONLY workflow. It runs daily at 10:00
+  UTC and on manual dispatch: unit tests, then `npm run seed` into PRODUCTION
+  KV, then a `curl` against the deployed API that fails the build if the live
+  `seeded_at` is over 90 minutes old — it verifies at the destination, not at
+  the build, because the seed script has reported success against a local
+  simulation before.
+- `refresh-pages-data.yml` no longer exists; it was deleted in `42607fe` along
+  with the Python pipeline it drove. Nothing regenerates `docs/data/*.json` any
+  more, which is fine — the only files left there are static reference geography
+  and the two profile fallbacks.
+- The Worker has NO cron. `[triggers]` and its empty `scheduled()` handler were
+  removed 2026-08-11: the seed cannot run inside a Worker (memory limits), so
+  the trigger fired daily into a no-op.
 
 ## Data caveats (baked into `dataset_info_from` — keep authoritative)
 - `reported_cost` is applicant-reported, not audited.
