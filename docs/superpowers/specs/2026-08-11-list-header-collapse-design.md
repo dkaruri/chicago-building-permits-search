@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-11
 - **Board card:** FEAT-052
-- **Status:** design approved, not yet implemented
+- **Status:** implemented on `feat-052-list-header` (`fba447b`) — see "As built" below
 - **Supersedes:** the 3-line clamp on the list description (`toggleListDesc`)
 
 ## Problem
@@ -155,3 +155,41 @@ its label states what it does — `Details` with a ▲/▼, never a bare chevron
 - Mutants: prepend the glyph to the label instead of the slot; make the stage
   summary prose again; move the filtered count back above the table; fold
   `#list-action-status`. Each must turn the suite red.
+
+## As built (2026-08-11)
+
+Implemented in `fba447b`. Suites: `verify-tmp/t78-list-header.js` (the movement,
+fold, undo, persistence and reduced-motion assertions above),
+`verify-tmp/t78-uiux.js` (contrast in both themes, a real Tab focus ring,
+disclosure semantics, named groups) and `verify-tmp/t78-mutants.js`.
+
+Five things the design did not anticipate, all found by measuring:
+
+1. **Two more sources of movement.** The shared
+   `button.tag[aria-pressed="true"]::before` adds the ✓ to Follow-up only when
+   pressed — the same defect as prepending a mark to a pill's label, worth
+   12.9px. It gets a reserved slot too. And `#list-action-status`, once it sits
+   above the table, collapses to 0 and expands to 46px whenever a filter
+   announces itself, moving everything below it; its box is now reserved
+   permanently, two lines' worth because at 390px the announcement wraps.
+2. **`.route-source` folds as well.** The design's fold list omitted it, but it
+   sits between `#user-route-summary` and `.list-note` — leaving it out would
+   have broken the contiguity the whole DOM move exists to create.
+3. **`#list-filter-status` sits directly under the table**, before the bottom
+   pager (§B's wording). The order sketch in §C put it after the pager; either
+   satisfies "below the table", and under the table reads better.
+4. **The fold animates `grid-template-rows: 1fr → 0fr`**, not a measured height,
+   so no JS measurement or ResizeObserver is involved and a description of any
+   length folds correctly. `overflow: hidden` on the inner element makes it clip
+   rather than reflow; a `padding: 4px; margin: -4px` pair gives focus rings
+   bleed room so they are not shaved at the block's edges.
+5. **The filter row is taller than what it replaced** — 125px on desktop and
+   177px at 390px against the old 96px — because two labelled lines, a reserved
+   tally slot and min-widths all cost height. At 390px the row has 329px to work
+   with and the three chips want 364px, so the last one wraps whatever the
+   labels do; the label column therefore stays inline (76px) rather than taking
+   its own line, which cost 52px for nothing.
+
+Measured table top edge: desktop 840px open / 437px folded; iPhone 13 1548px /
+857px. (The design's 651/1330 baseline was taken on a different list; the delta —
+403px and 691px — is the comparable number.)
