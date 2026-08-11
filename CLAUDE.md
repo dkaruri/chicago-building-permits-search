@@ -141,6 +141,30 @@ static site.
 - Tests should pass before landing; one PR/commit per change where practical.
 - Check `git status` before assuming HEAD reflects deployed behavior — this
   repo frequently carries uncommitted work in progress.
+- **Every finished feature branch merges into `integration` (standing
+  instruction, 2026-08-11).** `main` is what GitHub Pages serves, so nothing
+  reaches it without Divyam's explicit approval — but that left work stranded on
+  branches with no single place to try it. `integration` is that place: a
+  long-lived branch holding `main` plus everything built and verified but not yet
+  shipped.
+  - The moment a feature branch's own verification is green, merge it in and push:
+    `git checkout integration && git merge --no-ff <branch> && git push`.
+    Do this WITHOUT being asked — it is part of finishing the work, like updating
+    the board.
+  - Re-run the suites on `integration` after the merge, not just on the feature
+    branch. A clean merge is not evidence: FIX-045 and FEAT-046 both edit
+    `fillPermitGeo`, and the only proof they coexist is running them together.
+  - Tell Divyam the branch is testable and on which URL. The local preview serves
+    whatever is checked out, so leave `integration` checked out when handing over.
+  - `integration` NEVER merges back into a feature branch and is never the base for
+    new work — cut new branches from `main`, or from the one feature they depend on.
+    It is a testing vehicle, not a trunk.
+- **Local preview is not deploy-faithful by default.** Pages serves `main` +
+  `/docs` only, so a branch is never live at the public URL, and the Worker's
+  `ALLOWED_ORIGIN` must name the origin you are testing from or every API call is
+  CORS-blocked while the map still works (it calls Socrata directly) — which looks
+  like a feature bug and is not. `http://localhost:8791` is in the allowlist;
+  serve on that exact port: `python -m http.server 8791 --directory docs`.
 - **UI/UX Pro Max on every new UI feature (standing instruction, 2026-07-23;
   extended to design time 2026-07-27).** Invoke the `ui-ux-pro-max` skill TWICE
   on any change that adds or reworks user-facing UI on `docs/*.html`:
