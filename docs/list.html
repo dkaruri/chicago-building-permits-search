@@ -4059,7 +4059,7 @@
       // followUp is a plain on/off; visited and called are tri-state —
       // null (don't care) / "yes" / "no" — because "not visited" is as useful a
       // question as "visited" and the two cannot both be true (FEAT-031).
-      listFilters: { followUp: false, visited: null, called: null },
+      listFilters: { followUp: false, visited: null, called: null, stages: { include: [], exclude: [] } },
       focalPoint: null,
       draggedPermitNumber: "",
       userRouteLegs: [],
@@ -4448,7 +4448,7 @@
       if (id && state.lists[id]) {
         // A view filter belongs to the list you set it on. Carried across, it
         // shows the next list as empty for a filter you never set there.
-        if (id !== state.activeListId) state.listFilters = { followUp: false, visited: null, called: null };
+        if (id !== state.activeListId) state.listFilters = listFilterDefaults();
         state.activeListId = id;
         state.userPermitNumbers = [...state.lists[id].permits];
         saveUserLists();
@@ -7669,17 +7669,30 @@
     // render a guaranteed-empty table is a dead control. Across facets they
     // COMBINE, which is the question the field actually asks: visited + not
     // called = "been there, nobody has phoned yet".
+    // FEAT-048. One factory, so the initial value and the list-switch reset can
+    // never drift apart. Visited and Called are now tri-state ("include" |
+    // "exclude" | null) on FEAT-047's control; Follow-up stays a plain boolean
+    // on purpose, because "everything except follow-ups" is not a question
+    // anyone asks and it is the control most likely to be tapped in a hurry.
+    // Not persisted: this state is in-memory and resets when you switch lists,
+    // so there is no stored shape to migrate.
+    function listFilterDefaults() {
+      return { followUp: false, visited: null, called: null, stages: { include: [], exclude: [] } };
+    }
+
     function isListFiltered() {
       const f = state.listFilters;
-      return !!(f.followUp || f.visited || f.called);
+      const s = normalizeTriState(f.stages);
+      return !!(f.followUp || f.visited || f.called || s.include.length || s.exclude.length);
     }
 
     function visibleListRows(rows) {
       const f = state.listFilters;
       return rows.filter(row =>
         (!f.followUp || isFollowedUp(row))
-        && (!f.visited || isTicked(row) === (f.visited === "yes"))
-        && (!f.called || isCalled(row) === (f.called === "yes")));
+        && (!f.visited || isTicked(row) === (f.visited === "include"))
+        && (!f.called || isCalled(row) === (f.called === "include"))
+        && matchesTriState(permitStage(row), f.stages));
     }
 
     function toggleFollowUpFilter() {
@@ -7688,16 +7701,22 @@
       announceFilterState();
     }
 
-    // Pressing the chip that is already on turns the facet off, so every chip
-    // is its own escape route and "all" needs no chip of its own.
-    function setRowFilter(facet, want) {
-      state.listFilters[facet] = state.listFilters[facet] === want ? null : want;
+    // Cycles off -> include -> exclude -> off, matching the map's dropdown so
+    // the two surfaces behave identically.
+    function setRowFilter(facet) {
+      const now = state.listFilters[facet];
+      state.listFilters[facet] = now === "include" ? "exclude" : now === "exclude" ? null : "include";
+      renderUserList();
+      announceFilterState();
+    }
+    function setListStageFilter(value) {
+      state.listFilters.stages = cycleTriState(state.listFilters.stages, value);
       renderUserList();
       announceFilterState();
     }
 
     function clearListFilters() {
-      state.listFilters = { followUp: false, visited: null, called: null };
+      state.listFilters = listFilterDefaults();
       renderUserList();
       announceListAction("Showing all permits in this list.");
     }
