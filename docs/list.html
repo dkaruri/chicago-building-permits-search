@@ -4852,10 +4852,37 @@
       applyListHeaderFold(readFoldedLists()[state.activeListId] === true);
     }
 
+    // FIX-049. Clipping is a VISUAL operation. `grid-template-rows: 0fr` plus
+    // the inner `overflow: hidden` hides the block, but a clipped subtree stays
+    // in the focus order and in the accessibility tree \u2014 folded, a keyboard user
+    // tabbed through 13 invisible stops (Edit, Publish, Optimize route, Notes,
+    // Share, Starting Location, List Note \u2026), each landing in a zero-height box,
+    // and a screen reader still read the whole region. `inert` is the one
+    // property that removes both at once.
+    //
+    // Applied IMMEDIATELY on collapse, not after the .22s transition: `inert`
+    // has no layout or paint effect, so it cannot cut the animation short (the
+    // close is measured mid-flight in t84), and delaying it would leave a 220ms
+    // window in which the invisible region is still tabbable \u2014 which is the
+    // defect. Only the `visibility: hidden` fallback would need the wait, and
+    // it is not needed: inert is supported everywhere this site already
+    // requires `:has()`.
     function applyListHeaderFold(collapsed) {
       const fold = $("list-header-fold");
       const btn = $("list-header-toggle");
       if (!fold || !btn) return;
+      // Making an ancestor inert blurs whatever is focused inside it to
+      // <body>, so a fold closed while the user was inside it drops them at
+      // the top of the document. Move focus to the toggle: it is the control
+      // that just acted, and the one they need to undo it.
+      //
+      // The order of these two lines is NOT load-bearing \u2014 the toggle sits
+      // outside the fold, so focusing it works inert or not, and a mutant that
+      // swaps them passes t84 on purpose. Written this way round because it
+      // reads in the order it happens; do not add a comment claiming the
+      // sequence is required, as an earlier draft of this one did.
+      if (collapsed && fold.contains(document.activeElement)) btn.focus();
+      fold.inert = collapsed;
       fold.dataset.collapsed = collapsed ? "true" : "false";
       btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
       const caret = btn.querySelector(".fold-caret");

@@ -4538,7 +4538,12 @@
             <span id="map-count-pill" class="map-count-pill">Loading</span>
             <button id="map-add-all" onclick="addAllMapPermitsToList()" disabled>Add all to list</button>
           </div>
-          <section id="map-filter-drawer" class="map-drawer hidden" aria-label="Map filters">
+          <!-- FIX-049. The inert attribute is set here, not only in
+               toggleMapDrawer: the drawer ships closed, so without it the 48
+               controls inside are in the tab order from first paint until
+               someone opens and closes it. NOTE this block is a JS template
+               literal - no backticks in these comments, they end the string. -->
+          <section id="map-filter-drawer" class="map-drawer hidden" aria-label="Map filters" inert>
             <div class="map-drawer-head">
               <h3>Filters and Layers</h3>
             </div>
@@ -5768,6 +5773,19 @@
       renderMapSideList(true);
     }
 
+    // FIX-049. `.map-drawer.hidden` clips with max-height/opacity and never sets
+    // `visibility`, so the closed drawer kept 48 focusable controls in the tab
+    // order and in the accessibility tree — the same defect as the list header
+    // fold, and 3.7x bigger. Measured on the untouched build, not inferred:
+    // visibility "visible", inert false, and the first control took focus.
+    // `pointer-events: none` was already there and does nothing for a keyboard.
+    function collapseInert(el, collapsed, focusFallback) {
+      if (!el) return;
+      // Making an ancestor inert blurs whatever is focused inside it to <body>.
+      if (collapsed && el.contains(document.activeElement) && focusFallback) focusFallback.focus();
+      el.inert = collapsed;
+    }
+
     function toggleMapDrawer(name) {
       state.map.drawer = state.map.drawer === name ? "" : name;
       const active = state.map.drawer === "filters";
@@ -5775,6 +5793,7 @@
       const toggle = $("map-filter-toggle");
       const shell = drawer?.closest(".map-shell");
       if (drawer) drawer.classList.toggle("hidden", !active);
+      collapseInert(drawer, !active, toggle);
       if (shell) shell.classList.toggle("has-open-drawer", active);
       if (toggle) {
         toggle.innerHTML = `Filters and Layers ${mapWindowIcon(active)}`;
