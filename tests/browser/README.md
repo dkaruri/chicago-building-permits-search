@@ -40,19 +40,29 @@ non-zero if anything failed.
 
 ```bash
 cd tests/browser && npm install     # Playwright, pinned by package-lock.json
-npx playwright install chromium     # the browser itself
 ```
 
-`_boot.js` resolves Chromium in this order: `$CHROME`, then Playwright's own
-`chromium.executablePath()`, then the cached `chromium_headless_shell-1228`
-build this repo has used all along. If none exists it says so and exits 2,
-rather than failing several frames deep inside Playwright.
+Then a browser. `_boot.js` resolves one in this order: `$CHROME`, then
+Playwright's own `chromium.executablePath()`, then the cached
+`chromium_headless_shell-1228` build this repo has used all along. If none of
+them exists it says so and exits 2, rather than failing several frames deep
+inside Playwright.
 
-To use a browser you already have:
+**`npx playwright install chromium` stalls on the original machine** — verified
+2026-08-12 from a clean clone, where it hung until it was killed. This is the
+same download failure this repo has hit for WebKit, so treat the command as
+"try it, but do not count on it". Two things that do work:
 
 ```bash
+# 1. Point at any Chromium/Chrome build you already have.
 CHROME=/path/to/chrome-headless-shell node tests/browser/t83-count-overflow.js
+
+# 2. Fetch the build straight from the Playwright CDN, as WebKit was.
+curl -L -o cr.zip https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1228/chromium-headless-shell-win64.zip
 ```
+
+On a machine where the download does work, nothing needs setting: Playwright's
+own path is found automatically.
 
 **WebKit** is only needed by `t36-webkit-scroll.js`. `npx playwright install
 webkit` has stalled here; fetch the build zip from the Playwright CDN and
