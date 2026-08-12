@@ -811,6 +811,16 @@
 
     .results-table {
       table-layout: fixed;
+      /* Below ~1120px the fixed columns were crushed rather than scrolled: the
+         Permit number split into 3 lines at 900px and 9 at 660px, and the
+         Issued date into 8 — the same mid-value break FIX-044 was raised for in
+         the Cost column, measured across 1280/1120/900/760/660. 640px is the
+         stacked-layout breakpoint, not a computed sum — the columns' own needs
+         total ~543px, and 640 was then verified to leave zero spills at every
+         width above it. `.table-wrap` above is already `overflow: auto`, so the
+         TABLE scrolls; the page still does not. Under 640px the stacked layout
+         takes over and this never applies. */
+      min-width: 640px;
     }
 
     .contacts-table th:nth-child(1), .contacts-table td:nth-child(1) { width: 34%; }
@@ -822,9 +832,21 @@
     .permits-table th:nth-child(1), .permits-table td:nth-child(1) { width: 56px; }
     .permits-table th:nth-child(2), .permits-table td:nth-child(2) { width: 18%; }
     .permits-table th:nth-child(3), .permits-table td:nth-child(3) { width: 15%; }
-    .permits-table th:nth-child(4), .permits-table td:nth-child(4) { width: 12%; }
+    /* Issued. A date is a fixed-width value like the cost, and 12% put it at
+       59px of content against 66.3px of "2026-01-01" below 1120px — it split
+       into 2 lines, and 8 at 900px. 66.3 + 18px padding, measured (FIX-044). */
+    .permits-table th:nth-child(4), .permits-table td:nth-child(4) { width: 88px; }
     .permits-table th:nth-child(5), .permits-table td:nth-child(5) { width: 31%; }
-    .permits-table th:nth-child(6), .permits-table td:nth-child(6) { width: 10%; }
+    /* Cost, in px like the checkbox column above it rather than a percentage.
+       Sized from the data, not by eye: the widest reported_cost on an open
+       permit is $730,000,000 (Socrata, 2026-08-11), which measures 85.9px in
+       this cell, plus 18px of padding. A percentage was 72.7px at 1280 and
+       shrank further as the viewport narrowed, splitting every large figure
+       across two lines (FIX-044); `min-width` is no help because
+       `table-layout: fixed` ignores it on a column. Measured at 1280/1120/
+       1000/800/700: the column holds at >= 102px throughout and nothing
+       overflows. */
+    .permits-table th:nth-child(6), .permits-table td:nth-child(6) { width: 108px; }
     .permits-table th:nth-child(7), .permits-table td:nth-child(7) { width: 14%; }
 
     th, td {
@@ -891,6 +913,18 @@
     }
 
     .money { color: var(--warning); font-weight: 800; }
+
+    /* `th, td` above sets `overflow-wrap: anywhere`, which is right for an
+       address or a work-type token and wrong for anything numeric: it renders
+       $408,680 as "$408,68" / "0", which reads as a different number (FIX-044).
+       Numbers opt out. Same treatment `.pm-tablewrap td.num` and the saved
+       list's permit number already use. The mobile stacked layout re-sets
+       `white-space: normal` on `.results-table td` later in the sheet, which is
+       correct there — those cells are full width and cannot split a figure. */
+    td.money, td.num, td[data-label="Issued"] {
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
     .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 
     .tag {
@@ -1669,7 +1703,11 @@
       .map-toolbar,
       .map-search,
       .map-drawer,
-      .table-wrap {
+      .table-wrap,
+      /* The stacked layout makes every cell full-width, so the 640px floor
+         `.results-table` carries for the real-table widths above must be
+         released here or the page scrolls sideways at 390px (FIX-044). */
+      .results-table {
         max-width: 100%;
         min-width: 0;
       }
