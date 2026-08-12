@@ -3,3 +3,12 @@
 # a fresh clone would silently disable the control-byte guard (FIX-030).
 scripts/hooks/pre-commit text eol=lf
 scripts/hooks/*.mjs text eol=lf
+
+# FIX-020. The suites are authored LF and pinned LF, so a clone on any
+# platform gets the same bytes. Without this, core.autocrlf rewrites all 182
+# of them on checkout and the first diff on a second machine is 182 files of
+# pure line-ending churn.
+tests/browser/*.js text eol=lf
+tests/browser/*.mjs text eol=lf
+tests/browser/*.json text eol=lf
+tests/browser/*.md text eol=lf

@@ -9,7 +9,10 @@ var/
 *.db
 .env
 .DS_Store
+# FIX-020. verify-tmp/ is SCRATCH ONLY now - screenshots, traces, run logs and
+# one-off probes. The real suites are tracked in tests/browser/.
 verify-tmp/
+tests/browser/node_modules/
 worker/node_modules/
 worker/.wrangler/
 # Worker secrets for `wrangler dev` — never commit these.
