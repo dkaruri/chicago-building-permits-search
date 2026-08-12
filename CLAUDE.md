@@ -110,7 +110,21 @@ Cloudflare Worker.
   port 8791** — the Worker's `ALLOWED_ORIGIN` names it, and on any other port
   every API call is CORS-blocked while the map still works (it calls Socrata
   directly), which reads as a feature bug and is not one.
-- Worker tests: `cd worker && node --test "test/*.test.mjs"`.
+- Worker tests: `cd worker && node --test "test/*.test.mjs"` (282).
+- Unit suites: `node --test verify-tmp/*.mjs` — **251 tests, green, ~42s**
+  (baseline 2026-08-12). It had been red since `03bd149` and appeared to take
+  over five minutes; both were the four `_`-prefixed one-off probes the glob
+  sweeps up. Each now refuses to run under the runner
+  (`if (process.env.NODE_TEST_CONTEXT)`) and prints how to run it directly —
+  **keep that guard on every new `_`-prefixed script**, or the documented
+  command goes red again for something that was never a test.
+- Several suites (`feat024-impl`, `feat031-impl`, `feat035-impl`, …) EXTRACT
+  functions out of `docs/*.html` by name and `eval` them, deliberately, so a
+  test cannot agree with a stale hand-copy. The trap: the extractor pulls a
+  **named list**, so when you make an already-extracted function call something
+  new, add the callee to that list in the same change — otherwise it throws
+  `X is not defined` in a file nobody is looking at. FEAT-046 and FEAT-047 each
+  did this and left 13 tests red.
 - Browser suites: `node verify-tmp/t<N>-*.js`. See
   [[chi-permits-headless-verify]] — they are gitignored and exist on one
   machine only (tracked as FIX-020).
