@@ -29,7 +29,27 @@ const PERMITS = [
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   await page.route("**/api/stats*", r => r.fulfill({ json: { row_count: 3, open_permit_count: 3, general_contractor_count: 3, open_sub_count: 3, cached_at: "2026-07-31" } }));
-  await page.route("**/api/permits*", r => r.fulfill({ json: { rows: PERMITS, row_count: PERMITS.length, offset: 0, limit: 1000 } }));
+  // Open Permits is SERVER-paged since FEAT-044, so the client no longer sorts
+  // these rows — it asks the API for them in order. A mock that ignores the
+  // sort parameter would return the fixture order and make a correct product
+  // look broken, so this one honours it, and permitSorts records what was
+  // actually asked for.
+  const permitSorts = [];
+  await page.route("**/api/permits*", r => {
+    const u = new URL(r.request().url());
+    const sort = u.searchParams.get("sort") || "";
+    const dir = (u.searchParams.get("dir") || "desc").toLowerCase();
+    permitSorts.push(sort ? `${sort}:${dir}` : "");
+    const col = { cost: "reported_cost", issued: "issue_date" }[sort];
+    let rows = PERMITS.slice();
+    if (col) {
+      const sign = dir === "asc" ? 1 : -1;
+      rows.sort((a, b) => (col === "issue_date"
+        ? String(a[col]).localeCompare(String(b[col]))
+        : Number(a[col] || 0) - Number(b[col] || 0)) * sign);
+    }
+    r.fulfill({ json: { rows, row_count: rows.length, offset: 0, limit: 1000, sort, dir } });
+  });
   // Profiles come from the Worker (/api/profiles), not the docs/data JSON —
   // that file is only the map page's GC job index.
   await page.route("**/api/profiles*", r => r.fulfill({ json: { rows: PROFILES, row_count: PROFILES.length } }));
@@ -61,9 +81,15 @@ const PERMITS = [
   }
 
   // No regression on the mode that was already working.
+  permitSorts.length = 0;
   const permitsByCost = await sortBy("open_permits", "reported_cost");
   ok(`[open_permits] still sorts by per-permit reported_cost`,
     JSON.stringify(permitsByCost) === JSON.stringify(["P-RICH", "P-MID", "P-CHEAP"]), JSON.stringify(permitsByCost));
+  // The rendered order above can only be right if the request was right, but
+  // assert the request too: it is the half the client still owns, and it is the
+  // half that silently stopped happening when this mode went server-paged.
+  ok(`[open_permits] the dropdown reaches the API as a real sort`,
+    permitSorts.includes("cost:desc"), JSON.stringify(permitSorts));
   const permitLabel = await page.evaluate(() => $("sort").querySelector('option[value="reported_cost"]').textContent.trim());
   ok(`[open_permits] option reads "Reported cost"`, permitLabel === "Reported cost", permitLabel);
 

@@ -4107,6 +4107,25 @@
       if (state.resultSort.key) {
         params.set("sort", state.resultSort.key);
         params.set("dir", state.resultSort.direction || "asc");
+      } else {
+        // FIX-020. The Sort dropdown was DEAD in Open Permits. This mode became
+        // server-paged in FEAT-044, so nothing sorts client-side any more —
+        // sortRows() is only reached by the profile modes — and only a
+        // column-header click set state.resultSort. Picking "Reported cost"
+        // here therefore did nothing at all: the same dead-control defect
+        // FIX-026 fixed for the profile modes, reintroduced in the one mode it
+        // had been working in. t50 has been correctly red about it since.
+        //
+        // Only the two keys that mean anything for a permit are mapped; the
+        // rest of the dropdown is about contractors and has no permit column,
+        // so it sends nothing and the server keeps its default order.
+        const apiSort = { reported_cost: "cost", latest_issue_date: "issued" }[$("sort") ? $("sort").value : ""];
+        if (apiSort) {
+          params.set("sort", apiSort);
+          // Both read as "most first" — highest cost, newest issue date — which
+          // is what the profile modes' own comparator does.
+          params.set("dir", "desc");
+        }
       }
       params.set("limit", String(state.pageSize));
       params.set("offset", String(pageIndex * state.pageSize));
