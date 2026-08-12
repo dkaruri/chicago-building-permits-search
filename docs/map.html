@@ -4534,16 +4534,21 @@
               </div>
               <button class="primary" onclick="applyMapFilters()">Search</button>
             </div>
-            <button id="map-filter-toggle" onclick="toggleMapDrawer('filters')" aria-expanded="false">Filters and Layers ${mapWindowIcon(false)}</button>
+            <button id="map-filter-toggle" onclick="toggleMapDrawer('filters')" aria-expanded="${state.map.drawer === "filters" ? "true" : "false"}">Filters and Layers ${mapWindowIcon(state.map.drawer === "filters")}</button>
             <span id="map-count-pill" class="map-count-pill">Loading</span>
             <button id="map-add-all" onclick="addAllMapPermitsToList()" disabled>Add all to list</button>
           </div>
-          <!-- FIX-049. The inert attribute is set here, not only in
-               toggleMapDrawer: the drawer ships closed, so without it the 48
-               controls inside are in the tab order from first paint until
-               someone opens and closes it. NOTE this block is a JS template
-               literal - no backticks in these comments, they end the string. -->
-          <section id="map-filter-drawer" class="map-drawer hidden" aria-label="Map filters" inert>
+          <!-- FIX-049/FIX-020. Rendered FROM state, not hard-coded closed.
+               The markup used to emit "hidden" unconditionally while
+               state.map.drawer could still say "filters", so any re-render
+               (resetMapSettings -> renderMapMode) silently shut an open drawer
+               AND left state disagreeing, which made the next click on Filters
+               toggle it to closed instead of opening it. Nothing noticed while
+               a closed drawer stayed focusable; making it inert turned that
+               silent desync into t76 going red.
+               NOTE this block is a JS template literal - no backticks in these
+               comments, they end the string. -->
+          <section id="map-filter-drawer" class="map-drawer${state.map.drawer === "filters" ? "" : " hidden"}" aria-label="Map filters"${state.map.drawer === "filters" ? "" : " inert"}>
             <div class="map-drawer-head">
               <h3>Filters and Layers</h3>
             </div>

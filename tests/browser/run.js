@@ -27,11 +27,16 @@ const filters = args.filter(a => !a.startsWith("--"));
 // Suites that are NOT self-contained. They are excluded by default so a red run
 // means "the product broke", not "the wifi is slow" — the ambiguity FIX-020's
 // checklist called out. Run them deliberately with --network.
-const NETWORK = new Set([
+// Named individually AND by the `-live` convention: the first sweep after this
+// runner was written still picked up t67-live, t69-live, t71-live and t74-live,
+// because listing three files by hand is a list that goes stale. They passed,
+// but a suite whose result depends on the internet must be opted into.
+const NETWORK_NAMED = new Set([
   "t14-live.js",        // reaches the real Socrata/Worker network
   "t30-share-live.js",  // publishes against the deployed Worker
   "t79-live-close.js",  // closes cards against the DEPLOYED site
 ]);
+const isNetwork = f => NETWORK_NAMED.has(f) || /-live[.-]/.test(f);
 
 // Mutation controls: they REWRITE docs/*.html while they run, so they can never
 // run alongside anything else. Excluded from the sweep; run one at a time.
@@ -40,7 +45,7 @@ const isMutant = f => /mutants?\.js$/.test(f);
 function suites() {
   return readdirSync(HERE)
     .filter(f => /^t.*\.js$/.test(f) && !isMutant(f))
-    .filter(f => flag("--network") || !NETWORK.has(f))
+    .filter(f => flag("--network") || !isNetwork(f))
     .filter(f => !filters.length || filters.some(x => f.includes(x)))
     .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
 }

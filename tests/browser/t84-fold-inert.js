@@ -199,6 +199,22 @@ async function runMap(viewport, label) {
   check("closed again, it is inert again",
     reclosed.inert === true && reclosed.canFocus === false, JSON.stringify(reclosed));
 
+  // The drawer's markup used to hard-code `hidden` (and, briefly, `inert`),
+  // while `state.map.drawer` could still say "filters". Any re-render then shut
+  // an open drawer and left state disagreeing, so the next click on Filters
+  // toggled it CLOSED instead of opening it. Nothing noticed while a closed
+  // drawer stayed focusable; inert turned the silent desync into a red t76.
+  await page.evaluate(() => toggleMapDrawer("filters"));
+  await page.waitForTimeout(200);
+  await page.evaluate(() => renderMapMode());
+  await page.waitForTimeout(400);
+  const survived = await state();
+  check("an OPEN drawer survives a re-render, still open and still live",
+    survived.hidden === false && survived.inert === false && survived.canFocus === true,
+    JSON.stringify(survived));
+  check("the toggle still reports it open after a re-render",
+    await page.$eval("#map-filter-toggle", el => el.getAttribute("aria-expanded")) === "true");
+
   // This markup lives inside a JS template literal — a backtick in a comment
   // there ends the string and takes the whole page down. It did exactly that
   // once while this fix was being written, so the suite watches for it.
