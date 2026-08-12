@@ -659,11 +659,23 @@
        the layout they were written for. */
     .panel-head:has(#result-count) {
       flex-wrap: wrap;
+      /* Not baseline here: the title takes its position from the count's
+         first baseline, which drops 2px the moment a 44px button stands
+         where a 20px span was. Centring in the reserved 44px row makes
+         the title's position independent of what the count contains. */
+      align-items: center;
     }
 
     #result-count {
       min-width: min(280px, 100%);
       flex-wrap: wrap;
+      /* A reservation names an axis, so reserve the OTHER one too. The
+         280px above reserved width only, and the button is 44px tall
+         against a 20px bare label, so ticking a permit still grew this
+         head 20px -> 44px and shoved the whole results table down 12px.
+         The cost is 24px of empty header when nothing is selected; a
+         stable table is worth more than that. */
+      min-height: 44px;
       margin-left: auto;
       display: flex;
       gap: 8px;
@@ -2115,7 +2127,8 @@
       .status { grid-template-columns: 1fr; }
       .panel { padding: 12px; }
       .user-list-title-row,
-      .panel-head {
+      .panel-head,
+      .panel-head:has(#result-count) {
         align-items: flex-start;
         flex-direction: column;
       }
