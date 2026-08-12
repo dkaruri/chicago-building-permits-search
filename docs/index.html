@@ -3186,7 +3186,12 @@
     .tp-kv dt { color: var(--muted); }
     .tp-kv dd { margin: 0; }
     .tp-act { display: flex; gap: .5rem; margin-top: .35rem; }
-    .tp-act button { font: inherit; font-size: .78rem; font-weight: 600; background: none; border: 1px solid transparent; padding: .3rem .5rem; border-radius: 6px; color: var(--muted); cursor: pointer; min-height: 40px; }
+    .tp-act button { font: inherit; font-size: .78rem; font-weight: 600; background: none; border: 1px solid transparent; padding: .3rem .5rem; border-radius: 6px; color: var(--muted); cursor: pointer; min-height: 44px; }
+    /* FIX-034: was 40px, under the 44px minimum this repo requires on every
+       touch target. The roll-up's "On permit N" button is a new instance of
+       this class, and giving it its own size would leave two identical-looking
+       buttons at different heights — so the shared rule is the fix. Also
+       raises the thread's Edit/Delete, which were short for the same reason. */
     .tp-act button:hover { border-color: var(--line); }
     .tp-act button.del { color: var(--danger); }
     .tp-count { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .2rem; }
@@ -4102,6 +4107,25 @@
       if (state.resultSort.key) {
         params.set("sort", state.resultSort.key);
         params.set("dir", state.resultSort.direction || "asc");
+      } else {
+        // FIX-020. The Sort dropdown was DEAD in Open Permits. This mode became
+        // server-paged in FEAT-044, so nothing sorts client-side any more —
+        // sortRows() is only reached by the profile modes — and only a
+        // column-header click set state.resultSort. Picking "Reported cost"
+        // here therefore did nothing at all: the same dead-control defect
+        // FIX-026 fixed for the profile modes, reintroduced in the one mode it
+        // had been working in. t50 has been correctly red about it since.
+        //
+        // Only the two keys that mean anything for a permit are mapped; the
+        // rest of the dropdown is about contractors and has no permit column,
+        // so it sends nothing and the server keeps its default order.
+        const apiSort = { reported_cost: "cost", latest_issue_date: "issued" }[$("sort") ? $("sort").value : ""];
+        if (apiSort) {
+          params.set("sort", apiSort);
+          // Both read as "most first" — highest cost, newest issue date — which
+          // is what the profile modes' own comparator does.
+          params.set("dir", "desc");
+        }
       }
       params.set("limit", String(state.pageSize));
       params.set("offset", String(pageIndex * state.pageSize));
@@ -6573,6 +6597,10 @@
         if (pn) fetchThread(pn);
       } else {
         fillContactCard(body, desc);
+        // FIX-034. Its own round trip, after the permits land, and cached on
+        // the card: the card re-renders on every filter change and a refetch
+        // per keystroke would be a request storm.
+        fillContactNotes(body, desc);
       }
       // The innerHTML swap destroyed whatever had focus; without this it falls
       // to <body> and a keyboard or screen-reader user loses the stack.
@@ -7711,6 +7739,7 @@
               ? cardFiltersHtml(desc, rows) + cardPermitTableHtml(desc, name, rows)
               : `<p class="pm-empty">No open permits on file for this contractor.</p>`}
         </section>
+        <section class="pm-block" id="pm-contact-notes" hidden></section>
         ${principalsBlockHtml(desc.profile)}
         ${licenseBlockHtml(desc.profile)}
         ${specialtiesBlockHtml(desc.profile)}
@@ -7788,6 +7817,113 @@
       desc.loaded = true;
       if (activeCard() !== desc) return; // user navigated away mid-flight
       renderCard("none");
+    }
+
+    // ---- FIX-034: a contractor's notes ----
+    //
+    // A note lives on a permit. A contractor's notes are the notes on the
+    // permits that name them, rolled up HERE at read time and never copied into
+    // a second store. Two things fall out of that: every note that already
+    // existed shows up with no backfill step, and a note can never drift
+    // between two stored copies. It also means a note on a permit with 2 GCs
+    // and 3 open subs appears under all five cards without being written five
+    // times, each attributed to the one permit it came from.
+    //
+    // The roll-up deliberately covers ALL of the contractor's permits, not the
+    // card's currently filtered subset: these are the contractor's notes, not a
+    // description of the table above them. Contrast FIX-040, where the count
+    // DID claim to describe that table and so had to follow the filter.
+    const CARD_NOTES_MAX_PERMITS = 250; // /api/notes/bulk's own cap
+
+    async function contractorNotes(desc) {
+      const permits = [...new Set((desc.permits || [])
+        .map(r => clean(r.permit_number)).filter(Boolean))].slice(0, CARD_NOTES_MAX_PERMITS);
+      if (!permits.length) return [];
+      let threads = {};
+      try {
+        const res = await fetch(`${API_BASE}/api/notes/bulk?p=${encodeURIComponent(permits.join(","))}`);
+        if (res.ok) threads = (await res.json()).threads || {};
+      } catch {
+        // The rest of the card is worth showing without its notes.
+      }
+      const out = [];
+      for (const permit of permits) {
+        for (const post of threads[permit] || []) {
+          out.push({ permit, post, ts: Number(post.ts) || 0 });
+        }
+        // The reader's OWN note on that permit. It lives in this browser and is
+        // never sent anywhere, so showing it here cannot widen who can see it —
+        // and the request above carries permit numbers only, never note text.
+        const mine = clean(state.userPermitNotes[permit]);
+        if (mine) out.push({ permit, mine: true, text: mine, ts: Number(state.userNoteTs[permit]) || 0 });
+      }
+      return out.sort((a, b) => b.ts - a.ts);
+    }
+
+    async function fillContactNotes(body, desc) {
+      if (!desc || desc.type !== "contact" || !desc.loaded) return;
+      if (!desc.notes) {
+        if (desc.notesPending) return;
+        desc.notesPending = true;
+        const notes = await contractorNotes(desc);
+        desc.notesPending = false;
+        if (activeCard() !== desc) return; // navigated away mid-flight
+        desc.notes = notes;
+        // The card may have re-rendered while that was in flight, so the `body`
+        // captured at call time can be a detached node.
+        body = document.getElementById("permit-modal-body") || body;
+      }
+      const host = body.querySelector("#pm-contact-notes");
+      if (host) renderContactNotes(host, desc);
+    }
+
+    function renderContactNotes(host, desc) {
+      const entries = desc.notes || [];
+      // No notes: no section at all. Most contractors have none, so an empty
+      // "Notes" heading would be the most common thing on the card, and a zero
+      // badge reads as a broken lookup rather than as an absence.
+      host.hidden = !entries.length;
+      if (!entries.length) { host.innerHTML = ""; return; }
+      host.innerHTML = `<h3>Notes</h3>
+        <p class="pm-empty">${fmt(entries.length)} note${entries.length === 1 ? "" : "s"} from this contractor's permits, newest first.</p>
+        ${entries.map(contactNoteHtml).join("")}`;
+    }
+
+    // Read-only on purpose: a note is edited where it lives, on its own permit,
+    // and the "On permit N" button goes there. threadPostHtml's Edit/Delete read
+    // a single module-global permit, which is exactly wrong for a roll-up.
+    function contactNoteHtml(entry) {
+      const who = entry.mine ? "Your note" : (clean(entry.post.author) || "anonymous");
+      const kind = entry.mine ? "Private"
+        : entry.post.kind === "walk" ? "Walkthrough"
+        : entry.post.kind === "photo" ? "Photo" : "Note";
+      const text = entry.mine ? entry.text
+        : entry.post.kind === "walk" ? walkSummaryText(entry.post)
+        : (clean(entry.post.text) || (entry.post.kind === "photo" ? "Photo" : ""));
+      const when = entry.ts ? dateStampLabel(entry.ts) : "";
+      return `<article class="tp">
+        <p class="tp-head"><span class="tp-who">${esc(who)}</span><time>${esc(when)}</time><span class="tp-kind">${esc(kind)}</span></p>
+        <p class="tp-text">${esc(text)}</p>
+        <p class="tp-act"><button type="button" onclick="openPermitFromNote('${enc(entry.permit)}')">On permit ${esc(entry.permit)}</button></p>
+      </article>`;
+    }
+
+    // A walkthrough post carries no text of its own, so without this every one
+    // would render as a blank line.
+    function walkSummaryText(post) {
+      const { gc, sub } = walkParties(post);
+      const bits = [JOB_LABELS[post.job] || ""];
+      if (gc && gc.name) bits.push(`GC ${clean(gc.name)}`);
+      if (sub && sub.name) bits.push(`Open sub ${clean(sub.name)}`);
+      if (!gc && !sub) bits.push("nobody on site");
+      return bits.filter(Boolean).join(" · ");
+    }
+
+    function openPermitFromNote(encodedPermit) {
+      const number = decodeURIComponent(encodedPermit);
+      const desc = activeCard();
+      const row = ((desc && desc.permits) || []).find(r => clean(r.permit_number) === number);
+      if (row) openPermitDetail(row);
     }
 
     // Retry button in the card's error state.
