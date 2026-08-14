@@ -12,7 +12,14 @@
 const { devices } = require("playwright");
 const { chromium, CHROME } = require("./_boot.js");
 
-const PORT = process.env.PORT || 8792;
+// 8791, not 8792. `run.js` serves 8791 (the port the Worker's ALLOWED_ORIGIN
+// names), so an 8792 default made this the one suite in the tracked set that
+// could never pass under the runner: it died on ERR_CONNECTION_REFUSED at the
+// first goto, before a single assertion, and reported as a product failure.
+// Green in isolation only if you happened to have something on 8792. Found by
+// FIX-039's regression sweep; the default has been wrong since FIX-020 tracked
+// this file (e12749e).
+const PORT = process.env.PORT || 8791;
 // Same convention as t80/t81: BASE=<pages url> drives the DEPLOYED site so a
 // card can be closed against what users actually load, not against the build.
 // The /api mocks below still apply — Playwright intercepts regardless of origin
