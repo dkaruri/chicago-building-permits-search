@@ -3741,6 +3741,43 @@
     .slotbtn i { display: block; width: 22px; height: 22px; border-radius: 5px; background: var(--tc); }
     .slotbtn[aria-pressed="true"] { border-color: var(--ink); border-width: 2px; }
 
+    /* FIX-039. The tag chip input. A tag now looks the same while you are
+       making it as it does once it is published — the chips are the directory's
+       own `.tag` pills — so "one more chip" is the visible affordance and the
+       comma rule stops being something the hint has to teach. */
+    .tagedit {
+      display: flex; flex-wrap: wrap; gap: .4rem; align-items: center;
+      border: 1px solid var(--line); border-radius: 8px; background: var(--field);
+      padding: .3rem; box-sizing: border-box; min-height: 44px;
+    }
+    /* The ring belongs on the box the user sees, not on the bare field inside
+       it, so the whole control reads as focused. The field's own outline is
+       dropped only because this replaces it. */
+    .tagedit:focus-within { border-color: var(--primary); outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+    /* `flex` is what keeps the entry on the row beside the chips, NOT the
+       specificity of this selector over `.dlg-field input { width: 100% }`:
+       inside a flex row the basis wins and `width` is inert, measured at 351px
+       either way. `width: auto` was written here as the defence and was doing
+       nothing, so it is not written here. `min-width` IS load-bearing — it is
+       what makes the entry wrap to its own line on a phone instead of
+       squeezing to a few characters. */
+    .dlg-field .tagedit input {
+      flex: 1 1 8rem; min-width: 8rem; min-height: 38px;
+      border: 0; background: transparent; padding: .2rem .4rem;
+    }
+    .dlg-field .tagedit input:focus { outline: none; border-color: transparent; }
+    .tagedit .tag { padding: .1rem .1rem .1rem .6rem; min-height: 44px; }
+    /* 44x44 like every other target here. `width` AND `min-height` both have to
+       be named: the global `button { width: 100% }` catches this one too
+       (FIX-013 / FIX-019 / FIX-016 — fourth time). */
+    .tagedit-x {
+      width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0;
+      border: 0; border-radius: 999px; background: transparent; color: inherit;
+      font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+    }
+    .tagedit-x:hover { background: var(--tc); color: var(--panel); }
+
     /* ---- Per-list notes feed (FEAT-034) ---- */
     #notes-feed {
       border: 1px solid var(--line-strong); border-radius: 12px; padding: 0;
@@ -7560,7 +7597,7 @@
       const dlg = $("list-details");
       const tagText = (list.tags || []).map(pair => pair[0]).join(", ");
       const swatches = Array.from({ length: 10 }, (_, i) =>
-        `<button type="button" class="slotbtn" data-slot="${i}" aria-pressed="${i === 0}" aria-label="Colour ${i + 1} of 10" style="--tc:var(--t${i})"><i></i></button>`).join("");
+        `<button type="button" class="slotbtn" data-slot="${i}" aria-pressed="${i === 0}" aria-label="${TAG_SLOT_NAMES[i]}, colour ${i + 1} of 10" style="--tc:var(--t${i})"><i></i></button>`).join("");
       dlg.innerHTML = `<h3 id="details-title">List details</h3>
         <p class="dlg-sub">Published lists appear in the public directory and anyone can edit them.</p>
         <div class="dlg-field"><label for="ld-title">Title</label>
@@ -7570,9 +7607,14 @@
         <div class="dlg-field"><label for="ld-author">Author</label>
           <input id="ld-author" maxlength="40" value="${esc(list.author || localStorage.getItem("chi_permit_author") || "")}">
           <p class="dlg-hint">Shown publicly. Not verified \u2014 anyone can type any name.</p></div>
-        <div class="dlg-field"><label for="ld-tags">Tags</label>
-          <input id="ld-tags" value="${esc(tagText)}" placeholder="roofing, north side">
-          <p class="dlg-hint">Separate with commas. Up to 8.</p>
+        <div class="dlg-field"><label for="ld-tag-entry">Tags</label>
+          <div class="tagedit" id="ld-tagedit">
+            <span id="ld-tagchips"></span>
+            <input id="ld-tag-entry" type="text" maxlength="24" autocomplete="off"
+                   enterkeyhint="done" aria-describedby="ld-tag-help" placeholder="Type a tag, press Enter">
+          </div>
+          <p class="dlg-hint" id="ld-tag-help"></p>
+          <p class="sr-only" id="ld-tag-live" role="status" aria-live="polite"></p>
           <div id="ld-newtag" hidden><p class="dlg-hint" id="ld-newtag-label">New tag colour:</p>
             <div class="slotrow" role="group" aria-labelledby="ld-newtag-label">${swatches}</div></div></div>
         <p class="dlg-error" id="ld-error" role="alert" hidden></p>
@@ -7584,23 +7626,92 @@
 
       let newSlot = 0;
       const slotRow = dlg.querySelector(".slotrow");
-      slotRow.querySelectorAll(".slotbtn").forEach(btn => btn.addEventListener("click", () => {
-        newSlot = Number(btn.dataset.slot);
-        slotRow.querySelectorAll(".slotbtn").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
-      }));
 
-      // The colour picker only appears for a tag the registry has never seen.
-      const tagInput = dlg.querySelector("#ld-tags");
-      const refreshNewTag = () => {
-        const unknown = parseTagInput(tagInput.value, registry, newSlot).filter(pair => !Number.isInteger(registry[pair[0]]));
+      // FIX-039. The tags are held as chips, not as a comma string the user has
+      // to maintain. `parseTagInput` stays the ONE parser: the whole set is
+      // re-parsed through it on every change, so normalising, de-duplicating,
+      // the cap of 8 and the registry's colours behave exactly as they did when
+      // this was a text field — and a pasted "roofing, masonry" still splits.
+      // Nothing about what a tag IS or how it is stored changes here.
+      let chips = parseTagInput(tagText, registry, newSlot);
+      const entry = dlg.querySelector("#ld-tag-entry");
+      const chipBox = dlg.querySelector("#ld-tagchips");
+      const live = dlg.querySelector("#ld-tag-live");
+      const isNewTag = name => !Number.isInteger(registry[name]);
+
+      function renderChips() {
+        // The remove button carries the tag's name AND its colour word, so the
+        // swatch is never the only thing saying which tag this is — the ten
+        // slots are otherwise distinguishable by colour alone.
+        chipBox.innerHTML = chips.map(([name, slot], i) =>
+          `<span class="tag" style="--tc:var(--t${slot})"><span class="swatch"></span>${esc(name)}` +
+          `<button type="button" class="tagedit-x" data-i="${i}" ` +
+          `aria-label="Remove tag ${esc(name)}, ${TAG_SLOT_NAMES[slot]}">×</button></span>`).join("");
+        // At the cap the field is deliberately NOT disabled, and not marked
+        // aria-disabled either: it still accepts keystrokes, and a control that
+        // announces itself dead while it is still taking input is a worse lie
+        // than one that explains the refusal. The hint below is this field's
+        // aria-describedby, so it is read on focus, and a refused tag says why
+        // in the live region.
+        dlg.querySelector("#ld-tag-help").textContent = chips.length >= 8
+          ? "8 of 8 tags — remove one to add another."
+          : `Press Enter after each tag. ${chips.length} of 8.`;
+        // The colour picker still only appears for a name the registry has
+        // never seen, and one slot still covers all of them at once.
+        const unknown = chips.filter(pair => isNewTag(pair[0]));
         const box = dlg.querySelector("#ld-newtag");
         box.hidden = unknown.length === 0;
         if (unknown.length) {
           dlg.querySelector("#ld-newtag-label").textContent = `New tag colour for ${unknown.map(u => u[0]).join(", ")}:`;
         }
-      };
-      tagInput.addEventListener("input", refreshNewTag);
-      refreshNewTag();
+      }
+
+      function commitEntry() {
+        if (!normalizeTag(entry.value)) { entry.value = ""; return; }
+        const before = chips.length;
+        chips = parseTagInput(chips.map(pair => pair[0]).concat(entry.value).join(", "), registry, newSlot);
+        entry.value = "";
+        renderChips();
+        const added = chips.length - before;
+        live.textContent = added > 0
+          ? `${added === 1 ? chips[chips.length - 1][0] + " added" : added + " tags added"}, ${chips.length} of 8.`
+          : `Not added — ${before >= 8 ? "8 tags is the limit" : "that tag is already in the list"}.`;
+      }
+
+      entry.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === ",") { e.preventDefault(); commitEntry(); }
+        else if (e.key === "Backspace" && !entry.value && chips.length) { e.preventDefault(); removeChip(chips.length - 1); }
+      });
+      // Covers a paste of "roofing, masonry" as well as a typed comma on a
+      // keyboard that does not report one through keydown.
+      entry.addEventListener("input", () => { if (entry.value.includes(",")) commitEntry(); });
+
+      function removeChip(i) {
+        const [name] = chips[i] || [];
+        if (!name) return;
+        chips.splice(i, 1);
+        renderChips();
+        live.textContent = `${name} removed, ${chips.length} of 8.`;
+        // The chip that had focus has just been destroyed; put focus somewhere
+        // deliberate rather than letting it fall to <body>.
+        entry.focus();
+      }
+      // Delegated: the chips are re-rendered on every change.
+      chipBox.addEventListener("click", e => {
+        const btn = e.target.closest(".tagedit-x");
+        if (btn) removeChip(Number(btn.dataset.i));
+      });
+
+      slotRow.querySelectorAll(".slotbtn").forEach(btn => btn.addEventListener("click", () => {
+        newSlot = Number(btn.dataset.slot);
+        slotRow.querySelectorAll(".slotbtn").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+        // Recolour the chips the picker is FOR, so the choice is visible on the
+        // tag itself instead of only landing at save time.
+        chips = chips.map(([name, slot]) => [name, isNewTag(name) ? newSlot : slot]);
+        renderChips();
+      }));
+
+      renderChips();
 
       dlg.querySelector("#ld-cancel").addEventListener("click", () => dlg.close());
       dlg.querySelector("#ld-save").addEventListener("click", async () => {
@@ -7608,7 +7719,10 @@
         const err = dlg.querySelector("#ld-error");
         const title = dlg.querySelector("#ld-title").value.trim().slice(0, 80);
         if (!title) { err.hidden = false; err.textContent = "Give the list a title before publishing."; dlg.querySelector("#ld-title").focus(); return; }
-        const tags = parseTagInput(tagInput.value, registry, newSlot);
+        // A tag typed but not yet committed is still a tag the user meant to
+        // add — saving must not silently drop what is sitting in the box.
+        commitEntry();
+        const tags = chips;
         const payload = {
           title,
           desc: dlg.querySelector("#ld-desc").value.trim().slice(0, 2000),
@@ -7619,8 +7733,13 @@
         };
         btn.disabled = true;
         btn.textContent = "Saving\u2026";
+        // Declared OUT here on purpose: the catch below reads it to restore the
+        // button's label, and as a `const` inside the try it was out of scope
+        // there, so a failed save threw a second time, in the handler for the
+        // first, and left the button reading "Saving..." and disabled forever.
+        // Found by FIX-039's suite; not caused by it.
+        const published = list.sharedId;
         try {
-          const published = list.sharedId;
           const res = await fetch(`${API_BASE}/api/lists${published ? "/" + encodeURIComponent(published) : ""}`, {
             method: published ? "PUT" : "POST",
             headers: { "Content-Type": "application/json" },
