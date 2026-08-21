@@ -27,4 +27,4 @@ DATASET_ID = "ydr8-5enu"
 # local preview of a test branch exercises the REAL API instead of silently
 # falling back to the stale bundled JSON — without it, every Worker call from a
 # local page is blocked by CORS and only the direct-Socrata map still works.
-ALLOWED_ORIGIN = "https://dkaruri.github.io,http://localhost:8791"
+ALLOWED_ORIGIN = "https://dkaruri.github.io,https://hiimdivyam.github.io,http://localhost:8791"
